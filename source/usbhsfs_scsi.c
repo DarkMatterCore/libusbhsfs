@@ -71,12 +71,12 @@ typedef enum {
 
 /* Function prototypes. */
 
-static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
+static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
 
 static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, u8 *data_buf, u8 *out_status, u8 retry_count);
 static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw);
-static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, ScsiCommandStatusWrapper *out_csw);
+static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, ScsiCommandStatusWrapper *out_csw);
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *ctx);
 
@@ -137,6 +137,33 @@ end:
 
 
 
+
+static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun)
+{
+    if (!ctx || !out_status)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    ScsiCommandBlockWrapper cbw = {0};
+    
+    /* Prepare CBW. */
+    cbw.dCBWSignature = __builtin_bswap32(SCSI_CBW_SIGNATURE);
+    randomGet(&(cbw.dCBWTag), sizeof(cbw.dCBWTag));
+    cbw.dCBWDataTransferLength = 0;
+    cbw.bmCBWFlags = USB_ENDPOINT_OUT;
+    cbw.bCBWLUN = lun;
+    cbw.bCBWCBLength = 6;
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandBlockOperationCode_TestUnitReady; /* Operation code. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending Test Unit Ready (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
+}
+
 static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun)
 {
     if (!ctx || !out_status)
@@ -164,32 +191,6 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *ou
     
     /* Send command. */
     USBHSFS_LOG("Sending Start Stop Unit (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
-    return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
-}
-
-static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun)
-{
-    if (!ctx || !out_status)
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        return false;
-    }
-    
-    ScsiCommandBlockWrapper cbw = {0};
-    
-    /* Prepare CBW. */
-    cbw.dCBWSignature = __builtin_bswap32(SCSI_CBW_SIGNATURE);
-    randomGet(&(cbw.dCBWTag), sizeof(cbw.dCBWTag));
-    cbw.dCBWDataTransferLength = 0;
-    cbw.bmCBWFlags = USB_ENDPOINT_OUT;
-    cbw.bCBWLUN = lun;
-    cbw.bCBWCBLength = 6;
-    
-    /* Prepare CB. */
-    cbw.CBWCB[0] = ScsiCommandBlockOperationCode_TestUnitReady; /* Operation code. */
-    
-    /* Send command. */
-    USBHSFS_LOG("Sending Test Unit Ready (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
 }
 
@@ -268,7 +269,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
         }
         
         /* Receive CSW. */
-        if (usbHsFsScsiReceiveCommandStatusWrapper(ctx, cbw->dCBWTag, &csw))
+        if (usbHsFsScsiReceiveCommandStatusWrapper(ctx, cbw, &csw))
         {
             *out_status = csw.bCSWStatus;
             ret = true;
@@ -339,33 +340,33 @@ end:
 }
 
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 17). */
-static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, ScsiCommandStatusWrapper *out_csw)
+static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, ScsiCommandStatusWrapper *out_csw)
 {
     Result rc = 0;
     u32 xfer_size = 0;
     bool ret = false, valid_csw = false;
     ScsiCommandStatusWrapper *csw = (ScsiCommandStatusWrapper*)ctx->ctrl_xfer_buf;
     
-    USBHSFS_LOG("Receiving CSW (interface %d).", ctx->usb_if_session.ID);
+    USBHSFS_LOG("Receiving CSW (interface %d, LUN %u).", ctx->usb_if_session.ID, cbw->bCBWLUN);
     
     /* Receive CSW. */
     rc = usbHsFsRequestPostBuffer(ctx, false, csw, sizeof(ScsiCommandStatusWrapper), &xfer_size, true);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d).", rc, ctx->usb_if_session.ID);
+        USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandStatusWrapper))
     {
-        USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d).", xfer_size, sizeof(ScsiCommandStatusWrapper), ctx->usb_if_session.ID);
+        USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandStatusWrapper), ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
 #ifdef DEBUG
     char hexdump[0x20] = {0};
-    USBHSFS_LOG("Data from received CSW (interface %d):", ctx->usb_if_session.ID);
+    USBHSFS_LOG("Data from received CSW (interface %d, LUN %u):", ctx->usb_if_session.ID, cbw->bCBWLUN);
     usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), csw, sizeof(ScsiCommandStatusWrapper));
     strcat(hexdump, "\r\n");
     usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
@@ -374,14 +375,14 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32
     /* Check CSW signature. */
     if (csw->dCSWSignature != __builtin_bswap32(SCSI_CSW_SIGNATURE))
     {
-        USBHSFS_LOG("Invalid CSW signature! (0x%08X) (interface %d).", __builtin_bswap32(csw->dCSWSignature), ctx->usb_if_session.ID);
+        USBHSFS_LOG("Invalid CSW signature! (0x%08X) (interface %d, LUN %u).", __builtin_bswap32(csw->dCSWSignature), ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
     /* Check CSW tag. */
-    if (csw->dCSWTag != tag)
+    if (csw->dCSWTag != cbw->dCBWTag)
     {
-        USBHSFS_LOG("Invalid CSW tag! (0x%08X != 0x%08X) (interface %d).", csw->dCSWTag, tag, ctx->usb_if_session.ID);
+        USBHSFS_LOG("Invalid CSW tag! (0x%08X != 0x%08X) (interface %d, LUN %u).", csw->dCSWTag, cbw->dCBWTag, ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
@@ -394,7 +395,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32
     /* Check if we got a Phase Error status. */
     if (csw->bCSWStatus == ScsiCommandStatusWrapperStatus_PhaseError)
     {
-        USBHSFS_LOG("Phase error status in CSW! (interface %d).", ctx->usb_if_session.ID);
+        USBHSFS_LOG("Phase error status in CSW! (interface %d, LUN %u).", ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
@@ -404,7 +405,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32
 end:
     if (R_SUCCEEDED(rc) && !valid_csw)
     {
-        USBHSFS_LOG("Invalid CSW detected (interface %d). Performing BOT mass storage reset.", ctx->usb_if_session.ID);
+        USBHSFS_LOG("Invalid CSW detected (interface %d, LUN %u). Performing BOT mass storage reset.", ctx->usb_if_session.ID, cbw->bCBWLUN);
         usbHsFsScsiResetRecovery(ctx);
     }
     
