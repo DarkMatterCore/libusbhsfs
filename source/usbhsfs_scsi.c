@@ -102,14 +102,14 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     /* If it fails (e.g. command not supported), we will perform a reset recovery. */
     if (!usbHsFsScsiSendStartStopUnitCommand(ctx, &status, lun))
     {
-        USBHSFS_LOG("Start Stop Unit failed! (interface %d). Performing BOT mass storage reset.", ctx->usb_if_session.ID);
+        USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d). Performing BOT mass storage reset.", ctx->usb_if_session.ID, lun);
         usbHsFsScsiResetRecovery(ctx);
     }
     
     /* Send Test Unit Ready SCSI command. */
     if (!usbHsFsScsiSendTestUnitReadyCommand(ctx, &status, lun))
     {
-        USBHSFS_LOG("Test Unit Ready failed! (interface %d).", ctx->usb_if_session.ID);
+        USBHSFS_LOG("Test Unit Ready failed! (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
         goto end;
     }
     
@@ -163,7 +163,7 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *ou
     cbw.CBWCB[4] = ((1 << 4) | 1);                              /* Cause the logical unit to transition to the active power condition. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending Start Stop Unit (%02X) command (interface %d).", cbw.CBWCB[0], ctx->usb_if_session.ID);
+    USBHSFS_LOG("Sending Start Stop Unit (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
 }
 
@@ -189,7 +189,7 @@ static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *ou
     cbw.CBWCB[0] = ScsiCommandBlockOperationCode_TestUnitReady; /* Operation code. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending Test Unit Ready (%02X) command (interface %d).", cbw.CBWCB[0], ctx->usb_if_session.ID);
+    USBHSFS_LOG("Sending Test Unit Ready (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
 }
 
@@ -224,7 +224,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
     
     for(u8 i = 0; i < retry_cnt; i++)
     {
-        if (retry_cnt > 1) USBHSFS_LOG("Attempt #%u (interface %d).", i + 1, ctx->usb_if_session.ID);
+        if (retry_cnt > 1) USBHSFS_LOG("Attempt #%u (interface %d, LUN %u).", i + 1, ctx->usb_if_session.ID, cbw->bCBWLUN);
         
         /* Update CBW data transfer length. */
         if (i > 0 && data_buf && data_size) cbw->dCBWDataTransferLength = (data_size - data_transferred);
@@ -246,13 +246,13 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
                 rc = usbHsFsRequestPostBuffer(ctx, !receive, ctx->ctrl_xfer_buf, xfer_size, &rest_size, false);
                 if (R_FAILED(rc))
                 {
-                    USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d).", rc, ctx->usb_if_session.ID);
+                    USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, ctx->usb_if_session.ID, cbw->bCBWLUN);
                     break;
                 }
                 
                 if (rest_size != xfer_size)
                 {
-                    USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d).", rest_size, xfer_size, ctx->usb_if_session.ID);
+                    USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, ctx->usb_if_session.ID, cbw->bCBWLUN);
                     break;
                 }
                 
@@ -288,7 +288,7 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCom
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
-    USBHSFS_LOG("Data from CBW to send (interface %d):", ctx->usb_if_session.ID);
+    USBHSFS_LOG("Data from CBW to send (interface %d, LUN %u):", ctx->usb_if_session.ID, cbw->bCBWLUN);
     usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), cbw, sizeof(ScsiCommandBlockWrapper));
     strcat(hexdump, "\r\n");
     usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
@@ -303,14 +303,14 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCom
     rc = usbHsEpPostBuffer(&(ctx->usb_out_ep_session), cbw, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d).", rc, ctx->usb_if_session.ID);
+        USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto ep_chk;
     }
     
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandBlockWrapper))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d).", xfer_size, sizeof(ScsiCommandBlockWrapper), ctx->usb_if_session.ID);
+        USBHSFS_LOG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto ep_chk;
     }
     
@@ -323,14 +323,14 @@ ep_chk:
     rc = usbHsFsRequestGetEndpointStatus(ctx, true, &status);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("Failed to get output endpoint status! (0x%08X) (interface %d).", rc, ctx->usb_if_session.ID);
+        USBHSFS_LOG("Failed to get output endpoint status! (0x%08X) (interface %d, LUN %u).", rc, ctx->usb_if_session.ID, cbw->bCBWLUN);
         goto end;
     }
     
     /* If the endpoint was STALLed, something went wrong. Let's perform a reset recovery. */
     if (status)
     {
-        USBHSFS_LOG("Output endpoint STALLed (interface %d). Performing BOT mass storage reset.", ctx->usb_if_session.ID);
+        USBHSFS_LOG("Output endpoint STALLed (interface %d, LUN %u). Performing BOT mass storage reset.", ctx->usb_if_session.ID, cbw->bCBWLUN);
         usbHsFsScsiResetRecovery(ctx);
     }
     
