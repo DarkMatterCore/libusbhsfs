@@ -75,8 +75,8 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *ou
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
 
 static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, u8 *data_buf, u8 *out_status, u8 retry_count);
-static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx);
-static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, u8 *out_status);
+static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw);
+static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, ScsiCommandStatusWrapper *out_csw);
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *ctx);
 
@@ -217,7 +217,9 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
     Result rc = 0;
     u32 blksize = USB_CTRL_XFER_BUFFER_SIZE;
     u32 data_size = cbw->dCBWDataTransferLength, data_transferred = 0;
+    ScsiCommandStatusWrapper csw = {0};
     bool ret = false, receive = (cbw->bmCBWFlags == USB_ENDPOINT_IN);
+    
     retry_cnt++;
     
     for(u8 i = 0; i < retry_cnt; i++)
@@ -227,11 +229,8 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
         /* Update CBW data transfer length. */
         if (i > 0 && data_buf && data_size) cbw->dCBWDataTransferLength = (data_size - data_transferred);
         
-        /* Copy current CBW to the USB control transfer buffer. */
-        memcpy(ctx->ctrl_xfer_buf, cbw, sizeof(ScsiCommandBlockWrapper));
-        
         /* Send CBW. */
-        if (!usbHsFsScsiSendCommandBlockWrapper(ctx)) continue;
+        if (!usbHsFsScsiSendCommandBlockWrapper(ctx, cbw)) continue;
         
         if (data_buf && data_size)
         {
@@ -269,8 +268,9 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
         }
         
         /* Receive CSW. */
-        if (usbHsFsScsiReceiveCommandStatusWrapper(ctx, cbw->dCBWTag, out_status))
+        if (usbHsFsScsiReceiveCommandStatusWrapper(ctx, cbw->dCBWTag, &csw))
         {
+            *out_status = csw.bCSWStatus;
             ret = true;
             break;
         }
@@ -280,13 +280,11 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
 }
 
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 17). */
-/* The CBW must have been previously copied ctx->ctrl_xfer_buf. */
-static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx)
+static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw)
 {
     Result rc = 0;
     u32 xfer_size = 0;
     bool ret = false, status = false;
-    ScsiCommandBlockWrapper *cbw = (ScsiCommandBlockWrapper*)ctx->ctrl_xfer_buf;
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
@@ -295,6 +293,9 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx)
     strcat(hexdump, "\r\n");
     usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
+    
+    /* Copy current CBW to the USB control transfer buffer. */
+    memcpy(ctx->ctrl_xfer_buf, cbw, sizeof(ScsiCommandBlockWrapper));
     
     /* Send CBW. */
     /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled exactly the same as CSW or data stage transfers. */
@@ -338,8 +339,7 @@ end:
 }
 
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 17). */
-/* If successful, the CSW will be stored in ctx->ctrl_xfer_buf. */
-static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, u8 *out_status)
+static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32 tag, ScsiCommandStatusWrapper *out_csw)
 {
     Result rc = 0;
     u32 xfer_size = 0;
@@ -363,6 +363,14 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32
         goto end;
     }
     
+#ifdef DEBUG
+    char hexdump[0x20] = {0};
+    USBHSFS_LOG("Data from received CSW (interface %d):", ctx->usb_if_session.ID);
+    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), csw, sizeof(ScsiCommandStatusWrapper));
+    strcat(hexdump, "\r\n");
+    usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
+#endif
+    
     /* Check CSW signature. */
     if (csw->dCSWSignature != __builtin_bswap32(SCSI_CSW_SIGNATURE))
     {
@@ -377,16 +385,8 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, u32
         goto end;
     }
     
-#ifdef DEBUG
-    char hexdump[0x20] = {0};
-    USBHSFS_LOG("Data from received CSW (interface %d):", ctx->usb_if_session.ID);
-    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), csw, sizeof(ScsiCommandStatusWrapper));
-    strcat(hexdump, "\r\n");
-    usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
-#endif
-    
-    /* Update output status. */
-    *out_status = csw->bCSWStatus;
+    /* Copy CSW from the USB control transfer buffer. */
+    memcpy(out_csw, csw, sizeof(ScsiCommandStatusWrapper));
     
     /* Update return value. */
     ret = true;
