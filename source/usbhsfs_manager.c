@@ -247,7 +247,7 @@ static Result usbHsFsCloseDriveManagerThread(void)
     
     /* Wait until the drive manager thread wakes us up. */
     /* There may be edge cases in which any of the USB interface events and the thread exit event are in a signaled state at the same time. */
-    /* waitMulti() may catch any of these USB events before the thread exit one, so a condvar is used along with the thread exit event because to avoid deadlocks. */
+    /* waitMulti() may catch any of these USB events before the thread exit one, so a condvar is used along with the thread exit event to avoid deadlocks. */
     /* Basically, we just let the drive manager thread do its thing until it eventually catches the thread exit event and closes itself. */
     condvarWait(&g_usbDriveManagerThreadCondVar, &g_managerMutex);
     
