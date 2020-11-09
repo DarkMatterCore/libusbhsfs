@@ -43,8 +43,10 @@ static Thread g_usbDriveManagerThread = {0};
 static UEvent g_usbDriveManagerThreadExitEvent = {0};
 static CondVar g_usbDriveManagerThreadCondVar = 0;
 
-static UsbHsFsDriveContext *g_driveContexts = NULL;
-static u32 g_driveCount = 0;
+/* Will be accessed by FATFS. */
+
+UsbHsFsDriveContext *g_driveContexts = NULL;
+u32 g_driveCount = 0;
 
 /* Function prototypes. */
 

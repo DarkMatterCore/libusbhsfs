@@ -130,11 +130,14 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     /* TO DO: add LUN loop. */
     ret = usbHsFsScsiPrepareDrive(ctx, 0);
     
-    
-    
-    
-    
-    
+    /* Allocate drives according to the LUN count. */
+    ctx->lun_drives = (UsbHsFsDrive*)malloc(sizeof(UsbHsFsDrive) * ctx->max_lun);
+    memset(ctx->lun_drives, 0, sizeof(UsbHsFsDrive) * ctx->max_lun);
+    for(u8 i = 0; i < ctx->max_lun; i++)
+    {
+        ctx->lun_drives[i].mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
+        ctx->lun_drives[i].lun = i;
+    }
     
     
     

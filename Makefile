@@ -22,7 +22,7 @@ LIB_TITLE	:=	usbhsfs
 LIB_VERSION	:=  ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
 
 TARGET		:=	${LIB_TITLE}
-SOURCES		:=	source
+SOURCES		:=	source source/fat
 DATA		:=	data
 INCLUDES	:=	include
 

@@ -1,5 +1,5 @@
 /*
- * usbhsfs_scsi.h
+ * usbhsfs_drive.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,16 +22,12 @@
 
 #pragma once
 
-#ifndef __USBHSFS_SCSI_H__
-#define __USBHSFS_SCSI_H__
+#ifndef __FAT_DEV_H__
+#define __FAT_DEV_H__
 
-#include "usbhsfs_drive.h"
+#include "../usbhsfs_utils.h"
+#include "../usbhsfs_drive.h"
 
+const devoptab_t usbHsFsFatGetDevoptab();
 
-bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun);
-
-bool usbHsFsScsiReadDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, void *out_buf);
-bool usbHsFsScsiWriteDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, const void *buf);
-
-
-#endif  /* __USBHSFS_SCSI_H__ */
+#endif  /* __FAT_DEV_H__ */
