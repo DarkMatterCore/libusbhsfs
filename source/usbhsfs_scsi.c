@@ -43,10 +43,11 @@ typedef struct {
 #pragma pack(pop)
 
 typedef enum {
-    ScsiCommandOperationCode_TestUnitReady = 0x00,
-    ScsiCommandOperationCode_RequestSense  = 0x03,
-    ScsiCommandOperationCode_Inquiry       = 0x12,
-    ScsiCommandOperationCode_StartStopUnit = 0x1B,
+    ScsiCommandOperationCode_TestUnitReady        = 0x00,
+    ScsiCommandOperationCode_RequestSense         = 0x03,
+    ScsiCommandOperationCode_Inquiry              = 0x12,
+    ScsiCommandOperationCode_StartStopUnit        = 0x1B,
+    ScsiCommandOperationCode_ReadFormatCapacities = 0x23
 } ScsiCommandOperationCode;
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
@@ -71,16 +72,13 @@ typedef enum {
 /// Reference: https://www.stix.id.au/wiki/SCSI_Sense_Data.
 /// Followed by additional sense bytes (not requested).
 typedef struct {
-    union {
-        u8 response_code : 7;   ///< Must either be 0 or 1.
-        u8 valid         : 1;
-    };
+    u8 response_code;                       ///< Must either be 0x70 or 0x71.
     u8 segment_number;
-    union {
+    struct {
         u8 sense_key  : 4;
         u8 reserved_1 : 1;
-        u8 ili        : 1;      ///< Incorrect length indicator.
-        u8 eom        : 1;      ///< End-of-medium.
+        u8 ili        : 1;                  ///< Incorrect length indicator.
+        u8 eom        : 1;                  ///< End-of-medium.
         u8 file_mark  : 1;
     };
     u8 information[0x4];
@@ -116,23 +114,23 @@ typedef enum {
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 94).
 /// Truncated at the product revision level field to just request the bare minimum - we don't need anything else past that point.
 typedef struct {
-    union {
+    struct {
         u8 peripheral_device_type : 5;
         u8 peripheral_qualifier   : 3;
     };
-    union {
+    struct {
         u8 reserved_1 : 7;
         u8 rmb        : 1;              ///< Removable Media Bit.
     };
     u8 version;
-    union {
+    struct {
         u8 response_data_format : 4;
         u8 hisup                : 1;    ///< Hierarchical Addressing Support.
         u8 naca                 : 1;    ///< Normal Auto Contingent Allegiance.
         u8 reserved_2           : 2;
     };
     u8 additional_length;
-    union {
+    struct {
         u8 protect    : 1;
         u8 reserved_3 : 2;
         u8 _3pc       : 1;              ///< Third-Party Copy Support.
@@ -140,14 +138,14 @@ typedef struct {
         u8 acc        : 1;              ///< Access Controls Coordinator.
         u8 sccs       : 1;              ///< Embedded storage array controller component.
     };
-    union {
+    struct {
         u8 reserved_4 : 4;
         u8 multip     : 1;              ///< Multi Port.
         u8 vs_1       : 1;              ///< Vendor Specific field #1.
         u8 encserv    : 1;              ///< Enclosure Services.
         u8 reserved_5 : 1;
     };
-    union {
+    struct {
         u8 vs_2       : 1;              ///< Vendor Specific field #2.
         u8 cmdque     : 1;              ///< Command Queuing.
         u8 reserved_6 : 6;
@@ -157,12 +155,44 @@ typedef struct {
     char product_revision[0x4];
 } ScsiInquiryStandardData;
 
+/// Reference: https://www.usb.org/sites/default/files/usbmass-ufi10.pdf (page 34).
+typedef struct {
+    u8 reserved[0x3];
+    u8 list_length;
+} ScsiCapacityListHeader;
+
+/// Reference: https://www.usb.org/sites/default/files/usbmass-ufi10.pdf (page 34).
+typedef struct {
+    u32 block_count;        ///< Stored using big endian byte ordering.
+    struct {
+        u8 desc_code : 2;
+        u8 reserved  : 6;
+    };
+    u8 block_length[3];
+} ScsiCapacityDescriptor;
+
+/// Reference: https://www.usb.org/sites/default/files/usbmass-ufi10.pdf (page 34).
+typedef enum {
+    ScsiCapacityDescriptorCode_Invalid          = 0,
+    ScsiCapacityDescriptorCode_UnformattedMedia = 1,
+    ScsiCapacityDescriptorCode_FormattedMedia   = 2,    ///< This is the one we'll always look for.
+    ScsiCapacityDescriptorCode_NoCartridge      = 3
+} ScsiCapacityDescriptorCode;
+
+/// Reference: https://www.usb.org/sites/default/files/usbmass-ufi10.pdf (page 33).
+/// Truncated at the current/maximum capacity descriptor to just request the bare minimum - we don't need anything else past that point.
+typedef struct {
+    ScsiCapacityListHeader header;
+    ScsiCapacityDescriptor cur_max_desc;
+} ScsiCapacityList;
+
 /* Function prototypes. */
 
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status);
 static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiRequestSenseDataFixedFormat *request_sense_desc);
 static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiInquiryStandardData *inquiry_data);
 static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status);
+static bool usbHsFsScsiSendReadFormatCapacitiesCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiCapacityList *capacity_list);
 
 static void usbHsFsScsiPrepareCommandBlockWrapper(ScsiCommandBlockWrapper *cbw, u32 data_size, bool data_in, u8 lun, u8 cb_size);
 static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, void *buf, u8 *out_status, u8 retry_count);
@@ -191,9 +221,16 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     }
     
     u8 status = 0;
-    bool ret = false, proceed = true;
+    
     ScsiInquiryStandardData inquiry_data = {0};
+    
     ScsiRequestSenseDataFixedFormat request_sense_desc = {0};
+    
+    ScsiCapacityList capacity_list = {0};
+    u32 block_count = 0, block_length = 0;
+    u64 capacity = 0;
+    
+    bool ret = false, proceed = true;
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
@@ -217,15 +254,40 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     }
     
 #ifdef DEBUG
-        USBHSFS_LOG("Inquiry data (interface %d, LUN %u):", ctx->usb_if_session.ID, lun);
-        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &inquiry_data, sizeof(ScsiInquiryStandardData));
-        strcat(hexdump, "\r\n");
-        usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
+    USBHSFS_LOG("Inquiry data (interface %d, LUN %u):", ctx->usb_if_session.ID, lun);
+    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &inquiry_data, sizeof(ScsiInquiryStandardData));
+    strcat(hexdump, "\r\n");
+    usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
     
+    /* TO DO: use Inquiry data to store vendor id, product id and product revision.  */
     
+    /* Send Read Format Capacities SCSI command. */
+    if (!usbHsFsScsiSendReadFormatCapacitiesCommand(ctx, lun, &status, &capacity_list))
+    {
+        USBHSFS_LOG("Read Format Capacities failed! (interface %d, LUN %d).", ctx->usb_if_session.ID, lun);
+        goto end;
+    }
     
+#ifdef DEBUG
+    USBHSFS_LOG("Read Format Capacities data (interface %d, LUN %u):", ctx->usb_if_session.ID, lun);
+    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &capacity_list, sizeof(ScsiCapacityList));
+    strcat(hexdump, "\r\n");
+    usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
+#endif
     
+    if (capacity_list.cur_max_desc.desc_code != ScsiCapacityDescriptorCode_FormattedMedia)
+    {
+        USBHSFS_LOG("Invalid capacity list descriptor code! (%u) (interface %d, LUN %u).", capacity_list.cur_max_desc.desc_code, ctx->usb_if_session.ID, lun);
+        goto end;
+    }
+    
+    /* Calculate LUN capacity. */
+    block_count = __builtin_bswap32(capacity_list.cur_max_desc.block_count);
+    block_length = ((capacity_list.cur_max_desc.block_length[0] << 16) | (capacity_list.cur_max_desc.block_length[1] << 8) | capacity_list.cur_max_desc.block_length[2]);
+    capacity = ((u64)block_count * (u64)block_length);
+    USBHSFS_LOG("Capacity (interface %d, LUN %u): 0x%lX byte(s).", ctx->usb_if_session.ID, lun, capacity);
+    if (capacity);
     
     
     
@@ -376,8 +438,8 @@ static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *
     cbw.CBWCB[0] = ScsiCommandOperationCode_Inquiry;    /* Operation code. */
     cbw.CBWCB[1] = 0;                                   /* Request standard inquiry data. */
     cbw.CBWCB[2] = 0;                                   /* Mandatory for standard inquiry data request. */
-    cbw.CBWCB[3] = (u8)cbw.dCBWDataTransferLength;      /* Just request the bare minimum. */
-    cbw.CBWCB[4] = 0;                                   /* Upper byte from the previous value. */
+    cbw.CBWCB[3] = 0;                                   /* Upper byte from the allocation length. */
+    cbw.CBWCB[4] = (u8)cbw.dCBWDataTransferLength;      /* Lower byte from the allocation length. Just request the bare minimum. */
     
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
@@ -407,6 +469,30 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 lun
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
+}
+
+/* Reference: https://www.usb.org/sites/default/files/usbmass-ufi10.pdf (page 33). */
+static bool usbHsFsScsiSendReadFormatCapacitiesCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiCapacityList *capacity_list)
+{
+    if (!ctx || !out_status || !capacity_list)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, (u32)sizeof(ScsiCapacityList), true, lun, 12);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_ReadFormatCapacities;   /* Operation code. */
+    cbw.CBWCB[1] = ((lun << 5) & 0xE0);                             /* LUN index. */
+    cbw.CBWCB[7] = 0;                                               /* Upper byte from the allocation length. */
+    cbw.CBWCB[8] = (u8)cbw.dCBWDataTransferLength;                  /* Lower byte from the allocation length. Just request the bare minimum. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, capacity_list, out_status, 0);
 }
 
 
