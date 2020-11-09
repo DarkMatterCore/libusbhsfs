@@ -419,7 +419,7 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
             UsbHsInterface *usb_if = &(g_usbInterfaces[i]);
             
 #ifdef DEBUG
-            USBHSFS_LOG("Interface #%d data:", i);
+            USBHSFS_LOG("Interface #%d (%d) data:", i, usb_if->inf.ID);
             usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), usb_if, sizeof(UsbHsInterface));
             strcat(hexdump, "\r\n");
             usbHsFsUtilsWriteLogBufferToLogFile(hexdump);

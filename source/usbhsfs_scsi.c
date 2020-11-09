@@ -24,8 +24,8 @@
 #include "usbhsfs_request.h"
 #include "usbhsfs_scsi.h"
 
-#define SCSI_CBW_SIGNATURE  0x55534243  /* "USBC". */
-#define SCSI_CSW_SIGNATURE  0x55534253  /* "USBS". */
+#define SCSI_CBW_SIGNATURE              0x55534243  /* "USBC". */
+#define SCSI_CSW_SIGNATURE              0x55534253  /* "USBS". */
 
 /* Type definitions. */
 
@@ -44,11 +44,10 @@ typedef struct {
 
 typedef enum {
     ScsiCommandBlockOperationCode_TestUnitReady = 0x00,
-    
+    ScsiCommandBlockOperationCode_RequestSense  = 0x03,
     
     
     ScsiCommandBlockOperationCode_StartStopUnit = 0x1B,
-    
 } ScsiCommandBlockOperationCode;
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
@@ -69,16 +68,71 @@ typedef enum {
     ScsiCommandStatusWrapperStatus_Reserved   = 0x04,
 } ScsiCommandStatusWrapperStatus;
 
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 56).
+/// Reference: https://www.stix.id.au/wiki/SCSI_Sense_Data.
+/// Followed by additional sense bytes (not requested).
+#pragma pack(push, 1)
+typedef struct {
+    union {
+        u8 response_code : 7;   /* Must either be 0 or 1. */
+        u8 valid         : 1;
+    };
+    u8 segment_number;
+    union {
+        u8 sense_key  : 4;
+        u8 reserved_1 : 1;
+        u8 ili        : 1;      /* Incorrect length indicator. */
+        u8 eom        : 1;      /* End-of-medium. */
+        u8 file_mark  : 1;
+    };
+    u8 information[0x4];
+    u8 additional_sense_length;
+    u8 cmd_specific_info[0x4];
+    u8 additional_sense_code;
+    u8 additional_sense_code_qualifier;
+    u8 field_replaceable_unit_code;
+    u8 sense_key_specific[0x3];
+} ScsiRequestSenseDataFixedFormat;
+#pragma pack(pop)
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 59).
+/// Reference: https://www.stix.id.au/wiki/SCSI_Sense_Data.
+typedef enum {
+    ScsiSenseKey_NoSense        = 0x00,
+    ScsiSenseKey_RecoveredError = 0x01,
+    ScsiSenseKey_NotReady       = 0x02,
+    ScsiSenseKey_MediumError    = 0x03,
+    ScsiSenseKey_HardwareError  = 0x04,
+    ScsiSenseKey_IllegalRequest = 0x05,
+    ScsiSenseKey_UnitAttention  = 0x06,
+    ScsiSenseKey_DataProtect    = 0x07,
+    ScsiSenseKey_BlankCheck     = 0x08,
+    ScsiSenseKey_VendorSpecific = 0x09,
+    ScsiSenseKey_CopyAborted    = 0x0A,
+    ScsiSenseKey_AbortedCommand = 0x0B,
+    ScsiSenseKey_Reserved       = 0x0C,
+    ScsiSenseKey_VolumeOverflow = 0x0D,
+    ScsiSenseKey_Miscompare     = 0x0E,
+    ScsiSenseKey_Completed      = 0x0F
+} ScsiSenseKey;
+
 /* Function prototypes. */
 
-static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
-static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun);
+static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status);
+static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiRequestSenseDataFixedFormat *request_sense_desc);
+static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status);
 
-static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, u8 *data_buf, u8 *out_status, u8 retry_count);
+static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, void *buf, u8 *out_status, u8 retry_count);
 static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw);
 static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, ScsiCommandStatusWrapper *out_csw);
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *ctx);
+
+
+
+
+
+
 
 
 
@@ -94,24 +148,78 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     }
     
     u8 status = 0;
-    bool ret = false;
+    bool ret = false, proceed = true;
+    ScsiRequestSenseDataFixedFormat request_sense_desc = {0};
     
     mutexLock(&(ctx->mutex));
     
     /* Send Start Stop Unit SCSI command. */
     /* If it fails (e.g. command not supported), we will perform a reset recovery. */
-    if (!usbHsFsScsiSendStartStopUnitCommand(ctx, &status, lun))
+    if (!usbHsFsScsiSendStartStopUnitCommand(ctx, lun, &status))
     {
         USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d). Performing BOT mass storage reset.", ctx->usb_if_session.ID, lun);
         usbHsFsScsiResetRecovery(ctx);
     }
     
     /* Send Test Unit Ready SCSI command. */
-    if (!usbHsFsScsiSendTestUnitReadyCommand(ctx, &status, lun))
+    if (!usbHsFsScsiSendTestUnitReadyCommand(ctx, lun, &status))
     {
         USBHSFS_LOG("Test Unit Ready failed! (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
         goto end;
     }
+    
+    if (status != ScsiCommandStatusWrapperStatus_Passed)
+    {
+        /* Send Request Sense SCSI command. */
+        if (!usbHsFsScsiSendRequestSenseCommand(ctx, lun, &status, &request_sense_desc) || status != ScsiCommandStatusWrapperStatus_Passed)
+        {
+            USBHSFS_LOG("Request Sense failed! (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+            goto end;
+        }
+        
+#ifdef DEBUG
+        char hexdump[0x30] = {0};
+        USBHSFS_LOG("Request Sense data (interface %d, LUN %u):", ctx->usb_if_session.ID, lun);
+        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &request_sense_desc, sizeof(ScsiRequestSenseDataFixedFormat));
+        strcat(hexdump, "\r\n");
+        usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
+#endif
+        
+        /// Reference: https://www.stix.id.au/wiki/SCSI_Sense_Data.
+        switch(request_sense_desc.sense_key)
+        {
+            case ScsiSenseKey_NoSense:
+            case ScsiSenseKey_RecoveredError:
+            case ScsiSenseKey_UnitAttention:
+            case ScsiSenseKey_Completed:
+                /* Proceed normally. */
+                break;
+            case ScsiSenseKey_NotReady:
+            case ScsiSenseKey_AbortedCommand:
+                /* Wait some time (3s). */
+                usbHsFsUtilsSleep(3);
+                
+                /* Retry command. */
+                proceed = usbHsFsScsiSendTestUnitReadyCommand(ctx, lun, &status);
+                if (!proceed) USBHSFS_LOG("Test Unit Ready failed! (retry) (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+                break;
+            default:
+                /* Unrecoverable error. */
+                proceed = false;
+                break;
+        }
+        
+        if (!proceed) goto end;
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     
@@ -138,7 +246,7 @@ end:
 
 
 
-static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun)
+static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status)
 {
     if (!ctx || !out_status)
     {
@@ -160,11 +268,40 @@ static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *ctx, u8 *ou
     cbw.CBWCB[0] = ScsiCommandBlockOperationCode_TestUnitReady; /* Operation code. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending Test Unit Ready (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
 }
 
-static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *out_status, u8 lun)
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (pages 47 and 195). */
+static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, ScsiRequestSenseDataFixedFormat *request_sense_desc)
+{
+    if (!ctx || !out_status || !request_sense_desc)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    ScsiCommandBlockWrapper cbw = {0};
+    
+    /* Prepare CBW. */
+    cbw.dCBWSignature = __builtin_bswap32(SCSI_CBW_SIGNATURE);
+    randomGet(&(cbw.dCBWTag), sizeof(cbw.dCBWTag));
+    cbw.dCBWDataTransferLength = sizeof(ScsiRequestSenseDataFixedFormat);   /* Just request the fixed format descriptor without any additional sense bytes. */
+    cbw.bmCBWFlags = USB_ENDPOINT_IN;
+    cbw.bCBWLUN = lun;
+    cbw.bCBWCBLength = 6;
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandBlockOperationCode_RequestSense;              /* Operation code. */
+    cbw.CBWCB[3] = 0x00;                                                    /* Use fixed format sense data. */
+    cbw.CBWCB[4] = (u8)cbw.dCBWDataTransferLength;                          /* Must match dCBWDataTransferLength. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, request_sense_desc, out_status, 0);
+}
+
+static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status)
 {
     if (!ctx || !out_status)
     {
@@ -190,7 +327,7 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *ou
     cbw.CBWCB[4] = ((1 << 4) | 1);                              /* Cause the logical unit to transition to the active power condition. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending Start Stop Unit (%02X) command (interface %d, LUN %u).", cbw.CBWCB[0], ctx->usb_if_session.ID, lun);
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, NULL, out_status, 0);
 }
 
@@ -207,15 +344,16 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 *ou
 
 
 
-static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, u8 *data_buf, u8 *out_status, u8 retry_cnt)
+static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBlockWrapper *cbw, void *buf, u8 *out_status, u8 retry_cnt)
 {
-    if (!ctx || !cbw || (cbw->dCBWDataTransferLength && !data_buf) || !out_status)
+    if (!ctx || !cbw || (cbw->dCBWDataTransferLength && !buf) || !out_status)
     {
         USBHSFS_LOG("Invalid parameters!");
         return false;
     }
     
     Result rc = 0;
+    u8 *data_buf = (u8*)buf;
     u32 blksize = USB_CTRL_XFER_BUFFER_SIZE;
     u32 data_size = cbw->dCBWDataTransferLength, data_transferred = 0;
     ScsiCommandStatusWrapper csw = {0};
@@ -301,7 +439,7 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *ctx, ScsiCom
     /* Send CBW. */
     /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled exactly the same as CSW or data stage transfers. */
     /* A reset recovery must be performed if something goes wrong and the output endpoint is STALLed by the device. */
-    rc = usbHsEpPostBuffer(&(ctx->usb_out_ep_session), cbw, sizeof(ScsiCommandBlockWrapper), &xfer_size);
+    rc = usbHsEpPostBuffer(&(ctx->usb_out_ep_session), ctx->ctrl_xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, ctx->usb_if_session.ID, cbw->bCBWLUN);
@@ -346,8 +484,6 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *ctx, Scs
     u32 xfer_size = 0;
     bool ret = false, valid_csw = false;
     ScsiCommandStatusWrapper *csw = (ScsiCommandStatusWrapper*)ctx->ctrl_xfer_buf;
-    
-    USBHSFS_LOG("Receiving CSW (interface %d, LUN %u).", ctx->usb_if_session.ID, cbw->bCBWLUN);
     
     /* Receive CSW. */
     rc = usbHsFsRequestPostBuffer(ctx, false, csw, sizeof(ScsiCommandStatusWrapper), &xfer_size, true);
