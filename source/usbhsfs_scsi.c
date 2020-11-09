@@ -48,8 +48,14 @@ typedef enum {
     ScsiCommandOperationCode_Inquiry              = 0x12,
     ScsiCommandOperationCode_StartStopUnit        = 0x1B,
     ScsiCommandOperationCode_ReadFormatCapacities = 0x23,
+    ScsiCommandOperationCode_Read6                = 0x08,
     ScsiCommandOperationCode_Read10               = 0x28,
+    ScsiCommandOperationCode_Read12               = 0xA8,
     ScsiCommandOperationCode_Read16               = 0x88,
+    ScsiCommandOperationCode_Write6               = 0x0A,
+    ScsiCommandOperationCode_Write10              = 0x2A,
+    ScsiCommandOperationCode_Write12              = 0xAA,
+    ScsiCommandOperationCode_Write16              = 0x8A,
 } ScsiCommandOperationCode;
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
@@ -423,6 +429,28 @@ static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *ctx, u8 lun,
     return usbHsFsScsiTransferCommand(ctx, &cbw, request_sense_desc, out_status, 0);
 }
 
+static bool usbHsFsScsiSendRead6Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u16 lba, u8 transfer_len, void *out_buf)
+{
+    if (!ctx || !out_status || !out_buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 6);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Read6;    /* Operation code. */
+    *(u16*)&cbw.CBWCB[2] = lba;                       /* Logical block address. */
+    cbw.CBWCB[4] = transfer_len;                      /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, out_buf, out_status, 0);
+}
+
 static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u32 lba, u16 transfer_len, void *out_buf)
 {
     if (!ctx || !out_status || !out_buf)
@@ -439,6 +467,28 @@ static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *o
     cbw.CBWCB[0] = ScsiCommandOperationCode_Read10;   /* Operation code. */
     *(u32*)&cbw.CBWCB[2] = lba;                       /* Logical block address. */
     *(u16*)&cbw.CBWCB[7] = transfer_len;              /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, out_buf, out_status, 0);
+}
+
+static bool usbHsFsScsiSendRead12Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u32 lba, u32 transfer_len, void *out_buf)
+{
+    if (!ctx || !out_status || !out_buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 12);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Read12;   /* Operation code. */
+    *(u32*)&cbw.CBWCB[2] = lba;                       /* Logical block address. */
+    *(u32*)&cbw.CBWCB[6] = transfer_len;              /* Transfer length. */
     
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
@@ -465,6 +515,94 @@ static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *o
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
     return usbHsFsScsiTransferCommand(ctx, &cbw, out_buf, out_status, 0);
+}
+
+static bool usbHsFsScsiSendWrite6Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u16 lba, u8 transfer_len, const void *buf)
+{
+    if (!ctx || !out_status || !buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 6);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Write6;    /* Operation code. */
+    *(u16*)&cbw.CBWCB[2] = lba;                        /* Logical block address. */
+    cbw.CBWCB[4] = transfer_len;                       /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, buf, out_status, 0);
+}
+
+static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u32 lba, u16 transfer_len, const void *buf)
+{
+    if (!ctx || !out_status || !buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 10);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Write10;   /* Operation code. */
+    *(u32*)&cbw.CBWCB[2] = lba;                        /* Logical block address. */
+    *(u16*)&cbw.CBWCB[7] = transfer_len;               /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, buf, out_status, 0);
+}
+
+static bool usbHsFsScsiSendWrite12Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u32 lba, u32 transfer_len, const void *buf)
+{
+    if (!ctx || !out_status || !buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 12);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Write12;   /* Operation code. */
+    *(u32*)&cbw.CBWCB[2] = lba;                        /* Logical block address. */
+    *(u32*)&cbw.CBWCB[6] = transfer_len;               /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, buf, out_status, 0);
+}
+
+static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *ctx, u8 lun, u8 *out_status, u64 lba, u32 transfer_len, const void *buf)
+{
+    if (!ctx || !out_status || !buf)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return false;
+    }
+    
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, lba * transfer_len, true, lun, 16);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_Write16;   /* Operation code. */
+    *(u64*)&cbw.CBWCB[2] = lba;                        /* Logical block address. */
+    *(u32*)&cbw.CBWCB[10] = transfer_len;              /* Transfer length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
+    return usbHsFsScsiTransferCommand(ctx, &cbw, buf, out_status, 0);
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 92). */
@@ -781,5 +919,7 @@ bool usbHsFsScsiReadDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_of
 
 bool usbHsFsScsiWriteDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, const void *buf)
 {
-    return false;
+    u8 status;
+    if((sector_offset + sector_count) > UINT32_MAX) return usbHsFsScsiSendWrite16Command(ctx, lun, &status, sector_offset, sector_count, buf);
+    else return usbHsFsScsiSendWrite10Command(ctx, lun, &status, sector_offset, sector_count, buf);
 }
