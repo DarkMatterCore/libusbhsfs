@@ -1,5 +1,5 @@
 /*
- * fat_dev.h
+ * usbhsfs_manager.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,12 +22,17 @@
 
 #pragma once
 
-#ifndef __FAT_DEV_H__
-#define __FAT_DEV_H__
+#ifndef __USBHSFS_MANAGER_H__
+#define __USBHSFS_MANAGER_H__
 
-#include "../usbhsfs_utils.h"
-#include "../usbhsfs_drive.h"
+#include "usbhsfs_drive.h"
 
-const devoptab_t usbHsFsFatGetDevoptab();
+/// Used to lock the drive manager mutex to prevent it from updating drive contexts while working with them.
+/// Use with caution.
+void usbHsFsManagerMutexControl(bool lock);
 
-#endif  /* __FAT_DEV_H__ */
+/// Returns a pointer to the parent drive context from the provided LUN context, or NULL if an error occurs.
+/// The drive manager mutex must have been locked beforehand to achieve thread-safety.
+UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+
+#endif  /* __USBHSFS_MANAGER_H__ */

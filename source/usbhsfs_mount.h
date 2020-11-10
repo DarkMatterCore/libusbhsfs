@@ -1,5 +1,5 @@
 /*
- * fat_dev.h
+ * usbhsfs_mount.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,12 +22,22 @@
 
 #pragma once
 
-#ifndef __FAT_DEV_H__
-#define __FAT_DEV_H__
+#ifndef __USBHSFS_MOUNT_H__
+#define __USBHSFS_MOUNT_H__
 
-#include "../usbhsfs_utils.h"
-#include "../usbhsfs_drive.h"
+#include "usbhsfs_drive.h"
 
-const devoptab_t usbHsFsFatGetDevoptab();
+bool usbHsFsMountLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+bool usbHsFsUnmountLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
 
-#endif  /* __FAT_DEV_H__ */
+NX_CONSTEXPR bool usbHsFsLogicalUnitContextIsMounted(UsbHsFsDriveLogicalUnitContext *lun_ctx)
+{
+    return lun_ctx && (lun_ctx->fs_type != UsbHsFsFileSystemType_Invalid) && (lun_ctx->mount_idx != USBHSFS_DRIVE_INVALID_MOUNT_INDEX);
+}
+
+void usbHsFsFormatMountName(char *name, u32 idx);
+
+bool usbHsFsGetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, char *out_label);
+bool usbHsFsSetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, const char *label);
+
+#endif  /* __USBHSFS_MOUNT_H__ */

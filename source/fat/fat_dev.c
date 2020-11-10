@@ -1,5 +1,5 @@
 /*
- * usbhsfs_drive.c
+ * fat_dev.c
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.

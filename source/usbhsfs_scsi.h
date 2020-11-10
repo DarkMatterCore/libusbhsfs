@@ -25,13 +25,19 @@
 #ifndef __USBHSFS_SCSI_H__
 #define __USBHSFS_SCSI_H__
 
-#include "usbhsfs_drive.h"
-
-
-bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun);
+#include "usbhsfs_manager.h"
 
 bool usbHsFsScsiReadDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, void *out_buf);
 bool usbHsFsScsiWriteDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, const void *buf);
+/// Prepares a LUN from the provided drive context using SCSI commands and initializes an output LUN context.
+bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx);
 
+/// Reads logical blocks from a drive LUN using the provided LUN context.
+/// Takes care of thread-synchronization lock mechanisms on its own. Suitable for filesystem libraries.
+bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count);
+
+/// Writes logical blocks to a drive LUN using the provided LUN context.
+/// Takes care of thread-synchronization lock mechanisms on its own. Suitable for filesystem libraries.
+bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count);
 
 #endif  /* __USBHSFS_SCSI_H__ */

@@ -1,5 +1,27 @@
+/*
+ * usbhsfs.c
+ *
+ * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020, XorTroll.
+ *
+ * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
+ *
+ * libusbhsfs is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
+ *
+ * libusbhsfs is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "usbhsfs.h"
-#include "usbhsfs_drive.h"
+#include "usbhsfs_mount.h"
 
 extern UsbHsFsDriveContext *g_driveContexts;
 extern u32 g_driveCount;
@@ -34,34 +56,54 @@ bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun)
     return true;
 }
 
-bool usbHsFsMountDeviceLUN(s32 device_id, u8 lun, u32 *out_mount_idx)
+bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx)
 {
     UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
     if(!ctx) return false;
     if(lun >= ctx->max_lun) return false;
     
-    UsbHsFsDrive *drive = &ctx->lun_drives[lun];
-    bool mounted = usbHsFsDriveMount(drive);
-    if(mounted && out_mount_idx) *out_mount_idx = drive->mount_idx;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &ctx->lun_ctx[lun];
+    bool mounted = usbHsFsMountLogicalUnitContext(lun_ctx);
+    if(mounted && out_mount_idx) *out_mount_idx = lun_ctx->mount_idx;
     return mounted; 
 }
 
-bool usbHsFsIsMountedDeviceLUN(s32 device_id, u8 lun)
+bool usbHsFsIsMounted(s32 device_id, u8 lun)
 {
     UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
     if(!ctx) return false;
     if(lun >= ctx->max_lun) return false;
     
-    UsbHsFsDrive *drive = &ctx->lun_drives[lun];
-    return usbHsFsDriveIsMounted(drive);
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &ctx->lun_ctx[lun];
+    return usbHsFsLogicalUnitContextIsMounted(lun_ctx);
 }
 
-bool usbHsFsUnmountDeviceLUN(s32 device_id, u8 lun)
+bool usbHsFsUnmount(s32 device_id, u8 lun)
 {
     UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
     if(!ctx) return false;
     if(lun >= ctx->max_lun) return false;
     
-    UsbHsFsDrive *drive = &ctx->lun_drives[lun];
-    return usbHsFsDriveUnmount(drive);
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &ctx->lun_ctx[lun];
+    return usbHsFsUnmountLogicalUnitContext(lun_ctx);
+}
+
+bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label)
+{
+    UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
+    if(!ctx) return false;
+    if(lun >= ctx->max_lun) return false;
+    
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &ctx->lun_ctx[lun];
+    return usbHsFsGetLogicalUnitContextLabel(lun_ctx, out_label);
+}
+
+bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label)
+{
+    UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
+    if(!ctx) return false;
+    if(lun >= ctx->max_lun) return false;
+    
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &ctx->lun_ctx[lun];
+    return usbHsFsSetLogicalUnitContextLabel(lun_ctx, label);
 }

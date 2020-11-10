@@ -18,10 +18,33 @@ void do_drives() {
                 std::cout << "- ID " << dev_id << ", LUN " << (u32)j << std::endl;
                 consoleUpdate(nullptr);
                 u32 mount_idx = 0;
-                if(usbHsFsMountDeviceLUN(dev_id, j, &mount_idx)) {
+                if(usbHsFsMount(dev_id, j, &mount_idx)) {
                     std::cout << "-- Mounted at index " << mount_idx << "!" << std::endl;
                     consoleUpdate(nullptr);
-                    usbHsFsUnmountDeviceLUN(dev_id, j);
+
+                    char old_label[50];
+                    if(usbHsFsGetLabel(dev_id, j, old_label)) {
+                        std::cout << "-- Got label '" << old_label << "'!" << std::endl;
+                    }
+                    else {
+                        std::cout << "-- Getting label failed..." << std::endl;
+                        consoleUpdate(nullptr);
+                    }
+
+                    const char *label = "RUBEN-PUTO";
+                    std::cout << "-- Setting label '" << label << "'..." << std::endl;
+                    consoleUpdate(nullptr);
+                    if(usbHsFsSetLabel(dev_id, j, label)) {
+                        std::cout << "-- Setting label succeeded!" << std::endl;
+                        consoleUpdate(nullptr);
+                    }
+                    else {
+                        std::cout << "-- Setting label failed..." << std::endl;
+                        consoleUpdate(nullptr);
+                    }
+
+                    
+                    usbHsFsUnmount(dev_id, j);
                 }
                 else {
                     std::cout << "-- Error when mounting!" << std::endl;

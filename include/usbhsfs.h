@@ -35,9 +35,13 @@ Result usbHsFsInitialize(void);
 
 u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
 bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
-bool usbHsFsMountDeviceLUN(s32 device_id, u8 lun, u32 *out_mount_idx);
-bool usbHsFsIsMountedDeviceLUN(s32 device_id, u8 lun);
-bool usbHsFsUnmountDeviceLUN(s32 device_id, u8 lun);
+
+bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
+bool usbHsFsIsMounted(s32 device_id, u8 lun);
+bool usbHsFsUnmount(s32 device_id, u8 lun);
+
+bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
+bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
 
 void usbHsFsExit(void);
 

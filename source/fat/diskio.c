@@ -15,13 +15,14 @@
 #include "diskio.h"		/* Declarations of disk functions */
 
 #include <switch.h>
-#include "../usbhsfs_drive.h"
+#include "../usbhsfs_utils.h"
+#include "../usbhsfs_mount.h"
 #include "../usbhsfs_scsi.h"
 
 extern UsbHsFsDriveContext *g_driveContexts;
 extern u32 g_driveCount;
 
-static UsbHsFsDrive *usbHsFsFatFindDriveByMountIndex(u32 idx, UsbHsFsDriveContext **out_ctx)
+static UsbHsFsDriveLogicalUnitContext *usbHsFsFatFindLogicalUnitContext(u32 idx)
 {
 	if(idx == USBHSFS_DRIVE_INVALID_MOUNT_INDEX) return NULL;
 
@@ -30,12 +31,8 @@ static UsbHsFsDrive *usbHsFsFatFindDriveByMountIndex(u32 idx, UsbHsFsDriveContex
 		UsbHsFsDriveContext *cur_ctx = &g_driveContexts[i];
 		for(u8 j = 0; j < cur_ctx->max_lun; j++)
 		{
-			UsbHsFsDrive *cur_drive = &cur_ctx->lun_drives[j];
-			if(usbHsFsDriveIsMounted(cur_drive) && (cur_drive->fs_type == UsbHsFsFileSystemType_FAT) && (cur_drive->mount_idx == idx))
-			{
-				if(out_ctx) *out_ctx = cur_ctx;
-				return cur_drive;
-			}
+			UsbHsFsDriveLogicalUnitContext *cur_lun_ctx = &cur_ctx->lun_ctx[j];
+			if(usbHsFsLogicalUnitContextIsMounted(cur_lun_ctx) && (cur_lun_ctx->fs_type == UsbHsFsFileSystemType_FAT) && (cur_lun_ctx->mount_idx == idx)) return cur_lun_ctx;
 		}
 	}
 
@@ -81,10 +78,11 @@ DRESULT disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
-	UsbHsFsDriveContext *ctx = NULL;
-	UsbHsFsDrive *drive = usbHsFsFatFindDriveByMountIndex((u32)pdrv, &ctx);
+	USBHSFS_LOG("Drive no: %d", pdrv);
+	UsbHsFsDriveLogicalUnitContext *lun_ctx = usbHsFsFatFindLogicalUnitContext((u32)pdrv);
+	USBHSFS_LOG("Ctx: %p", lun_ctx);
 
-	if(ctx && drive && usbHsFsScsiReadDriveSectors(ctx, drive->lun, sector, count, buff)) return RES_OK;
+	if(lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buff, sector, count)) return RES_OK;
 	return RES_PARERR;
 }
 
@@ -102,10 +100,11 @@ DRESULT disk_write (
 	UINT count			/* Number of sectors to write */
 )
 {
-	UsbHsFsDriveContext *ctx = NULL;
-	UsbHsFsDrive *drive = usbHsFsFatFindDriveByMountIndex((u32)pdrv, &ctx);
+	USBHSFS_LOG("Drive no: %d", pdrv);
+	UsbHsFsDriveLogicalUnitContext *lun_ctx = usbHsFsFatFindLogicalUnitContext((u32)pdrv);
+	USBHSFS_LOG("Ctx: %p", lun_ctx);
 
-	if(ctx && drive && usbHsFsScsiWriteDriveSectors(ctx, drive->lun, sector, count, buff)) return RES_OK;
+	if(lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, (void*)buff, sector, count)) return RES_OK;
 	return RES_PARERR;
 }
 
@@ -122,8 +121,18 @@ DRESULT disk_ioctl (
 	void *buff		/* Buffer to send/receive control data */
 )
 {
+	USBHSFS_LOG("Drive no: %d", pdrv);
+	UsbHsFsDriveLogicalUnitContext *lun_ctx = usbHsFsFatFindLogicalUnitContext((u32)pdrv);
+	USBHSFS_LOG("Ctx: %p", lun_ctx);
     switch(cmd) {
-        /* TODO */
+        case GET_SECTOR_SIZE:
+			USBHSFS_LOG("Get sector size");
+			*(u32*)buff = lun_ctx->block_length;
+			break;
+		case GET_SECTOR_COUNT:
+			USBHSFS_LOG("Get sector count");
+			*(u32*)buff = lun_ctx->block_count;
+			break;
         default:
             break;
     }

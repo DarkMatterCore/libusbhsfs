@@ -1,5 +1,5 @@
 /*
- * usbhsfs_drive.h
+ * fat_mount.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -26,9 +26,12 @@
 #define __FAT_MOUNT_H__
 
 #include "../usbhsfs_utils.h"
-#include "../usbhsfs_drive.h"
+#include "../usbhsfs_mount.h"
 
-bool usbHsFsFatMountDrive(UsbHsFsDrive *ctx);
-bool usbHsFsFatUnmountDrive(UsbHsFsDrive *ctx);
+bool usbHsFsFatMount(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+bool usbHsFsFatUnmount(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+
+bool usbHsFsFatGetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, char *out_label);
+bool usbHsFsFatSetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, const char *label);
 
 #endif  /* __FAT_MOUNT_H__ */
