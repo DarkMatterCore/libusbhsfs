@@ -354,66 +354,6 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     /* Update return value. */
     ret = true;
     
-    
-    
-    
-    
-    
-#ifdef DEBUG
-    u32 bufsize = 0x8000000;    /* 128 MiB, more than enough to exceed the Read (10) limit. */
-    if (capacity < bufsize) goto end;
-    
-    char path[0x20] = {0};
-    sprintf(path, "sdmc:/%d_chunk.bin", drive_ctx->usb_if_id);
-    
-    u8 *bigbuf = NULL;
-    FILE *fd = NULL;
-    
-    bigbuf = malloc(bufsize);
-    if (bigbuf)
-    {
-        u32 xfer_blk_cnt = (bufsize / block_length);
-        if (xfer_blk_cnt > block_count) xfer_blk_cnt = block_count;
-        
-        u32 data_transferred = 0;
-        u64 cur_block_addr = 0;
-        
-        time_t start = time(NULL);
-        
-        fd = fopen(path, "wb");
-        if (fd)
-        {
-            while(xfer_blk_cnt)
-            {
-                u16 cur_block_count = (xfer_blk_cnt > SCSI_RW10_MAX_BLOCK_COUNT ? SCSI_RW10_MAX_BLOCK_COUNT : (u16)xfer_blk_cnt);
-                
-                if (!usbHsFsScsiSendRead10Command(drive_ctx, lun, bigbuf + data_transferred, cur_block_addr, cur_block_count, block_length)) break;
-                
-                data_transferred += (cur_block_count * block_length);
-                
-                cur_block_addr += cur_block_count;
-                
-                xfer_blk_cnt -= cur_block_count;
-            }
-            
-            if (!xfer_blk_cnt)
-            {
-                time_t end = time(NULL);
-                USBHSFS_LOG("Chunk dumped in %lu seconds.", end - start);
-                fwrite(bigbuf, 1, bufsize, fd);
-            }
-            
-            fclose(fd);
-        }
-        
-        free(bigbuf);
-    }
-#endif
-    
-    
-    
-    
-    
 end:
     mutexUnlock(&(drive_ctx->mutex));
     
