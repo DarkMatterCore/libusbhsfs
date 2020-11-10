@@ -626,7 +626,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
         }
     }
     
-    if (ret && csw.bCSWStatus != ScsiCommandStatus_Passed)
+    if (ret && csw.bCSWStatus != ScsiCommandStatus_Passed && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
     {
         /* Send Request Sense SCSI command. */
         if (!usbHsFsScsiSendRequestSenseCommand(ctx, cbw->bCBWLUN, &request_sense_desc))
