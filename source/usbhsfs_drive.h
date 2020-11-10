@@ -39,6 +39,7 @@ typedef struct {
     s32 usb_if_id;              ///< USB interface ID. Used to find the drive context this LUN context belongs to.
     u8 lun;                     ///< Drive LUN index (zero-based, up to 15). Used to send SCSI commands.
     bool removable;             ///< Set to true if this LUN is removable. Retrieved via Inquiry SCSI command.
+    bool eject_supported;       ///< Set to true if ejection via Prevent/Allow Medium Removal + Start Stop Unit is supported.
     char vendor_id[0x9];        ///< Vendor identification string. Retrieved via Inquiry SCSI command. May be empty.
     char product_id[0x11];      ///< Product identification string. Retrieved via Inquiry SCSI command. May be empty.
     char product_revision[0x5]; ///< Product revision string. Retrieved via Inquiry SCSI command. May be empty.

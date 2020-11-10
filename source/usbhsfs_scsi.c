@@ -51,18 +51,19 @@ typedef struct {
 #pragma pack(pop)
 
 typedef enum {
-    ScsiCommandOperationCode_TestUnitReady   = 0x00,
-    ScsiCommandOperationCode_RequestSense    = 0x03,
-    ScsiCommandOperationCode_Inquiry         = 0x12,
-    ScsiCommandOperationCode_StartStopUnit   = 0x1B,
-    ScsiCommandOperationCode_ReadCapacity10  = 0x25,
-    ScsiCommandOperationCode_Read10          = 0x28,
-    ScsiCommandOperationCode_Write10         = 0x2A,
-    ScsiCommandOperationCode_Read16          = 0x88,
-    ScsiCommandOperationCode_Write16         = 0x8A,
-    ScsiCommandOperationCode_ServiceActionIn = 0x9E,
-    ScsiCommandOperationCode_Read12          = 0xA8,
-    ScsiCommandOperationCode_Write12         = 0xAA
+    ScsiCommandOperationCode_TestUnitReady             = 0x00,
+    ScsiCommandOperationCode_RequestSense              = 0x03,
+    ScsiCommandOperationCode_Inquiry                   = 0x12,
+    ScsiCommandOperationCode_StartStopUnit             = 0x1B,
+    ScsiCommandOperationCode_PreventAllowMediumRemoval = 0x1E,
+    ScsiCommandOperationCode_ReadCapacity10            = 0x25,
+    ScsiCommandOperationCode_Read10                    = 0x28,
+    ScsiCommandOperationCode_Write10                   = 0x2A,
+    ScsiCommandOperationCode_Read16                    = 0x88,
+    ScsiCommandOperationCode_Write16                   = 0x8A,
+    ScsiCommandOperationCode_ServiceActionIn           = 0x9E,
+    ScsiCommandOperationCode_Read12                    = 0xA8,
+    ScsiCommandOperationCode_Write12                   = 0xAA
 } ScsiCommandOperationCode;
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
@@ -198,7 +199,8 @@ typedef struct {
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
 static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiRequestSenseDataFixedFormat *request_sense_desc);
 static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiInquiryStandardData *inquiry_data);
-static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
+static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool start);
+static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool prevent);
 static bool usbHsFsScsiSendReadCapacity10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiReadCapacity10Data *read_capacity_10_data);
 static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length);
 static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length);
@@ -228,7 +230,7 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     ScsiReadCapacity10Data read_capacity_10_data = {0};
     ScsiReadCapacity16Data read_capacity_16_data = {0};
     u64 block_count = 0, block_length = 0, capacity = 0;
-    bool ret = false, rc16_used = false;
+    bool ret = false, eject_supported = false, rc16_used = false;
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
@@ -253,8 +255,25 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
     
-    /* Send Start Stop Unit SCSI command. This may not be supported by all devices. */
-    if (inquiry_data.rmb && !usbHsFsScsiSendStartStopUnitCommand(drive_ctx, lun)) USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+    /* Perform necessary steps for removable LUNs. */
+    if (inquiry_data.rmb)
+    {
+        /* Send Prevent/Allow Medium Removal SCSI command. Not supported by all devices. We're OK if it fails. */
+        if (usbHsFsScsiSendPreventAllowMediumRemovalCommand(drive_ctx, lun, true))
+        {
+            /* Send Start Stop Unit SCSI command. */
+            if (!usbHsFsScsiSendStartStopUnitCommand(drive_ctx, lun, true))
+            {
+                USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+                goto end;
+            }
+            
+            /* Update eject supported flag. */
+            eject_supported = true;
+        } else {
+            USBHSFS_LOG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+        }
+    }
     
     /* Send Test Unit Ready SCSI command. */
     if (!usbHsFsScsiSendTestUnitReadyCommand(drive_ctx, lun))
@@ -320,6 +339,7 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     lun_ctx->lun = lun;
     lun_ctx->removable = inquiry_data.rmb;
     lun_ctx->mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
+    lun_ctx->eject_supported = eject_supported;
     
     memcpy(lun_ctx->vendor_id, inquiry_data.vendor_id, sizeof(inquiry_data.vendor_id));
     usbHsFsUtilsTrimString(lun_ctx->vendor_id);
@@ -428,24 +448,6 @@ end:
     return ret;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 230). */
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun)
 {
@@ -498,7 +500,7 @@ static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (pages 223 and 224). */
-static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun)
+static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool start)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
@@ -509,7 +511,24 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, 
     cbw.CBWCB[1] = 0;                                       /* Return status after the whole operation is completed. */
     cbw.CBWCB[2] = 0;                                       /* Reserved. */
     cbw.CBWCB[3] = 0;                                       /* Unused for our configuration. */
-    cbw.CBWCB[4] = 1;                                       /* Cause the logical unit to transition to the active power condition. */
+    cbw.CBWCB[4] = (start ? 1 : 2);                         /* Start: LOEJ cleared, START set. Stop: LOEJ set, START cleared. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL, 0);
+}
+
+/* Reference: https://web.archive.org/web/20201109051603if_/https://docs.oracle.com/en/storage/tape-storage/storagetek-sl150-modular-tape-library/slorm/preventallow-medium-removal-1eh.html. */
+/* Refenence: https://web.archive.org/web/20201109051603if_/https://docs.oracle.com/en/storage/tape-storage/storagetek-sl150-modular-tape-library/slorm/img_text/slk_100.html. */
+static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool prevent)
+{
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, 0, false, lun, 6);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_PreventAllowMediumRemoval;  /* Operation code. */
+    cbw.CBWCB[4] = (prevent ? 1 : 0);                                   /* Prevent or allow medium removal. */
     
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
