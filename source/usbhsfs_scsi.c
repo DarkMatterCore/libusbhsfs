@@ -227,7 +227,7 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     ScsiInquiryStandardData inquiry_data = {0};
     ScsiReadCapacity10Data read_capacity_10_data = {0};
     ScsiReadCapacity16Data read_capacity_16_data = {0};
-    u64 block_count = 0, block_length = 0, capacity = 0;
+    u64 capacity = 0;
     bool ret = false;
     
 #ifdef DEBUG
@@ -300,18 +300,19 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
         strcat(hexdump, "\r\n");
         usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
-        
+
+        ctx->has_capacity_16 = true;  
         /* Store block count and length. */
-        block_count = __builtin_bswap64(read_capacity_16_data.block_count);
-        block_length = __builtin_bswap32(read_capacity_16_data.block_length);
+        ctx->block_count = __builtin_bswap64(read_capacity_16_data.block_count);
+        ctx->block_length = __builtin_bswap32(read_capacity_16_data.block_length);
     } else {
         /* Store block count and length. */
-        block_count = __builtin_bswap32(read_capacity_10_data.block_count);
-        block_length = __builtin_bswap32(read_capacity_10_data.block_length);
+        ctx->block_count = __builtin_bswap32(read_capacity_10_data.block_count);
+        ctx->block_length = __builtin_bswap32(read_capacity_10_data.block_length);
     }
     
     /* Calculate LUN capacity. */
-    capacity = (block_count * block_length);
+    capacity = (ctx->block_count * ctx->block_length);
     if (!capacity)
     {
         USBHSFS_LOG("Capacity is zero! (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
@@ -326,12 +327,12 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
 #ifdef DEBUG
     /* Quick test. */
     u8 sector[0x1000] = {0};
-    if (usbHsFsScsiSendRead10Command(ctx, lun, sector, 0, 1, block_length))
+    if (usbHsFsScsiSendRead10Command(ctx, lun, sector, 0, 1, ctx->block_length))
     {
         FILE *fd = fopen("sdmc:/mbr.bin", "ab+");
         if (fd)
         {
-            fwrite(sector, 1, block_length, fd);
+            fwrite(sector, 1, ctx->block_length, fd);
             fclose(fd);
         }
     }
@@ -817,14 +818,19 @@ static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *ctx)
 
 bool usbHsFsScsiReadDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, void *out_buf)
 {
-    u8 status;
-    if((sector_offset + sector_count) > UINT32_MAX) return usbHsFsScsiSendRead16Command(ctx, lun, &status, sector_offset, sector_count, out_buf);
-    else return usbHsFsScsiSendRead10Command(ctx, lun, &status, sector_offset, sector_count, out_buf);
+    if(!ctx) return false;
+
+    if(ctx->has_capacity_16) return usbHsFsScsiSendRead16Command(ctx, lun, out_buf, sector_offset, sector_count, ctx->block_length);
+    else
+    {
+        if(sector_count > 0xFFFF) return usbHsFsScsiSendRead12Command(ctx, lun, out_buf, sector_offset, sector_count, ctx->block_length);
+        else return usbHsFsScsiSendRead10Command(ctx, lun, out_buf, sector_offset, sector_count, ctx->block_length);
+    }
+
+    return false;
 }
 
 bool usbHsFsScsiWriteDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, const void *buf)
 {
-    u8 status;
-    if((sector_offset + sector_count) > UINT32_MAX) return usbHsFsScsiSendWrite16Command(ctx, lun, &status, sector_offset, sector_count, buf);
-    else return usbHsFsScsiSendWrite10Command(ctx, lun, &status, sector_offset, sector_count, buf);
+    return false;
 }

@@ -50,6 +50,9 @@ typedef struct {
 typedef struct {
     Mutex mutex;
     u8 *ctrl_xfer_buf;
+    bool has_capacity_16;
+    u32 block_count;
+    u32 block_length;
     UsbHsClientIfSession usb_if_session;
     UsbHsClientEpSession usb_in_ep_session;
     UsbHsClientEpSession usb_out_ep_session;

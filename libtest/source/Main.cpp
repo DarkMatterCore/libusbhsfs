@@ -37,10 +37,14 @@ int main() {
     usbHsFsInitialize();
 
     
-    while(true) {
+    while(appletMainLoop()) {
         hidScanInput();
-        if(hidKeysDown(CONTROLLER_P1_AUTO) & KEY_A) {
+        auto k = hidKeysDown(CONTROLLER_P1_AUTO);
+        if(k & KEY_A) {
             do_drives();
+        }
+        if(k & KEY_PLUS) {
+            break;
         }
     }
 

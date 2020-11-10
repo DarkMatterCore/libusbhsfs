@@ -73,40 +73,42 @@ static int fatdev_open(struct _reent *r, void *fileStruct, const char *path, int
 
 static int fatdev_close(struct _reent *r, void *fd)
 {
-    /* TODO */
-    r->_errno = EINVAL;
-    return -1;
+    FatFileObject *fat_file = (FatFileObject*)fd;
+
+    FRESULT ff_res = f_close(&fat_file->ff_file);
+    if (ff_res == FR_OK) return 0;
+    else
+    {
+        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+        return -1;
+    }
 }
 
 static ssize_t fatdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
 {
-    /* TODO */
-    r->_errno = EINVAL;
-    return -1;
-}
+    FatFileObject *fat_file = (FatFileObject*)fd;
 
-/*
-static ssize_t fatdev_write_safe(struct _reent *r, void *fd, const char *ptr, size_t len)
-{
-    r->_errno = EINVAL;
-    return -1;
+    FRESULT ff_res = f_write(&fat_file->ff_file, ptr, len, NULL);
+    if (ff_res == FR_OK) return 0;
+    else
+    {
+        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+        return -1;
+    }
 }
-*/
 
 static ssize_t fatdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
 {
-    /* TODO */
-    r->_errno = EINVAL;
-    return -1;
-}
+    FatFileObject *fat_file = (FatFileObject*)fd;
 
-/*
-static ssize_t fatdev_read_safe(struct _reent *r, void *fd, char *ptr, size_t len)
-{
-    r->_errno = EINVAL;
-    return -1;
+    FRESULT ff_res = f_read(&fat_file->ff_file, ptr, len, NULL);
+    if (ff_res == FR_OK) return 0;
+    else
+    {
+        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+        return -1;
+    }
 }
-*/
 
 static off_t fatdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
 {
