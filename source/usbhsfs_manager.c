@@ -21,7 +21,7 @@
  */
 
 #include "usbhsfs_utils.h"
-#include "usbhsfs_drive.h"
+#include "usbhsfs_manager.h"
 
 #define USB_MASS_STORAGE_SCSI_CMD_SET                   0x06
 #define USB_MASS_STORAGE_BULK_ONLY_TRANSPORT            0x50
@@ -164,13 +164,33 @@ end:
     mutexUnlock(&g_managerMutex);
 }
 
+void usbHsFsManagerMutexControl(bool lock)
+{
+    if (lock)
+    {
+        mutexLock(&g_managerMutex);
+    } else {
+        mutexUnlock(&g_managerMutex);
+    }
+}
 
-
-
-
-
-
-
+UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx)
+{
+    if (!lun_ctx || !g_driveCount || !g_driveContexts)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        return NULL;
+    }
+    
+    for(u32 i = 0; i < g_driveCount; i++)
+    {
+        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
+        if (lun_ctx->usb_if_id == drive_ctx->usb_if_id) return drive_ctx;
+    }
+    
+    USBHSFS_LOG("Unable to find a matching drive context for LUN context with USB interface ID %d.", lun_ctx->usb_if_id);
+    return NULL;
+}
 
 
 

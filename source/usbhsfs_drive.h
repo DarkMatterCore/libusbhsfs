@@ -25,15 +25,36 @@
 #ifndef __USBHSFS_DRIVE_H__
 #define __USBHSFS_DRIVE_H__
 
+typedef struct {
+    s32 usb_if_id;              ///< USB interface ID. Used to find the drive context this LUN context belongs to.
+    u8 lun;                     ///< Drive LUN index (zero-based, up to 15). Used to send SCSI commands.
+    bool removable;             ///< Set to true if this LUN is removable. Retrieved via Inquiry SCSI command.
+    char vendor_id[0x9];        ///< Vendor identification string. Retrieved via Inquiry SCSI command. May be empty.
+    char product_id[0x11];      ///< Product identification string. Retrieved via Inquiry SCSI command. May be empty.
+    char product_revision[0x5]; ///< Product revision string. Retrieved via Inquiry SCSI command. May be empty.
+    bool rc16_used;             ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
+    u64 block_count;            ///< Logical block count. Retrieved via Read Capacity SCSI command. Must be non-zero.
+    u32 block_length;           ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
+    u64 capacity;               ///< LUN capacity (block count times block length).
+    
+    /// Place FS stuff here (e.g. partition count, partition objects, etc.).
+    /// Ideally, each partition object would have its own mounted flag, mount name, FS type flag and (possibly) devoptab stuff.
+    /// Unlike drive contexts, pointers to LUN contexts won't change in the background, so it's safe to place a pointer to the parent LUN context in partition FS objects.
+    
+} UsbHsFsDriveLogicalUnitContext;
+
 /// Internal context struct used to handle drives.
 /// Not actually provided to the user.
 typedef struct {
-    Mutex mutex;
-    u8 *ctrl_xfer_buf;
-    UsbHsClientIfSession usb_if_session;
-    UsbHsClientEpSession usb_in_ep_session;
-    UsbHsClientEpSession usb_out_ep_session;
-    u8 max_lun;
+    Mutex mutex;                                ///< Drive mutex.
+    s32 usb_if_id;                              ///< USB interface ID. Exactly the same as usb_if_session.ID / usb_if_session.inf.inf.ID. Placed here for convenience.
+    u8 *ctrl_xfer_buf;                          ///< Dedicated control transfer buffer for this drive.
+    UsbHsClientIfSession usb_if_session;        ///< Interface session.
+    UsbHsClientEpSession usb_in_ep_session;     ///< Input endpoint session (device to host).
+    UsbHsClientEpSession usb_out_ep_session;    ///< Output endpoint session (host to device).
+    u8 max_lun;                                 ///< Max LUNs supported by this drive. Must be at least 1.
+    u8 lun_count;                               ///< Initialized LUN count. May differ from the max LUN count.
+    UsbHsFsDriveLogicalUnitContext *lun_ctx;    ///< Dynamically allocated array of lun_count LUN contexts.
 } UsbHsFsDriveContext;
 
 /// Initializes a drive context using the provided UsbHsInterface object.
@@ -42,7 +63,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
 /// Destroys the provided drive context.
 void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx);
 
-/// Checks if the provided drive context is valid. Not thread safe.
+/// Checks if the provided drive context is valid. Not thread safe - (un)lock the drive mutex yourself.
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *ctx)
 {
     return (ctx && ctx->ctrl_xfer_buf && usbHsIfIsActive(&(ctx->usb_if_session)) && serviceIsActive(&(ctx->usb_in_ep_session.s)) && serviceIsActive(&(ctx->usb_out_ep_session.s)));

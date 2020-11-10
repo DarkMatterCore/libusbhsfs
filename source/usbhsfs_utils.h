@@ -33,7 +33,7 @@
 #include <stdarg.h>
 #include <malloc.h>
 //#include <errno.h>
-//#include <ctype.h>
+#include <ctype.h>
 //#include <math.h>
 #include <time.h>
 //#include <sys/stat.h>
@@ -49,6 +49,8 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 #else
 #define USBHSFS_LOG(fmt, ...)
 #endif
+
+void usbHsFsUtilsTrimString(char *str);
 
 NX_INLINE void usbHsFsUtilsSleep(u64 seconds)
 {

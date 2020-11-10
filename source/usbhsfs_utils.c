@@ -101,3 +101,25 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
     dst[j] = '\0';
 }
 #endif  /* DEBUG */
+
+void usbHsFsUtilsTrimString(char *str)
+{
+    size_t strsize = 0;
+    char *start = NULL, *end = NULL;
+    
+    if (!str || !(strsize = strlen(str))) return;
+    
+    start = str;
+    end = (start + strsize);
+    
+    while(--end >= start)
+    {
+        if (!isspace((unsigned char)*end)) break;
+    }
+    
+    *(++end) = '\0';
+    
+    while(isspace((unsigned char)*start)) start++;
+    
+    if (start != str) memmove(str, start, end - start + 1);
+}
