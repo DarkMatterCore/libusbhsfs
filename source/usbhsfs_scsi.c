@@ -31,6 +31,8 @@
 
 #define SCSI_SERVICE_ACTION_IN_READ_CAPACITY_16 0x10
 
+#define SCSI_ASC_MEDIUM_NOT_PRESENT             0x3A
+
 /* Type definitions. */
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 13).
@@ -655,6 +657,9 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
                 USBHSFS_LOG("Proceeding normally (0x%X) (interface %d, LUN %u).", request_sense_desc.sense_key, ctx->usb_if_session.ID, cbw->bCBWLUN);
                 break;
             case ScsiSenseKey_NotReady:
+                /* Check if we're dealing with a medium not present. */
+                if (request_sense_desc.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT) break;
+                
                 /* Wait some time (3s). */
                 usbHsFsUtilsSleep(3);
             case ScsiSenseKey_AbortedCommand:
