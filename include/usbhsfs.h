@@ -33,8 +33,9 @@ extern "C" {
 
 Result usbHsFsInitialize(void);
 
-u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
-bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
+u32 usbHsFsGetDriveCount();
+u32 usbHsFsListDrives(s32 *out_buf, u32 max_count);
+bool usbHsFsGetDriveMaxLUN(s32 device_id, u8 *out_max_lun);
 
 bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
 bool usbHsFsIsMounted(s32 device_id, u8 lun);

@@ -1,5 +1,7 @@
 #include <usbhsfs.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 
 void getLabel(s32 device_id, u8 lun)
@@ -21,6 +23,7 @@ void setLabel(s32 device_id, u8 lun)
 
 void fsTest(s32 device_id, u8 lun)
 {
+    /* We are only mounting one drive at a time, so it's guaranteed to be usb-0. */
     FILE *fp = fopen("usb-0:/sample.txt", "w");
     if(fp)
     {
@@ -50,24 +53,28 @@ bool waitConfirmation()
 }
 
 void listTestDrives() {
-    consoleClear();
-    s32 device_id_array[20] = {};
-
-    u32 device_count = usbHsFsListFoundDevices(device_id_array, 20);
-    printf("Found %d devices...\n", device_count);
+    u32 drive_count = usbHsFsGetDriveCount();
+    printf("Found %d devices...\n", drive_count);
     consoleUpdate(NULL);
 
-    for(u32 i = 0; i < device_count; i++)
+    s32 *drive_array = (s32*)malloc(sizeof(s32) * drive_count);
+    memset(drive_array, 0, sizeof(s32) * drive_count);
+
+    drive_count = usbHsFsListDrives(drive_array, drive_count);
+    printf("Listed %d devices...\n", drive_count);
+    consoleUpdate(NULL);
+
+    for(u32 i = 0; i < drive_count; i++)
     {
-        s32 dev_id = device_id_array[i];
-        printf("Devices[%d] -> ID %d\n", i, dev_id);
+        s32 drive_id = drive_array[i];
+        printf("Drives[%d] -> ID %d\n", i, drive_id);
         consoleUpdate(NULL);
 
         printf("Would you like to test this drive?\n");
         if(waitConfirmation())
         {
             u8 max_lun = 0;
-            if(usbHsFsGetDeviceMaxLUN(dev_id, &max_lun))
+            if(usbHsFsGetDriveMaxLUN(drive_id, &max_lun))
             {
                 for(u8 j = 0; j < max_lun; j++)
                 {
@@ -75,7 +82,7 @@ void listTestDrives() {
                     if(waitConfirmation())
                     {
                         u32 mount_idx = 0;
-                        if(usbHsFsMount(dev_id, j, &mount_idx))
+                        if(usbHsFsMount(drive_id, j, &mount_idx))
                         {
                             printf("Mounted drive LUN as 'usb-%d:/'!\n", mount_idx);
                             consoleUpdate(NULL);
@@ -87,14 +94,14 @@ void listTestDrives() {
                                 hidScanInput();
 
                                 u64 k = hidKeysDown(CONTROLLER_P1_AUTO);
-                                if(k & KEY_A) getLabel(dev_id, j);
-                                else if(k & KEY_X) setLabel(dev_id, j);
-                                else if(k & KEY_Y) fsTest(dev_id, j);
+                                if(k & KEY_A) getLabel(drive_id, j);
+                                else if(k & KEY_X) setLabel(drive_id, j);
+                                else if(k & KEY_Y) fsTest(drive_id, j);
                                 else if(k) break;
                             }
 
                             printf("Unmounting drive LUN...\n");
-                            usbHsFsUnmount(dev_id, j);
+                            usbHsFsUnmount(drive_id, j);
                         }
                         else {
                             printf("Unable to mount LUN...\n");
