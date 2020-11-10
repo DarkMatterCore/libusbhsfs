@@ -307,7 +307,7 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
         strcat(hexdump, "\r\n");
         usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
-        
+
         /* Store block count and length. */
         block_count = __builtin_bswap64(read_capacity_16_data.block_count);
         block_length = __builtin_bswap32(read_capacity_16_data.block_length);
@@ -334,6 +334,7 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     lun_ctx->usb_if_id = drive_ctx->usb_if_id;
     lun_ctx->lun = lun;
     lun_ctx->removable = inquiry_data.rmb;
+    lun_ctx->mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
     lun_ctx->eject_supported = eject_supported;
     
     memcpy(lun_ctx->vendor_id, inquiry_data.vendor_id, sizeof(inquiry_data.vendor_id));

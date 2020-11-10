@@ -27,6 +27,8 @@
 
 #include "usbhsfs_manager.h"
 
+bool usbHsFsScsiReadDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, void *out_buf);
+bool usbHsFsScsiWriteDriveSectors(UsbHsFsDriveContext *ctx, u8 lun, u64 sector_offset, u32 sector_count, const void *buf);
 /// Prepares a LUN from the provided drive context using SCSI commands and initializes an output LUN context.
 bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx);
 

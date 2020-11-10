@@ -22,8 +22,18 @@
 
 #pragma once
 
+#include "fat/ff.h"
+#include <sys/iosupport.h>
+
 #ifndef __USBHSFS_DRIVE_H__
 #define __USBHSFS_DRIVE_H__
+
+typedef enum {
+    UsbHsFsFileSystemType_Invalid = 0,
+    UsbHsFsFileSystemType_FAT     = 1
+} UsbHsFsFileSystemType;
+
+#define USBHSFS_DRIVE_INVALID_MOUNT_INDEX UINT32_MAX
 
 typedef struct {
     s32 usb_if_id;              ///< USB interface ID. Used to find the drive context this LUN context belongs to.
@@ -38,10 +48,12 @@ typedef struct {
     u32 block_length;           ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
     u64 capacity;               ///< LUN capacity (block count times block length).
     
-    /// Place FS stuff here (e.g. partition count, partition objects, etc.).
-    /// Ideally, each partition object would have its own mounted flag, mount name, FS type flag and (possibly) devoptab stuff.
-    /// Unlike drive contexts, pointers to LUN contexts won't change in the background, so it's safe to place a pointer to the parent LUN context in partition FS objects.
-    
+    UsbHsFsFileSystemType fs_type;
+    u32 mount_idx;
+    char mount_name[10];
+    devoptab_t devoptab;
+    /* FAT-specific */
+    FATFS fat_fs;
 } UsbHsFsDriveLogicalUnitContext;
 
 /// Internal context struct used to handle drives.
@@ -68,6 +80,14 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx);
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *ctx)
 {
     return (ctx && ctx->ctrl_xfer_buf && usbHsIfIsActive(&(ctx->usb_if_session)) && serviceIsActive(&(ctx->usb_in_ep_session.s)) && serviceIsActive(&(ctx->usb_out_ep_session.s)));
+}
+
+NX_INLINE UsbHsFsDriveLogicalUnitContext *usbHsFsDriveContextGetLogicalUnitContext(UsbHsFsDriveContext *ctx, u8 lun)
+{
+    if(!ctx) return NULL;
+    if(lun >= ctx->max_lun) return NULL;
+
+    return &ctx->lun_ctx[lun];
 }
 
 #endif  /* __USBHSFS_DRIVE_H__ */

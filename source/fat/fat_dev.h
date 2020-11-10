@@ -1,5 +1,5 @@
 /*
- * usbhsfs.h
+ * fat_dev.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,31 +22,12 @@
 
 #pragma once
 
-#ifndef __USBHSFS_H__
-#define __USBHSFS_H__
+#ifndef __FAT_DEV_H__
+#define __FAT_DEV_H__
 
-#include <switch.h>
+#include "../usbhsfs_utils.h"
+#include "../usbhsfs_drive.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+const devoptab_t usbHsFsFatGetDevoptab();
 
-Result usbHsFsInitialize(void);
-
-u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
-bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
-
-bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
-bool usbHsFsIsMounted(s32 device_id, u8 lun);
-bool usbHsFsUnmount(s32 device_id, u8 lun);
-
-bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
-bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
-
-void usbHsFsExit(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif  /* __USBHSFS_H__ */
+#endif  /* __FAT_DEV_H__ */

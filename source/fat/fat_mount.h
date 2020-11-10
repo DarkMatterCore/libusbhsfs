@@ -1,5 +1,5 @@
 /*
- * usbhsfs.h
+ * fat_mount.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,31 +22,16 @@
 
 #pragma once
 
-#ifndef __USBHSFS_H__
-#define __USBHSFS_H__
+#ifndef __FAT_MOUNT_H__
+#define __FAT_MOUNT_H__
 
-#include <switch.h>
+#include "../usbhsfs_utils.h"
+#include "../usbhsfs_mount.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+bool usbHsFsFatMount(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+bool usbHsFsFatUnmount(UsbHsFsDriveLogicalUnitContext *lun_ctx);
 
-Result usbHsFsInitialize(void);
+bool usbHsFsFatGetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, char *out_label);
+bool usbHsFsFatSetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, const char *label);
 
-u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
-bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
-
-bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
-bool usbHsFsIsMounted(s32 device_id, u8 lun);
-bool usbHsFsUnmount(s32 device_id, u8 lun);
-
-bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
-bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
-
-void usbHsFsExit(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif  /* __USBHSFS_H__ */
+#endif  /* __FAT_MOUNT_H__ */
