@@ -31,7 +31,23 @@
 extern "C" {
 #endif
 
+/// Initializes the USB host FS interface.
 Result usbHsFsInitialize(void);
+
+/// Closes the USB host FS interface.
+void usbHsFsExit(void);
+
+/// Returns a pointer to the usermode drive status change event (with autoclear enabled).
+/// Useful to wait for drive status changes without having to constantly poll the interface.
+/// Returns NULL if the USB host FS interface hasn't been initialized.
+UEvent *usbHsFsGetDriveStatusChangeUserEvent(void);
+
+
+
+
+
+
+
 
 u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
 bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
@@ -42,8 +58,6 @@ bool usbHsFsUnmount(s32 device_id, u8 lun);
 
 bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
 bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
-
-void usbHsFsExit(void);
 
 #ifdef __cplusplus
 }

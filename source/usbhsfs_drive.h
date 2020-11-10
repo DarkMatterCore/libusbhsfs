@@ -22,18 +22,18 @@
 
 #pragma once
 
-#include "fat/ff.h"
-#include <sys/iosupport.h>
-
 #ifndef __USBHSFS_DRIVE_H__
 #define __USBHSFS_DRIVE_H__
+
+#include <sys/iosupport.h>
+#include "fat/ff.h"
+
+#define USBHSFS_DRIVE_INVALID_MOUNT_INDEX UINT32_MAX
 
 typedef enum {
     UsbHsFsFileSystemType_Invalid = 0,
     UsbHsFsFileSystemType_FAT     = 1
 } UsbHsFsFileSystemType;
-
-#define USBHSFS_DRIVE_INVALID_MOUNT_INDEX UINT32_MAX
 
 typedef struct {
     s32 usb_if_id;              ///< USB interface ID. Used to find the drive context this LUN context belongs to.
@@ -80,14 +80,6 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx);
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *ctx)
 {
     return (ctx && ctx->ctrl_xfer_buf && usbHsIfIsActive(&(ctx->usb_if_session)) && serviceIsActive(&(ctx->usb_in_ep_session.s)) && serviceIsActive(&(ctx->usb_out_ep_session.s)));
-}
-
-NX_INLINE UsbHsFsDriveLogicalUnitContext *usbHsFsDriveContextGetLogicalUnitContext(UsbHsFsDriveContext *ctx, u8 lun)
-{
-    if(!ctx) return NULL;
-    if(lun >= ctx->max_lun) return NULL;
-
-    return &ctx->lun_ctx[lun];
 }
 
 #endif  /* __USBHSFS_DRIVE_H__ */

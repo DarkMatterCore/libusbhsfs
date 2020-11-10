@@ -307,7 +307,7 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
         strcat(hexdump, "\r\n");
         usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
-
+        
         /* Store block count and length. */
         block_count = __builtin_bswap64(read_capacity_16_data.block_count);
         block_length = __builtin_bswap32(read_capacity_16_data.block_length);

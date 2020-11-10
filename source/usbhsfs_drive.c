@@ -37,7 +37,6 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     UsbHsClientEpSession *usb_in_ep_session = &(ctx->usb_in_ep_session);
     UsbHsClientEpSession *usb_out_ep_session = &(ctx->usb_out_ep_session);
     UsbHsFsDriveLogicalUnitContext lun_ctx = {0}, *tmp_lun_ctx = NULL;
-    //u8 conf = 0;
     bool ret = false, ep_open = false;
     
     /* Clear output context. */
@@ -104,26 +103,6 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     }
     
     if (!ep_open) goto end;
-    
-    /* Get device configuration. */
-    /*rc = usbHsFsRequestGetDeviceConfiguration(ctx, &conf);
-    if (R_FAILED(rc))
-    {
-        USBHSFS_LOG("Failed to get device configuration! (interface %d).", ctx->usb_if_id);
-        goto end;
-    }*/
-    
-    /* Set device configuration, if needed. */
-    /*if (conf != usb_if->config_desc.bConfigurationValue)
-    {
-        USBHSFS_LOG("Device configuration mismatch detected (0x%02X != 0x%02X) (interface %d). Setting preferred value.", conf, usb_if->config_desc.bConfigurationValue, ctx->usb_if_id);
-        rc = usbHsFsRequestSetDeviceConfiguration(ctx, usb_if_session->inf.config_desc.bConfigurationValue);
-        if (R_FAILED(rc))
-        {
-            USBHSFS_LOG("Failed to set device configuration to 0x%02X! (interface %d).", usb_if_session->inf.config_desc.bConfigurationValue, ctx->usb_if_id);
-            goto end;
-        }
-    }*/
     
     /* Retrieve max supported logical units from this storage device. */
     /* If the request fails (e.g. unsupported by the device), we'll attempt to clear a possible STALL status from the input endpoint. */

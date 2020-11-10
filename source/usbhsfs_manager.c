@@ -48,6 +48,8 @@ static CondVar g_usbDriveManagerThreadCondVar = 0;
 UsbHsFsDriveContext *g_driveContexts = NULL;
 u32 g_driveCount = 0;
 
+static UEvent g_driveStatusChangeEvent = {0};
+
 /* Function prototypes. */
 
 static Result usbHsFsCreateDriveManagerThread(void);
@@ -116,6 +118,9 @@ Result usbHsFsInitialize(void)
     /* Create usermode drive manager thread exit event. */
     ueventCreate(&g_usbDriveManagerThreadExitEvent, true);
     
+    /* Create usermode drive status change event. */
+    ueventCreate(&g_driveStatusChangeEvent, true);
+    
     /* Create and start drive manager background thread. */
     rc = usbHsFsCreateDriveManagerThread();
     if (R_FAILED(rc))
@@ -166,6 +171,38 @@ end:
     mutexUnlock(&g_managerMutex);
 }
 
+UEvent *usbHsFsGetDriveStatusChangeUserEvent(void)
+{
+    mutexLock(&g_managerMutex);
+    UEvent *event = (g_usbHsFsInitialized ? &g_driveStatusChangeEvent : NULL);
+    mutexUnlock(&g_managerMutex);
+    return event;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Non-static function not meant to be disclosed to users. */
 void usbHsFsManagerMutexControl(bool lock)
 {
     if (lock)
@@ -176,6 +213,7 @@ void usbHsFsManagerMutexControl(bool lock)
     }
 }
 
+/* Non-static function not meant to be disclosed to users. */
 UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
     if (!lun_ctx || !g_driveCount || !g_driveContexts)
@@ -193,20 +231,6 @@ UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsD
     USBHSFS_LOG("Unable to find a matching drive context for LUN context with USB interface ID %d.", lun_ctx->usb_if_id);
     return NULL;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /* Used to create and start a new thread with preemptive multithreading enabled without using libnx's newlib wrappers. */
 /* This lets us manage threads using libnx types. */
@@ -296,7 +320,7 @@ static void usbHsFsDriveManagerThreadFunc(void *arg)
     
     Result rc = 0;
     int idx = 0;
-    //bool ctx_updated = false;
+    bool ctx_updated = false;
     
     Waiter usb_if_available_waiter = waiterForEvent(&g_usbInterfaceAvailableEvent);
     Waiter usb_if_state_change_waiter = waiterForEvent(g_usbInterfaceStateChangeEvent);
@@ -331,14 +355,13 @@ static void usbHsFsDriveManagerThreadFunc(void *arg)
         if (idx == 2) break;
         
         /* Update drive contexts. */
-        //ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
-        usbHsFsUpdateDriveContexts(idx == 1);
+        ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
         
         /* Clear the interface change event if it was triggered (not an autoclear event). */
         if (idx == 1) eventClear(g_usbInterfaceStateChangeEvent);
         
         /* Signal user event if contexts were updated. */
-        //if (ctx_updated);
+        if (ctx_updated) ueventSignal(&g_driveStatusChangeEvent);
         
         mutexUnlock(&g_managerMutex);
     }

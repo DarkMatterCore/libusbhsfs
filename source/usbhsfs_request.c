@@ -179,63 +179,6 @@ end:
     return rc;
 }
 
-/* Reference: https://www.beyondlogic.org/usbnutshell/usb6.shtml. */
-Result usbHsFsRequestGetDeviceConfiguration(UsbHsFsDriveContext *drive_ctx, u8 *out_conf)
-{
-    Result rc = 0;
-    u32 xfer_size = 0;
-    
-    if (!usbHsFsDriveIsValidContext(drive_ctx) || !out_conf)
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
-        goto end;
-    }
-    
-    UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
-    
-    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_CONFIGURATION, 0, 0, 1, drive_ctx->ctrl_xfer_buf, &xfer_size);
-    if (R_FAILED(rc))
-    {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
-        goto end;
-    }
-    
-    if (xfer_size != 1)
-    {
-        USBHSFS_LOG("usbHsIfCtrlXfer read 0x%X byte(s), expected 0x%X!", xfer_size, 1);
-        rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
-        goto end;
-    }
-    
-    *out_conf = *(drive_ctx->ctrl_xfer_buf);
-    
-end:
-    return rc;
-}
-
-/* Reference: https://www.beyondlogic.org/usbnutshell/usb6.shtml. */
-Result usbHsFsRequestSetDeviceConfiguration(UsbHsFsDriveContext *drive_ctx, u8 conf)
-{
-    Result rc = 0;
-    u32 xfer_size = 0;
-    
-    if (!usbHsFsDriveIsValidContext(drive_ctx))
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
-        goto end;
-    }
-    
-    UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
-    
-    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_SET_CONFIGURATION, conf, 0, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
-    
-end:
-    return rc;
-}
-
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (pages: 19 - 22). */
 Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, void *buf, u32 size, u32 *xfer_size, bool retry)
 {
