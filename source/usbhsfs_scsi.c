@@ -238,9 +238,6 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     
     mutexLock(&(ctx->mutex));
     
-    /* Send Start Stop Unit SCSI command. This may not be supported by all devices. */
-    if (!usbHsFsScsiSendStartStopUnitCommand(ctx, lun)) USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d).", ctx->usb_if_session.ID, lun);
-    
     /* Send Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(ctx, lun, &inquiry_data))
     {
@@ -255,16 +252,10 @@ bool usbHsFsScsiPrepareDrive(UsbHsFsDriveContext *ctx, u8 lun)
     usbHsFsUtilsWriteLogBufferToLogFile(hexdump);
 #endif
     
-    
-    
-    
-    
-    
     /* TO DO: use Inquiry data to store vendor id, product id and product revision.  */
     
-    
-    
-    
+    /* Send Start Stop Unit SCSI command. This may not be supported by all devices. */
+    if (inquiry_data.rmb && !usbHsFsScsiSendStartStopUnitCommand(ctx, lun)) USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d).", ctx->usb_if_session.ID, lun);
     
     /* Send Test Unit Ready SCSI command. */
     if (!usbHsFsScsiSendTestUnitReadyCommand(ctx, lun))
@@ -426,7 +417,7 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *ctx, u8 lun
     cbw.CBWCB[1] = 0;                                       /* Return status after the whole operation is completed. */
     cbw.CBWCB[2] = 0;                                       /* Reserved. */
     cbw.CBWCB[3] = 0;                                       /* Unused for our configuration. */
-    cbw.CBWCB[4] = ((1 << 4) | 1);                          /* Cause the logical unit to transition to the active power condition. */
+    cbw.CBWCB[4] = 1;                                       /* Cause the logical unit to transition to the active power condition. */
     
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", ctx->usb_if_session.ID, lun);
@@ -658,7 +649,11 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *ctx, ScsiCommandBloc
                 break;
             case ScsiSenseKey_NotReady:
                 /* Check if we're dealing with a medium not present. */
-                if (request_sense_desc.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT) break;
+                if (request_sense_desc.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT)
+                {
+                    ret = false;
+                    break;
+                }
                 
                 /* Wait some time (3s). */
                 usbHsFsUtilsSleep(3);
