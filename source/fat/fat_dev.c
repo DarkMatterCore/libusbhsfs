@@ -34,10 +34,31 @@ static int usbHsFsFatConvertErrorCode(FRESULT res)
     {
         case FR_OK:
             return 0;
+        case FR_EXIST:
+            return EEXIST;
+        case FR_DISK_ERR:
+        case FR_NO_FILESYSTEM:
+        case FR_INVALID_DRIVE:
+            return ENODEV;
+        case FR_NO_FILE:
+        case FR_NO_PATH:
+            return ENOENT;
+        case FR_INVALID_NAME:
+        case FR_INVALID_PARAMETER:
+            return EINVAL;
         /* TODO: more */
         default:
             return EINVAL;
     }
+}
+
+static void usbHsFsFatFillStat(struct stat *out_st, FILINFO *fil_info)
+{
+    out_st->st_size = fil_info->fsize;
+    if(fil_info->fattrib & AM_DIR) out_st->st_mode |= S_IFDIR;
+    else out_st->st_mode |= S_IFREG;
+    /* TODO: more flags */
+    /* TODO: timestamps */
 }
 
 static int fatdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
@@ -73,11 +94,9 @@ static int fatdev_open(struct _reent *r, void *fileStruct, const char *path, int
     
     FRESULT ff_res = f_open(fat_file, path, ff_mode);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_close(struct _reent *r, void *fd)
@@ -86,11 +105,9 @@ static int fatdev_close(struct _reent *r, void *fd)
 
     FRESULT ff_res = f_close(fat_file);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static ssize_t fatdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
@@ -100,11 +117,9 @@ static ssize_t fatdev_write(struct _reent *r, void *fd, const char *ptr, size_t 
     UINT bw;
     FRESULT ff_res = f_write(fat_file, ptr, len, &bw);
     if (ff_res == FR_OK) return (ssize_t)bw;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static ssize_t fatdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
@@ -114,17 +129,32 @@ static ssize_t fatdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     UINT br;
     FRESULT ff_res = f_read(fat_file, ptr, len, &br);
     if (ff_res == FR_OK) return (ssize_t)br;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static off_t fatdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
 {
-    /* TODO */
-    r->_errno = EINVAL;
+    FIL *fat_file = (FIL*)fd;
+
+    FSIZE_t off = (FSIZE_t)pos;
+    switch(dir)
+    {
+        case SEEK_SET:
+            break;
+        case SEEK_CUR:
+            off += f_tell(fat_file);
+            break;
+        case SEEK_END:
+            off += f_size(fat_file);
+            break;
+    }
+
+    FRESULT ff_res = f_lseek(fat_file, off);
+    if (ff_res == FR_OK) return (off_t)off;
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
     return -1;
 }
 
@@ -137,14 +167,21 @@ static int fatdev_fstat(struct _reent *r, void *fd, struct stat *st)
 
 static int fatdev_stat(struct _reent *r, const char *file, struct stat *st)
 {
-    /* TODO */
-    r->_errno = EINVAL;
+    FILINFO fil_info;
+    FRESULT ff_res = f_stat(file, &fil_info);
+    if (ff_res == FR_OK)
+    {
+        usbHsFsFatFillStat(st, &fil_info);
+        return 0;
+    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
     return -1;
 }
 
 static int fatdev_link(struct _reent *r, const char *existing, const char  *newLink)
 {
-    /* TODO */
+    /* Unsupported. */
     r->_errno = EINVAL;
     return -1;
 }
@@ -153,11 +190,9 @@ static int fatdev_unlink(struct _reent *r, const char *name)
 {
     FRESULT ff_res = f_unlink(name);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_chdir(struct _reent *r, const char *name)
@@ -171,22 +206,18 @@ static int fatdev_rename(struct _reent *r, const char *oldName, const char *newN
 {
     FRESULT ff_res = f_rename(oldName, newName);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_mkdir(struct _reent *r, const char *path, int mode)
 {
     FRESULT ff_res = f_mkdir(path);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static DIR_ITER *fatdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path)
@@ -194,11 +225,9 @@ static DIR_ITER *fatdev_diropen(struct _reent *r, DIR_ITER *dirState, const char
     DIR *fat_dir = (DIR*)dirState->dirStruct;
     FRESULT ff_res = f_opendir(fat_dir, path);
     if (ff_res == FR_OK) return dirState;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return NULL;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return NULL;
 }
 
 static int fatdev_dirreset(struct _reent *r, DIR_ITER *dirState)
@@ -206,11 +235,9 @@ static int fatdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     DIR *fat_dir = (DIR*)dirState->dirStruct;
     FRESULT ff_res = f_rewinddir(fat_dir);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
@@ -221,18 +248,12 @@ static int fatdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
     if (ff_res == FR_OK)
     {
         strcpy(filename, fil_info.fname);
-        filestat->st_size = fil_info.fsize;
-        if(fil_info.fattrib & AM_DIR) filestat->st_mode |= S_IFDIR;
-        else filestat->st_mode |= S_IFREG;
-        /* TODO: more flags */
-        /* TODO: timestamps */
+        usbHsFsFatFillStat(filestat, &fil_info);
         return 0;
     }
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_dirclose(struct _reent *r, DIR_ITER *dirState)
@@ -241,11 +262,9 @@ static int fatdev_dirclose(struct _reent *r, DIR_ITER *dirState)
     FILINFO fil_info;
     FRESULT ff_res = f_closedir(fat_dir);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
 static int fatdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
@@ -257,15 +276,28 @@ static int fatdev_statvfs(struct _reent *r, const char *path, struct statvfs *bu
 
 static int fatdev_ftruncate(struct _reent *r, void *fd, off_t len)
 {
-    /* TODO */
-    r->_errno = EINVAL;
+    FIL *fat_file = (FIL*)fd;
+
+    /* Set offset, then truncate. */
+    FRESULT ff_res = f_lseek(fat_file, (FSIZE_t)len);
+    if (ff_res == FR_OK)
+    {
+        ff_res = f_truncate(fat_file);
+        if (ff_res == FR_OK) return 0;
+    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
     return -1;
 }
 
 static int fatdev_fsync(struct _reent *r, void *fd)
 {
-    /* TODO */
-    r->_errno = EINVAL;
+    FIL *fat_file = (FIL*)fd;
+
+    FRESULT ff_res = f_sync(fat_file);
+    if (ff_res == FR_OK) return 0;
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
     return -1;
 }
 
@@ -287,14 +319,12 @@ static int fatdev_rmdir(struct _reent *r, const char *name)
 {
     FRESULT ff_res = f_rmdir(name);
     if (ff_res == FR_OK) return 0;
-    else
-    {
-        r->_errno = usbHsFsFatConvertErrorCode(ff_res);
-        return -1;
-    }
+    
+    r->_errno = usbHsFsFatConvertErrorCode(ff_res);
+    return -1;
 }
 
-static const devoptab_t g_FatDevoptab =
+static const devoptab_t g_fatDevoptab =
 {
   .structSize   = sizeof(FIL),
   .open_r       = fatdev_open,
@@ -327,5 +357,5 @@ static const devoptab_t g_FatDevoptab =
 
 const devoptab_t usbHsFsFatGetDevoptab()
 {
-    return g_FatDevoptab;
+    return g_fatDevoptab;
 }
