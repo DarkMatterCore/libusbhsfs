@@ -143,16 +143,16 @@ DRESULT disk_ioctl (
 #if !FF_FS_READONLY && !FF_FS_NORTC /* Get system time */
 DWORD get_fattime(void)
 {
-	/* Use FF_NORTC values by default */
+    /* Use FF_NORTC values by default */
     DWORD output = FAT_TIMESTAMP(FF_NORTC_YEAR, FF_NORTC_MON, FF_NORTC_MDAY, 0, 0, 0);
     
-	/* Try to retrieve time from time services. */
-	u64 timestamp = 0;
-	if (R_SUCCEEDED(timeGetCurrentTime(TimeType_LocalSystemClock, &timestamp))) {
-		time_t rawtime = (time_t)timestamp;
-		struct tm *timeinfo = localtime(&rawtime);
-		output = FAT_TIMESTAMP(timeinfo->tm_year, timeinfo->tm_mon + 1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	}
+    /* Try to retrieve time from time services. */
+    u64 timestamp = 0;
+    if (R_SUCCEEDED(timeGetCurrentTime(TimeType_LocalSystemClock, &timestamp))) {
+        time_t rawtime = (time_t)timestamp;
+        struct tm *timeinfo = localtime(&rawtime);
+        output = FAT_TIMESTAMP(timeinfo->tm_year, timeinfo->tm_mon + 1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    }
     
     return output;
 }

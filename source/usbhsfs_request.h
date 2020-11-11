@@ -52,13 +52,6 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsFsDriveContext *drive_ctx, bool out_
 /// If out_ep is true, the output endpoint will be used. Otherwise, the input endpoint is used.
 Result usbHsFsRequestClearEndpointHaltFeature(UsbHsFsDriveContext *drive_ctx, bool out_ep);
 
-/// Performs a GET_CONFIGURATION request on the device from the provided drive context.
-/// If successful, the configuration value is saved to out_conf.
-Result usbHsFsRequestGetDeviceConfiguration(UsbHsFsDriveContext *drive_ctx, u8 *out_conf);
-
-/// Performs a SET_CONFIGURATION request on the device from the provided drive context using the provided configuration value.
-Result usbHsFsRequestSetDeviceConfiguration(UsbHsFsDriveContext *drive_ctx, u8 conf);
-
 /// Performs a data transfer on an endpoint from the provided drive context.
 /// If out_ep is true, the output endpoint will be used. Otherwise, the input endpoint is used.
 /// If an error occurs, a STALL status check is performed on the target endpoint. If its present, the STALL status is cleared and the transfer is retried one more time (if retry == true).
