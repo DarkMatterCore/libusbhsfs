@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <dirent.h>
 
 void getLabel(s32 device_id, u8 lun)
 {
@@ -24,6 +25,33 @@ void setLabel(s32 device_id, u8 lun)
 void fsTest(s32 device_id, u8 lun)
 {
     /* We are only mounting one drive at a time, so it's guaranteed to be usb-0. */
+
+    /* List all files in root. */
+    DIR *dp = opendir("usb-0:/");
+    if(dp)
+    {
+        printf("Listing root files/dirs:\n");
+        consoleUpdate(NULL);
+        while(true)
+        {
+            struct dirent *dt = readdir(dp);
+            if(!dt) break;
+
+            printf(" - ");
+            if(dt->d_type & DT_DIR) printf("[D] ");
+            else printf("[F] ");
+            printf("usb-0:/%s\n", dt->d_name);
+            consoleUpdate(NULL);
+        }
+        closedir(dp);
+    }
+    else
+    {
+        printf("Unable to open root dir... errno value: %d\n", errno);
+        consoleUpdate(NULL);
+    }
+
+    /* Log to a file. */
     FILE *fp = fopen("usb-0:/sample.txt", "w");
     if(fp)
     {
@@ -31,9 +59,45 @@ void fsTest(s32 device_id, u8 lun)
         fprintf(fp, "Hello %s!", "world");
         fclose(fp);
         printf("Logged sample message!\n");
+        consoleUpdate(NULL);
     }
-    else printf("Error opening file... errno value: %d\n", errno);
-    consoleUpdate(NULL);
+    else
+    {
+        printf("Error opening file... errno value: %d\n", errno);
+        consoleUpdate(NULL);
+    }
+    
+    /* Read logged file. */
+    fp = fopen("usb-0:/sample.txt", "r");
+    if(fp)
+    {
+        printf("Reading logged text...\n");
+        char log_text[50];
+        fscanf(fp, "%s", log_text);
+        printf("Logged text: '%s'...\n", log_text);
+        fclose(fp);
+        consoleUpdate(NULL);
+    }
+    else
+    {
+        printf("Error opening file... errno value: %d\n", errno);
+        consoleUpdate(NULL);
+    }
+
+    /* Stat file. */
+    struct stat st;
+    printf("Statting sample file...\n");
+    if(stat("usb-0:/sample.txt", &st) == 0)
+    {
+        if(st.st_mode & S_IFREG) printf("It's a file!\n");
+        else if(st.st_mode & S_IFDIR) printf("It's a dir...?\n");
+        consoleUpdate(NULL);
+    }
+    else
+    {
+        printf("Error statting file... errno value: %d\n", errno);
+        consoleUpdate(NULL);
+    }
 }
 
 bool waitConfirmation()
@@ -78,7 +142,7 @@ void listTestDrives() {
             {
                 for(u8 j = 0; j < max_lun; j++)
                 {
-                    printf("Would you like to test with LUN %d?", j);
+                    printf("Would you like to test with LUN %d?\n", j);
                     if(waitConfirmation())
                     {
                         u32 mount_idx = 0;

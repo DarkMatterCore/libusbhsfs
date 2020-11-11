@@ -247,6 +247,12 @@ static int fatdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
     FRESULT ff_res = f_readdir(fat_dir, &fil_info);
     if (ff_res == FR_OK)
     {
+        /* FatFs returns an empty string when reaching end-of-directory. */
+        if (strlen(fil_info.fname) == 0)
+        {
+            r->_errno = ENOENT;
+            return -1;
+        }
         strcpy(filename, fil_info.fname);
         usbHsFsFatFillStat(filestat, &fil_info);
         return 0;
