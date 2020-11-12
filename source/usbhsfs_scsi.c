@@ -214,7 +214,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx);
 
-bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx)
+bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
     if (!usbHsFsDriveIsValidContext(drive_ctx) || lun >= USB_BOT_MAX_LUN || !lun_ctx)
     {
@@ -231,8 +231,6 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
 #ifdef DEBUG
     char hexdump[0x50] = {0};
 #endif
-    
-    mutexLock(&(drive_ctx->mutex));
     
     /* Clear output LUN context. */
     memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
@@ -355,9 +353,24 @@ bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     ret = true;
     
 end:
-    mutexUnlock(&(drive_ctx->mutex));
-    
     return ret;
+}
+
+void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
+{
+    if (!usbHsFsDriveIsValidContext(drive_ctx) || !drive_ctx->lun_ctx || lun_ctx_idx >= drive_ctx->lun_count) return;
+    
+    /* Retrieve LUN context. */
+    /* Only perform these steps on removable LUNs with ejection supported. */
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    if (!lun_ctx->removable || !lun_ctx->eject_supported) return;
+    
+    /* Send Prevent/Allow Medium Removal SCSI command. */
+    if (usbHsFsScsiSendPreventAllowMediumRemovalCommand(drive_ctx, lun_ctx->lun, false))
+    {
+        /* Send Start Stop Unit SCSI command. */
+        usbHsFsScsiSendStartStopUnitCommand(drive_ctx, lun_ctx->lun, false);
+    }
 }
 
 bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count)

@@ -74,7 +74,7 @@ typedef struct {
 bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb_if);
 
 /// Destroys the provided drive context.
-void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx);
+void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx, bool stop_lun);
 
 /// Checks if the provided drive context is valid. Not thread safe - (un)lock the drive mutex yourself.
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *ctx)

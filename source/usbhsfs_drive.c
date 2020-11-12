@@ -37,7 +37,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     UsbHsClientEpSession *usb_in_ep_session = &(ctx->usb_in_ep_session);
     UsbHsClientEpSession *usb_out_ep_session = &(ctx->usb_out_ep_session);
     UsbHsFsDriveLogicalUnitContext lun_ctx = {0}, *tmp_lun_ctx = NULL;
-    bool ret = false, ep_open = false;
+    bool ret = false, ep_open = false, lun_started = false, realloc_failed = false;
     
     /* Clear output context. */
     memset(ctx, 0, sizeof(UsbHsFsDriveContext));
@@ -112,35 +112,39 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     /* Prepare LUNs using SCSI commands. */
     for(u8 i = 0; i < ctx->max_lun; i++)
     {
-        /* Initialize LUN context. */
-        if (!usbHsFsScsiInitializeDriveLogicalUnitContext(ctx, i, &lun_ctx))
+        mutexLock(&(ctx->mutex));
+        
+        /* Start LUN. */
+        if (usbHsFsScsiStartDriveLogicalUnit(ctx, i, &lun_ctx))
         {
+            /* Update LUN started flag. */
+            if (!lun_started) lun_started = true;
+            
+            
+            
+            /* TO DO: initialize partition FS stuff here. */
+            
+            
+            
+            /* Reallocate LUN context buffer. */
+            tmp_lun_ctx = realloc(ctx->lun_ctx, (ctx->lun_count + 1) * sizeof(UsbHsFsDriveLogicalUnitContext));
+            if (tmp_lun_ctx)
+            {
+                /* Copy initialized LUN context data. */
+                ctx->lun_ctx = tmp_lun_ctx;
+                tmp_lun_ctx = &(ctx->lun_ctx[ctx->lun_count++]);    /* Increase initialized LUN count. */
+                memcpy(tmp_lun_ctx, &lun_ctx, sizeof(UsbHsFsDriveLogicalUnitContext));
+            } else {
+                USBHSFS_LOG("Failed to allocate memory for LUN #%u context! (interface %d).", i, ctx->usb_if_id);
+                realloc_failed = true;
+            }
+        } else {
             USBHSFS_LOG("Failed to initialize context for drive LUN #%u! (interface %d).", i, ctx->usb_if_id);
-            continue;
         }
         
+        mutexUnlock(&(ctx->mutex));
         
-        
-        
-        /* TO DO: initialize partition FS stuff here. */
-        
-        
-        
-        
-        
-        /* Reallocate LUN context buffer. */
-        tmp_lun_ctx = realloc(ctx->lun_ctx, (ctx->lun_count + 1) * sizeof(UsbHsFsDriveLogicalUnitContext));
-        if (!tmp_lun_ctx)
-        {
-            USBHSFS_LOG("Failed to allocate memory for LUN #%u context! (interface %d).", i, ctx->usb_if_id);
-            goto end;
-        }
-        
-        ctx->lun_ctx = tmp_lun_ctx;
-        tmp_lun_ctx = &(ctx->lun_ctx[ctx->lun_count++]);    /* Increase initialized LUN count. */
-        
-        /* Copy initialized LUN context data. */
-        memcpy(tmp_lun_ctx, &lun_ctx, sizeof(UsbHsFsDriveLogicalUnitContext));
+        if (realloc_failed) goto end;
     }
     
     if (!ctx->lun_count)
@@ -154,12 +158,12 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     
 end:
     /* Destroy drive context if something went wrong. */
-    if (!ret) usbHsFsDriveDestroyContext(ctx);
+    if (!ret) usbHsFsDriveDestroyContext(ctx, lun_started);
     
     return ret;
 }
 
-void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx)
+void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx, bool stop_lun)
 {
     if (!ctx) return;
     
@@ -176,9 +180,17 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *ctx)
     
     
     
-    
-    /* Free LUN context buffer. */
-    if (ctx->lun_ctx) free(ctx->lun_ctx);
+    if (ctx->lun_ctx)
+    {
+        /* Stop LUNs. */
+        if (stop_lun)
+        {
+            for(u8 i = 0; i < ctx->lun_count; i++) usbHsFsScsiStopDriveLogicalUnit(ctx, i);
+        }
+        
+        /* Free LUN context buffer. */
+        free(ctx->lun_ctx);
+    }
     
     /* Close USB interface and endpoint sessions. */
     if (serviceIsActive(&(usb_out_ep_session->s))) usbHsEpClose(usb_out_ep_session);

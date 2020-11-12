@@ -27,8 +27,11 @@
 
 #include "usbhsfs_manager.h"
 
-/// Prepares a LUN from the provided drive context using SCSI commands and initializes an output LUN context.
-bool usbHsFsScsiInitializeDriveLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx);
+/// Starts a LUN from the provided drive context using SCSI commands and fills the provided LUN context.
+bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx);
+
+/// Stops a LUN from the provided drive context using SCSI commands, as long as it's removable (returns right away if it isn't).
+void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx);
 
 /// Reads logical blocks from a drive LUN using the provided LUN context.
 /// Takes care of thread-synchronization lock mechanisms on its own. Suitable for filesystem libraries.

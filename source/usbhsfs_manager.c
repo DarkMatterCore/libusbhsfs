@@ -367,7 +367,7 @@ static void usbHsFsDriveManagerThreadFunc(void *arg)
     }
     
     /* Destroy drive contexts, one by one. */
-    for(u32 i = 0; i < g_driveCount; i++) usbHsFsDriveDestroyContext(&(g_driveContexts[i]));
+    for(u32 i = 0; i < g_driveCount; i++) usbHsFsDriveDestroyContext(&(g_driveContexts[i]), true);
     
     /* Free drive context buffer. */
     if (g_driveContexts)
@@ -495,7 +495,7 @@ static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx)
     UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[drive_ctx_idx]), *tmp_drive_ctx = NULL;
     
     /* Destroy drive context. */
-    usbHsFsDriveDestroyContext(drive_ctx);
+    usbHsFsDriveDestroyContext(drive_ctx, false);
     
     if (g_driveCount > 1)
     {
@@ -557,7 +557,7 @@ static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if)
     
 end:
     /* Destroy drive context if the reallocation failed. */
-    if (!ret && ctx_init) usbHsFsDriveDestroyContext(&drive_ctx);
+    if (!ret && ctx_init) usbHsFsDriveDestroyContext(&drive_ctx, true);
     
     return ret;
 }
