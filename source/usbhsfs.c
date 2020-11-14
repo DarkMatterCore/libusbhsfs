@@ -36,7 +36,12 @@ static UsbHsFsDriveContext *usbHsFsGetDriveContextByDeviceId(s32 id)
     return NULL;
 }
 
-u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count)
+u32 usbHsFsGetDriveCount()
+{
+    return g_driveCount;
+}
+
+u32 usbHsFsListDrives(s32 *out_buf, u32 max_count)
 {
     u32 count = (max_count < g_driveCount) ? max_count : g_driveCount;
     for(u32 i = 0; i < count; i++)
@@ -47,7 +52,7 @@ u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count)
     return count;
 }
 
-bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun)
+bool usbHsFsGetDriveMaxLUN(s32 device_id, u8 *out_max_lun)
 {
     UsbHsFsDriveContext *ctx = usbHsFsGetDriveContextByDeviceId(device_id);
     if(!ctx) return false;

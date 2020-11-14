@@ -42,21 +42,31 @@ void usbHsFsExit(void);
 /// Returns NULL if the USB host FS interface hasn't been initialized.
 UEvent *usbHsFsGetDriveStatusChangeUserEvent(void);
 
+/// Returns the number of available drives.
+u32 usbHsFsGetDriveCount();
 
+/// Lists available drives by copying their IDs on the provided array.
+u32 usbHsFsListDrives(s32 *out_buf, u32 max_count);
 
+/// Gets the max LUN value for the specified drive.
+bool usbHsFsGetDriveMaxLUN(s32 device_id, u8 *out_max_lun);
 
-
-
-
-
-u32 usbHsFsListFoundDevices(s32 *out_buf, u32 max_count);
-bool usbHsFsGetDeviceMaxLUN(s32 device_id, u8 *out_max_lun);
-
+/// Mounts a drive's LUN.
+/// This is required to do any of the operations below (like getting/setting the label) or using the drive's filesystem.
+/// The mounted filesystem will be "usb-<mount_idx>:/" (usb-0:/, usb-1:/, ...) and will be accessible via the standard fs library.
 bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
+
+/// Returns whether a drive's LUN is currently mounted.
 bool usbHsFsIsMounted(s32 device_id, u8 lun);
+
+/// Unmounts a drive's LUN.
+/// The LUN must be already mounted for this to succeed.
 bool usbHsFsUnmount(s32 device_id, u8 lun);
 
+/// Retrieves a drive LUN's label.
 bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
+
+/// Updates a drive LUN's label with a new value.
 bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
 
 #ifdef __cplusplus
