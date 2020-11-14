@@ -27,8 +27,6 @@
 
 static FsFileSystem *g_sdCardFsObj = NULL;
 static Mutex g_logMutex = 0;
-static const char *g_logTimestampFormat = "%d-%02d-%02d %02d:%02d:%02d -> %s: ";
-static const char *g_logLineBreak = "\r\n";
 
 static void usbHsFsUtilsCommitSdCardFileSystemChanges(void)
 {
@@ -51,13 +49,13 @@ void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, .
     time_t now = time(NULL);
     struct tm *ts = localtime(&now);
     
-    fprintf(fd, g_logTimestampFormat, ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+    fprintf(fd, "%d-%02d-%02d %02d:%02d:%02d -> %s: ", ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
     
     va_start(args, fmt);
     vfprintf(fd, fmt, args);
     va_end(args);
     
-    fprintf(fd, g_logLineBreak);
+    fprintf(fd, "\r\n");
     fclose(fd);
     usbHsFsUtilsCommitSdCardFileSystemChanges();
     

@@ -42,6 +42,9 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     /* Clear output context. */
     memset(ctx, 0, sizeof(UsbHsFsDriveContext));
     
+    /* Lock drive mutex. */
+    mutexLock(&(ctx->mutex));
+    
     /* Copy USB interface ID. */
     ctx->usb_if_id = usb_if->inf.ID;
     
@@ -112,8 +115,6 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     /* Prepare LUNs using SCSI commands. */
     for(u8 i = 0; i < ctx->max_lun; i++)
     {
-        mutexLock(&(ctx->mutex));
-        
         /* Start LUN. */
         if (usbHsFsScsiStartDriveLogicalUnit(ctx, i, &lun_ctx))
         {
@@ -142,8 +143,6 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
             USBHSFS_LOG("Failed to initialize context for drive LUN #%u! (interface %d).", i, ctx->usb_if_id);
         }
         
-        mutexUnlock(&(ctx->mutex));
-        
         if (realloc_failed) goto end;
     }
     
@@ -157,6 +156,9 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *ctx, UsbHsInterface *usb
     ret = true;
     
 end:
+    /* Unlock drive mutex. */
+    mutexUnlock(&(ctx->mutex));
+    
     /* Destroy drive context if something went wrong. */
     if (!ret) usbHsFsDriveDestroyContext(ctx, lun_started);
     

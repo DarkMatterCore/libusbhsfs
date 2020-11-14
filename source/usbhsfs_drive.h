@@ -43,7 +43,7 @@ typedef struct {
     char vendor_id[0x9];        ///< Vendor identification string. Retrieved via Inquiry SCSI command. May be empty.
     char product_id[0x11];      ///< Product identification string. Retrieved via Inquiry SCSI command. May be empty.
     char product_revision[0x5]; ///< Product revision string. Retrieved via Inquiry SCSI command. May be empty.
-    bool rc16_used;             ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
+    bool long_lba;              ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
     u64 block_count;            ///< Logical block count. Retrieved via Read Capacity SCSI command. Must be non-zero.
     u32 block_length;           ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
     u64 capacity;               ///< LUN capacity (block count times block length).

@@ -40,6 +40,8 @@
 //#include <stdatomic.h>
 #include <switch.h>
 
+#define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
+
 #ifdef DEBUG
 #define USBHSFS_LOG(fmt, ...)   usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
 
