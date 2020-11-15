@@ -280,7 +280,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     ScsiReadCapacity16Data read_capacity_16_data = {0};
     u64 block_count = 0, block_length = 0, capacity = 0;
     
-    bool ret = false, eject_supported = false, fua_supported = false, long_lba = false;
+    bool ret = false, eject_supported = false, write_protect = false, fua_supported = false, long_lba = false;
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
@@ -343,7 +343,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
 #endif
         
-        /* Update FUA supported flag. */
+        /* Update Write Protect and FUA supported flags. */
+        write_protect = (mode_parameter_header_10.wp == 1);
         fua_supported = (mode_parameter_header_10.dpofua == 1);
     } else {
 #ifdef DEBUG
@@ -351,7 +352,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         USBHSFS_LOG("Mode Sense (6) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
 #endif
         
-        /* Update FUA supported flag. */
+        /* Update Write Protect and FUA supported flags. */
+        write_protect = (mode_parameter_header_6.wp == 1);
         fua_supported = (mode_parameter_header_6.dpofua == 1);
     }
     
@@ -415,6 +417,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     lun_ctx->lun = lun;
     lun_ctx->removable = inquiry_data.rmb;
     lun_ctx->eject_supported = eject_supported;
+    lun_ctx->write_protect = write_protect;
     lun_ctx->fua_supported = fua_supported;
     
     memcpy(lun_ctx->vendor_id, inquiry_data.vendor_id, sizeof(inquiry_data.vendor_id));
@@ -528,7 +531,7 @@ end:
 
 bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count)
 {
-    if (!lun_ctx || !buf || !block_count || (block_addr + block_count) > lun_ctx->block_count)
+    if (!lun_ctx || lun_ctx->write_protect || !lun_ctx->block_length || !buf || !block_count || (block_addr + block_count) > lun_ctx->block_count)
     {
         USBHSFS_LOG("Invalid parameters!");
         return false;

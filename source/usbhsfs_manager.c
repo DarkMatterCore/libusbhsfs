@@ -23,10 +23,10 @@
 #include "usbhsfs_utils.h"
 #include "usbhsfs_manager.h"
 
-#define USB_MASS_STORAGE_SCSI_CMD_SET                   0x06
-#define USB_MASS_STORAGE_BULK_ONLY_TRANSPORT            0x50
+#define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06
+#define USB_PROTOCOL_BULK_ONLY_TRANSPORT        0x50
 
-#define MAX_USB_INTERFACES                              0x20
+#define MAX_USB_INTERFACES                      0x20
 
 /* Global variables. */
 
@@ -99,8 +99,8 @@ Result usbHsFsInitialize(void)
     /* Fill USB interface filter. */
     g_usbInterfaceFilter.Flags = (UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol);
     g_usbInterfaceFilter.bInterfaceClass = USB_CLASS_MASS_STORAGE;
-    g_usbInterfaceFilter.bInterfaceSubClass = USB_MASS_STORAGE_SCSI_CMD_SET;
-    g_usbInterfaceFilter.bInterfaceProtocol = USB_MASS_STORAGE_BULK_ONLY_TRANSPORT;
+    g_usbInterfaceFilter.bInterfaceSubClass = USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET;
+    g_usbInterfaceFilter.bInterfaceProtocol = USB_PROTOCOL_BULK_ONLY_TRANSPORT;
     
     /* Create USB interface available event for our filter. */
     /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
