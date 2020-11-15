@@ -476,10 +476,10 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
     }
     
     UsbHsFsDriveContext *drive_ctx = NULL;
-    u8 *data_buf = (u8*)buf;
+    u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
-    bool fua = lun_ctx->fua_supported, ret = false, cmd = false;
+    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, ret = false, cmd = false;
     
     usbHsFsManagerMutexControl(true);
     
@@ -492,7 +492,7 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
     /* Set max block count per Read command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
     /* Long LBA LUNs: up to UINT32_MAX blocks should be supported, but some tests with 4 TB Seagate drives show that only up to SCSI_RW10_MAX_BLOCK_COUNT + 1 blocks can be read at once. */
-    cmd_max_block_count = (lun_ctx->long_lba ? (SCSI_RW10_MAX_BLOCK_COUNT + 1) : SCSI_RW10_MAX_BLOCK_COUNT);
+    cmd_max_block_count = (long_lba ? (SCSI_RW10_MAX_BLOCK_COUNT + 1) : SCSI_RW10_MAX_BLOCK_COUNT);
     
     /* Optimize reads by issuing commands with block counts aligned to the transfer buffer size. Reserve short packets for the last Read command (if needed). */
     max_block_count_per_loop = ALIGN_DOWN(cmd_max_block_count, buf_block_count);
@@ -504,13 +504,13 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
         
         /* Read blocks. */
-        USBHSFS_LOG("Reading 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
-        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length, fua) : \
-                                   usbHsFsScsiSendRead10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length, fua));
+        USBHSFS_LOG("Reading 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
+                          usbHsFsScsiSendRead10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
-        data_transferred += (xfer_block_count * lun_ctx->block_length);
+        data_transferred += (xfer_block_count * block_length);
         cur_block_addr += xfer_block_count;
         block_count -= xfer_block_count;
     }
@@ -535,10 +535,10 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     }
     
     UsbHsFsDriveContext *drive_ctx = NULL;
-    u8 *data_buf = (u8*)buf;
+    u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
-    bool fua = lun_ctx->fua_supported, ret = false, cmd = false;
+    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, ret = false, cmd = false;
     
     usbHsFsManagerMutexControl(true);
     
@@ -551,7 +551,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     /* Set max block count per Write command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
     /* Long LBA LUNs: up to UINT32_MAX blocks should be supported, but some tests with 4 TB Seagate drives show that only up to SCSI_RW10_MAX_BLOCK_COUNT + 1 blocks can be written at once. */
-    cmd_max_block_count = (lun_ctx->long_lba ? (SCSI_RW10_MAX_BLOCK_COUNT + 1) : SCSI_RW10_MAX_BLOCK_COUNT);
+    cmd_max_block_count = (long_lba ? (SCSI_RW10_MAX_BLOCK_COUNT + 1) : SCSI_RW10_MAX_BLOCK_COUNT);
     
     /* Optimize writes by issuing commands with block counts aligned to the transfer buffer size. Reserve short packets for the last Write command (if needed). */
     max_block_count_per_loop = ALIGN_DOWN(cmd_max_block_count, buf_block_count);
@@ -563,13 +563,13 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
         
         /* Write blocks. */
-        USBHSFS_LOG("Writing 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
-        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length, fua) : \
-                                   usbHsFsScsiSendWrite10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length, fua));
+        USBHSFS_LOG("Writing 0x%X blocks to LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
+                          usbHsFsScsiSendWrite10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
-        data_transferred += (xfer_block_count * lun_ctx->block_length);
+        data_transferred += (xfer_block_count * block_length);
         cur_block_addr += xfer_block_count;
         block_count -= xfer_block_count;
     }

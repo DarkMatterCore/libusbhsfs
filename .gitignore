@@ -3,3 +3,4 @@
 /lib
 *.tar.bz2
 *.log
+*.bin
