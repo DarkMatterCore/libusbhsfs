@@ -25,8 +25,8 @@
             u32 xfer_block_count = (total_block_count > max_block_count_per_loop ? max_block_count_per_loop : total_block_count);
             
             USBHSFS_LOG("Reading 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, drive_ctx->usb_if_id, lun);
-            cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, bigbuf + data_transferred, cur_block_addr, xfer_block_count, block_length) : \
-                              usbHsFsScsiSendRead10Command(drive_ctx, lun, bigbuf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length));
+            cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, bigbuf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua_supported) : \
+                              usbHsFsScsiSendRead10Command(drive_ctx, lun, bigbuf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua_supported));
             if (!cmd) break;
             
             data_transferred += (xfer_block_count * block_length);
@@ -56,8 +56,8 @@
                 u32 xfer_block_count = (total_block_count > max_block_count_per_loop ? max_block_count_per_loop : total_block_count);
                 
                 USBHSFS_LOG("Writing 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, drive_ctx->usb_if_id, lun);
-                cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, bigbuf + data_transferred, cur_block_addr, xfer_block_count, block_length) : \
-                                  usbHsFsScsiSendWrite10Command(drive_ctx, lun, bigbuf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length));
+                cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, bigbuf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua_supported) : \
+                                  usbHsFsScsiSendWrite10Command(drive_ctx, lun, bigbuf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua_supported));
                 if (!cmd) break;
                 
                 data_transferred += (xfer_block_count * block_length);

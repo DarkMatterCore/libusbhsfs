@@ -27,13 +27,16 @@
 #define SCSI_CBW_SIGNATURE                      0x55534243      /* "USBC". */
 #define SCSI_CSW_SIGNATURE                      0x55534253      /* "USBS". */
 
-#define SCSI_READ_CAPACITY_10_MAX_LBA           UINT32_MAX
-
-#define SCSI_SERVICE_ACTION_IN_READ_CAPACITY_16 0x10
-
 #define SCSI_ASC_MEDIUM_NOT_PRESENT             0x3A
 
+#define SCSI_MODE_PAGE_CODE_ALL                 0x3F
+#define SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES  0x00
+
+#define SCSI_READ_CAPACITY_10_MAX_LBA           UINT32_MAX
+
 #define SCSI_RW10_MAX_BLOCK_COUNT               UINT16_MAX
+
+#define SCSI_SERVICE_ACTION_IN_READ_CAPACITY_16 0x10
 
 /* Type definitions. */
 
@@ -54,11 +57,13 @@ typedef enum {
     ScsiCommandOperationCode_TestUnitReady             = 0x00,
     ScsiCommandOperationCode_RequestSense              = 0x03,
     ScsiCommandOperationCode_Inquiry                   = 0x12,
+    ScsiCommandOperationCode_ModeSense6                = 0x1A,
     ScsiCommandOperationCode_StartStopUnit             = 0x1B,
     ScsiCommandOperationCode_PreventAllowMediumRemoval = 0x1E,
     ScsiCommandOperationCode_ReadCapacity10            = 0x25,
     ScsiCommandOperationCode_Read10                    = 0x28,
     ScsiCommandOperationCode_Write10                   = 0x2A,
+    ScsiCommandOperationCode_ModeSense10               = 0x5A,
     ScsiCommandOperationCode_Read16                    = 0x88,
     ScsiCommandOperationCode_Write16                   = 0x8A,
     ScsiCommandOperationCode_ServiceActionIn           = 0x9E
@@ -167,6 +172,45 @@ typedef struct {
     char product_revision[0x4];
 } ScsiInquiryStandardData;
 
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 111).
+typedef enum {
+    ScsiModePageControl_CurrentValues    = 0,
+    ScsiModePageControl_ChangeableValues = 1,
+    ScsiModePageControl_DefaultValues    = 2,
+    ScsiModePageControl_SavedValues      = 3
+} ScsiModePageControl;
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 378).
+typedef struct {
+    u8 mode_data_length;    ///< Length of the rest of the data available to be transferred (excluding this field).
+    u8 medium_type;
+    struct {
+        u8 reserved_1 : 4;
+        u8 dpofua     : 1;  ///< DPO and FUA support.
+        u8 reserved_2 : 2;
+        u8 wp         : 1;  ///< Write Protect.
+    };
+    u8 block_desc_length;   ///< Length in bytes of all of the block descriptors.
+} ScsiModeParameterHeader6;
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 378).
+typedef struct {
+    u16 mode_data_length;   ///< Length of the rest of the data available to be transferred (excluding this field). Stored using big endian byte ordering.
+    u8 medium_type;
+    struct {
+        u8 reserved_1 : 4;
+        u8 dpofua     : 1;  ///< DPO and FUA support.
+        u8 reserved_2 : 2;
+        u8 wp         : 1;  ///< Write Protect.
+    };
+    struct {
+        u8 longlba    : 1;  ///< Long Block Descriptor.
+        u8 reserved_3 : 7;
+    };
+    u8 reserved_4;
+    u16 block_desc_length;  ///< Length in bytes of all of the block descriptors. Stored using big endian byte ordering.
+} ScsiModeParameterHeader10;
+
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 156).
 typedef struct {
     u32 block_count;    ///< Stored using big endian byte ordering.
@@ -200,13 +244,15 @@ typedef struct {
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
 static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiRequestSenseDataFixedFormat *sense_data);
 static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiInquiryStandardData *inquiry_data);
+static bool usbHsFsScsiSendModeSense6Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u8 page_control, u8 page_code, u8 subpage_code, u8 allocation_length, void *buf);
 static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool start);
 static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool prevent);
 static bool usbHsFsScsiSendReadCapacity10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiReadCapacity10Data *read_capacity_10_data);
-static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length);
-static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length);
-static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length);
-static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length);
+static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua);
+static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua);
+static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, bool long_lba, u8 page_control, u8 page_code, u8 subpage_code, u16 allocation_length, void *buf);
+static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua);
+static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua);
 static bool usbHsFsScsiSendReadCapacity16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiReadCapacity16Data *read_capacity_16_data);
 
 static void usbHsFsScsiPrepareCommandBlockWrapper(ScsiCommandBlockWrapper *cbw, u32 data_size, bool data_in, u8 lun, u8 cb_size);
@@ -226,10 +272,15 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     }
     
     ScsiInquiryStandardData inquiry_data = {0};
+    
+    ScsiModeParameterHeader6 mode_parameter_header_6 = {0};
+    ScsiModeParameterHeader10 mode_parameter_header_10 = {0};
+    
     ScsiReadCapacity10Data read_capacity_10_data = {0};
     ScsiReadCapacity16Data read_capacity_16_data = {0};
     u64 block_count = 0, block_length = 0, capacity = 0;
-    bool ret = false, eject_supported = false, long_lba = false;
+    
+    bool ret = false, eject_supported = false, fua_supported = false, long_lba = false;
     
 #ifdef DEBUG
     char hexdump[0x50] = {0};
@@ -269,6 +320,39 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         } else {
             USBHSFS_LOG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
         }
+    }
+    
+    /* Send Mode Sense (6) SCSI command. */
+    /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
+    if (!usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
+                                         &mode_parameter_header_6))
+    {
+        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        
+        /* Send Mode Sense (10) SCSI command. */
+        /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
+        if (!usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+                                               sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
+        {
+            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+            goto end;
+        }
+        
+#ifdef DEBUG
+        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_10, sizeof(ScsiModeParameterHeader10));
+        USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
+#endif
+        
+        /* Update FUA supported flag. */
+        fua_supported = (mode_parameter_header_10.dpofua == 1);
+    } else {
+#ifdef DEBUG
+        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_6, sizeof(ScsiModeParameterHeader6));
+        USBHSFS_LOG("Mode Sense (6) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
+#endif
+        
+        /* Update FUA supported flag. */
+        fua_supported = (mode_parameter_header_6.dpofua == 1);
     }
     
     /* Send Test Unit Ready SCSI command. */
@@ -330,8 +414,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     lun_ctx->usb_if_id = drive_ctx->usb_if_id;
     lun_ctx->lun = lun;
     lun_ctx->removable = inquiry_data.rmb;
-    lun_ctx->mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
     lun_ctx->eject_supported = eject_supported;
+    lun_ctx->fua_supported = fua_supported;
     
     memcpy(lun_ctx->vendor_id, inquiry_data.vendor_id, sizeof(inquiry_data.vendor_id));
     usbHsFsUtilsTrimString(lun_ctx->vendor_id);
@@ -346,6 +430,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     lun_ctx->block_count = block_count;
     lun_ctx->block_length = block_length;
     lun_ctx->capacity = capacity;
+    
+    lun_ctx->mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
     
     /* Update return value. */
     ret = true;
@@ -391,9 +477,9 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
     
     UsbHsFsDriveContext *drive_ctx = NULL;
     u8 *data_buf = (u8*)buf;
-    u64 cur_block_addr = block_addr;
-    u64 data_transferred = 0, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / lun_ctx->block_length), max_block_count_per_loop = 0;
-    bool ret = false, cmd = false;
+    u64 cur_block_addr = block_addr, data_transferred = 0;
+    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
+    bool fua = lun_ctx->fua_supported, ret = false, cmd = false;
     
     usbHsFsManagerMutexControl(true);
     
@@ -419,8 +505,8 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
         
         /* Read blocks. */
         USBHSFS_LOG("Reading 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
-        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length) : \
-                                   usbHsFsScsiSendRead10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length));
+        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length, fua) : \
+                                   usbHsFsScsiSendRead10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
@@ -450,9 +536,9 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     
     UsbHsFsDriveContext *drive_ctx = NULL;
     u8 *data_buf = (u8*)buf;
-    u64 cur_block_addr = block_addr;
-    u64 data_transferred = 0, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / lun_ctx->block_length), max_block_count_per_loop = 0;
-    bool ret = false, cmd = false;
+    u64 cur_block_addr = block_addr, data_transferred = 0;
+    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
+    bool fua = lun_ctx->fua_supported, ret = false, cmd = false;
     
     usbHsFsManagerMutexControl(true);
     
@@ -478,8 +564,8 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
         
         /* Write blocks. */
         USBHSFS_LOG("Writing 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
-        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length) : \
-                                   usbHsFsScsiSendWrite10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length));
+        cmd = (lun_ctx->long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, lun_ctx->block_length, fua) : \
+                                   usbHsFsScsiSendWrite10Command(drive_ctx, lun_ctx->lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, lun_ctx->block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
@@ -552,6 +638,25 @@ static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, inquiry_data);
 }
 
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 111). */
+static bool usbHsFsScsiSendModeSense6Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u8 page_control, u8 page_code, u8 subpage_code, u8 allocation_length, void *buf)
+{
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, allocation_length, true, lun, 6);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_ModeSense6;                 /* Operation code. */
+    cbw.CBWCB[1] = 0;                                                   /* Always clear DBD bit. */
+    cbw.CBWCB[2] = (((page_control << 6) & 0xC0) | (page_code & 0x3F)); /* Mask Page Control and Page Code values. */
+    cbw.CBWCB[3] = subpage_code;                                        /* Set Subpage Code. */
+    cbw.CBWCB[4] = allocation_length;                                   /* Set allocation length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
+}
+
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (pages 223 and 224). */
 static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool start)
 {
@@ -604,7 +709,7 @@ static bool usbHsFsScsiSendReadCapacity10Command(UsbHsFsDriveContext *drive_ctx,
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 136). */
-static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length)
+static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
@@ -616,7 +721,7 @@ static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
     
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_Read10;     /* Operation code. */
-    //cbw.CBWCB[1] = (1 << 3);                            /* Always force unit access. */
+    cbw.CBWCB[1] = (fua ? (1 << 3) : 0);                /* Enable Force Unit Access (if needed). */
     memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u32));  /* LBA (big endian). */
     memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16)); /* Transfer length (big endian). */
     
@@ -626,7 +731,7 @@ static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 249). */
-static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length)
+static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
@@ -638,7 +743,7 @@ static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_Write10;    /* Operation code. */
-    //cbw.CBWCB[1] = (1 << 3);                            /* Always force unit access. */
+    cbw.CBWCB[1] = (fua ? (1 << 3) : 0);                /* Enable Force Unit Access (if needed). */
     memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u32));  /* LBA (big endian). */
     memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16)); /* Transfer length (big endian). */
     
@@ -647,8 +752,30 @@ static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 114). */
+static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, bool long_lba, u8 page_control, u8 page_code, u8 subpage_code, u16 allocation_length, void *buf)
+{
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, allocation_length, true, lun, 10);
+    
+    /* Byteswap data. */
+    allocation_length = __builtin_bswap16(allocation_length);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_ModeSense10;                /* Operation code. */
+    cbw.CBWCB[1] = (long_lba ? (1 << 4) : 0);                           /* Set LLBAA bit (if needed), always clear DBD bit. */
+    cbw.CBWCB[2] = (((page_control << 6) & 0xC0) | (page_code & 0x3F)); /* Mask Page Control and Page Code values. */
+    cbw.CBWCB[3] = subpage_code;                                        /* Set Subpage Code. */
+    memcpy(&(cbw.CBWCB[7]), &allocation_length, sizeof(u16));           /* Set allocation length. */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
+}
+
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 141). */
-static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length)
+static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
@@ -660,7 +787,7 @@ static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
     
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_Read16;         /* Operation code. */
-    //cbw.CBWCB[1] = (1 << 3);                              /* Always force unit access. */
+    cbw.CBWCB[1] = (fua ? (1 << 3) : 0);                    /* Enable Force Unit Access (if needed). */
     memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u64));      /* LBA (big endian). */
     memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));    /* Transfer length (big endian). */
     
@@ -670,7 +797,7 @@ static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 254). */
-static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length)
+static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
@@ -682,7 +809,7 @@ static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_Write16;        /* Operation code. */
-    //cbw.CBWCB[1] = (1 << 3);                                /* Always force unit access. */
+    cbw.CBWCB[1] = (fua ? (1 << 3) : 0);                    /* Enable Force Unit Access (if needed). */
     memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u64));      /* LBA (big endian). */
     memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));    /* Transfer length (big endian). */
     
