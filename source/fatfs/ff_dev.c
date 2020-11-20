@@ -29,7 +29,7 @@
 
 /* Function prototypes. */
 
-static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(struct _reent *r);
+static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx);
 
 static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath);
 
@@ -101,22 +101,24 @@ const devoptab_t *ffdev_get_devoptab()
     return &ffdev_devoptab;
 }
 
-static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(struct _reent *r)
+static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
 {
-    if (!r || !r->deviceData) return NULL;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
+    UsbHsFsDriveContext *drive_ctx = NULL;
     
     /* Lock drive manager mutex. */
     usbHsFsManagerMutexControl(true);
     
-    /* Get pointer to the filesystem context. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    
-    /* Get pointer to the LUN context. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
-    
-    /* Get pointer to the drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-    if (drive_ctx) mutexLock(&(drive_ctx->mutex));
+    /* Check if we have a valid filesystem context pointer. */
+    if (fs_ctx && *fs_ctx)
+    {
+        /* Get pointer to the LUN context. */
+        lun_ctx = (UsbHsFsDriveLogicalUnitContext*)(*fs_ctx)->lun_ctx;
+        
+        /* Get pointer to the drive context and lock its mutex. */
+        drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
+        if (drive_ctx) mutexLock(&(drive_ctx->mutex));
+    }
     
     /* Unlock drive manager mutex. */
     usbHsFsManagerMutexControl(false);
@@ -291,7 +293,8 @@ static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int 
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -299,7 +302,6 @@ static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int 
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
     
     /* Check access mode. */
@@ -371,7 +373,8 @@ static int ffdev_close(struct _reent *r, void *fd)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -402,7 +405,8 @@ static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t l
     ssize_t ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -451,7 +455,8 @@ static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     ssize_t ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -489,7 +494,8 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     off_t ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -550,7 +556,8 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -558,7 +565,6 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) goto end;
     
     /* Get file stats. */
@@ -605,7 +611,8 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -613,7 +620,6 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) goto end;
     
     /* Delete file. */
@@ -647,7 +653,8 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -655,7 +662,6 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     }
     
     /* Fix input paths. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, oldName, &fs_ctx, old_path) || !ffdev_fixpath(r, newName, &fs_ctx, new_path)) goto end;
     
     /* Rename entry. */
@@ -680,7 +686,8 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -688,7 +695,6 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
     
     /* Create directory. */
@@ -714,7 +720,8 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     DIR_ITER *ret = NULL;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -722,7 +729,6 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
     
     /* Open directory. */
@@ -748,7 +754,8 @@ static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -779,7 +786,8 @@ static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, s
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -835,7 +843,8 @@ static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -860,14 +869,14 @@ end:
 
 static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    FATFS *fatfs = NULL;
     char name[32] = {0};
     DWORD free_clusters = 0;
     FRESULT res = FR_OK;
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -875,7 +884,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
     }
     
     /* Get FATFS object. */
-    fatfs = ((UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData)->fatfs;
+    FATFS *fatfs = fs_ctx->fatfs;
     
     /* Generate volume name. */
     sprintf(name, "%u:", fatfs->pdrv);
@@ -918,7 +927,8 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -957,7 +967,8 @@ static int ffdev_fsync(struct _reent *r, void *fd)
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -1012,7 +1023,8 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
     int ret = -1;
     
     /* Get drive context and lock its mutex. */
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(r);
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
     if (!drive_ctx)
     {
         r->_errno = EINVAL;
@@ -1020,7 +1032,6 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
     }
     
     /* Fix input path. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
     if (!ffdev_fixpath(r, filename, &fs_ctx, NULL)) goto end;
     
     /* Convert POSIX timestamp to calendar time. */
