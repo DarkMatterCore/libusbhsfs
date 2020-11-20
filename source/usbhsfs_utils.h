@@ -26,18 +26,13 @@
 #define __USBHSFS_UTILS_H__
 
 #include <stdio.h>
-//#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <stddef.h>
 #include <stdarg.h>
 #include <malloc.h>
 #include <errno.h>
 #include <ctype.h>
-//#include <math.h>
 #include <time.h>
-//#include <sys/stat.h>
-//#include <stdatomic.h>
 #include <switch.h>
 
 #define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
