@@ -144,4 +144,4 @@ static bool usbHsFsScsiSendSynchronizeCache16Command(UsbHsFsDriveContext *drive_
 
 
 
-
+-Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function

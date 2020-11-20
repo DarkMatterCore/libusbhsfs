@@ -22,7 +22,7 @@ LIB_TITLE	:=	usbhsfs
 LIB_VERSION	:=  ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
 
 TARGET		:=	${LIB_TITLE}
-SOURCES		:=	source source/fat
+SOURCES		:=	source source/fatfs
 DATA		:=	data
 INCLUDES	:=	include
 
@@ -31,7 +31,7 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
-CFLAGS	:=	-g -Wall -Werror -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE) \
+CFLAGS	:=	-g -Wall -Werror -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE) \
 			-DVERSION_MAJOR=${VERSION_MAJOR} -DVERSION_MINOR=${VERSION_MINOR} -DVERSION_MICRO=${VERSION_MICRO} -DLIB_TITLE=\"lib${LIB_TITLE}\" -DLIB_VERSION=\"${LIB_VERSION}\"
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions

@@ -434,8 +434,6 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     lun_ctx->block_length = block_length;
     lun_ctx->capacity = capacity;
     
-    lun_ctx->mount_idx = USBHSFS_DRIVE_INVALID_MOUNT_INDEX;
-    
     /* Update return value. */
     ret = true;
     
@@ -470,27 +468,13 @@ void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_
     }
 }
 
-bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count)
+bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count)
 {
-    if (!lun_ctx || !lun_ctx->block_length || !buf || !block_count || (block_addr + block_count) > lun_ctx->block_count)
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        return false;
-    }
-    
-    UsbHsFsDriveContext *drive_ctx = NULL;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
-    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, ret = false, cmd = false;
-    
-    usbHsFsManagerMutexControl(true);
-    
-    /* Retrieve drive context for this LUN context. */
-    drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-    if (!drive_ctx) goto end;
-    
-    mutexLock(&(drive_ctx->mutex));
+    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
     
     /* Set max block count per Read command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
@@ -507,7 +491,7 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
         
         /* Read blocks. */
-        USBHSFS_LOG("Reading 0x%X blocks from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG("Reading 0x%X block(s) from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendRead10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
@@ -518,38 +502,16 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
         block_count -= xfer_block_count;
     }
     
-    /* Update return value. */
-    ret = (block_count == 0);
-    
-    mutexUnlock(&(drive_ctx->mutex));
-    
-end:
-    usbHsFsManagerMutexControl(false);
-    
-    return ret;
+    return (block_count == 0);
 }
 
-bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count)
+bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count)
 {
-    if (!lun_ctx || lun_ctx->write_protect || !lun_ctx->block_length || !buf || !block_count || (block_addr + block_count) > lun_ctx->block_count)
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        return false;
-    }
-    
-    UsbHsFsDriveContext *drive_ctx = NULL;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
-    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, ret = false, cmd = false;
-    
-    usbHsFsManagerMutexControl(true);
-    
-    /* Retrieve drive context for this LUN context. */
-    drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-    if (!drive_ctx) goto end;
-    
-    mutexLock(&(drive_ctx->mutex));
+    bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
     
     /* Set max block count per Write command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
@@ -566,7 +528,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
         
         /* Write blocks. */
-        USBHSFS_LOG("Writing 0x%X blocks to LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG("Writing 0x%X block(s) to LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendWrite10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
@@ -577,15 +539,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
         block_count -= xfer_block_count;
     }
     
-    /* Update return value. */
-    ret = (block_count == 0);
-    
-    mutexUnlock(&(drive_ctx->mutex));
-    
-end:
-    usbHsFsManagerMutexControl(false);
-    
-    return ret;
+    return (block_count == 0);
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 230). */

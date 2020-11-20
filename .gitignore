@@ -4,3 +4,7 @@
 *.tar.bz2
 *.log
 *.bin
+/example/build
+/example/*.elf
+/example/*.nacp
+/example/*.nro

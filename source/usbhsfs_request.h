@@ -30,7 +30,7 @@
 #define USB_XFER_BUF_ALIGNMENT      0x1000      /* 4 KiB. */
 #define USB_CTRL_XFER_BUFFER_SIZE   0x800000    /* 8 MiB. */
 
-#define USB_BOT_MAX_LUN             16          /* Max returned value is actually a zero-based index to the highest LUN. */
+/// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 
 /// Returns a pointer to a dynamic, memory-aligned buffer suitable for USB control transfers.
 void *usbHsFsRequestAllocateCtrlXferBuffer(void);

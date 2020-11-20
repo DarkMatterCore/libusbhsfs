@@ -1,5 +1,5 @@
 /*
- * fat_dev.h
+ * ff_dev.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
@@ -22,12 +22,12 @@
 
 #pragma once
 
-#ifndef __FAT_DEV_H__
-#define __FAT_DEV_H__
+#ifndef __FF_DEV_H__
+#define __FF_DEV_H__
 
 #include "../usbhsfs_utils.h"
-#include "../usbhsfs_drive.h"
+#include "../usbhsfs_manager.h"
 
-const devoptab_t usbHsFsFatGetDevoptab();
+const devoptab_t *ffdev_get_devoptab();
 
-#endif  /* __FAT_DEV_H__ */
+#endif  /* __FF_DEV_H__ */

@@ -37,20 +37,29 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   of a homebrew executable (.nro). This is intended to be used for sysmodules.
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
-TARGET		:=	$(notdir $(CURDIR))
+
+VERSION_MAJOR := 0
+VERSION_MINOR := 0
+VERSION_MICRO := 1
+
+APP_TITLE	:=	libusbhsfs-example
+APP_AUTHOR	:=	DarkMatterCore, XorTroll
+APP_VERSION	:=  ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
+
+TARGET		:=	${APP_TITLE}
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-# ROMFS	:=	romfs
+#ROMFS	:=	romfs
 
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
-CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
-			$(ARCH) $(DEFINES)
+CFLAGS	:=	-g -Wall -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES)
+CFLAGS	+=	-DAPP_TITLE=\"${APP_TITLE}\"
 
 CFLAGS	+=	$(INCLUDE) -D__SWITCH__
 
@@ -59,6 +68,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
+# Use -lusbhsfs instead of -lusbhsfsd to use the library build without debug logging
 LIBS	:=  -lusbhsfsd -lnx
 
 #---------------------------------------------------------------------------------

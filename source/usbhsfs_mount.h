@@ -27,17 +27,16 @@
 
 #include "usbhsfs_drive.h"
 
-bool usbHsFsMountLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
-bool usbHsFsUnmountLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+/// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 
-NX_CONSTEXPR bool usbHsFsLogicalUnitContextIsMounted(UsbHsFsDriveLogicalUnitContext *lun_ctx)
-{
-    return lun_ctx && (lun_ctx->fs_type != UsbHsFsFileSystemType_Invalid) && (lun_ctx->mount_idx != USBHSFS_DRIVE_INVALID_MOUNT_INDEX);
-}
+/// Initializes filesystem contexts for the provided LUN context.
+/// If this function succeeds, at least one filesystem will have been both mounted and registered as a devoptab virtual device.
+bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveLogicalUnitContext *lun_ctx);
 
-void usbHsFsFormatMountName(char *name, u32 idx);
+/// Destroys the provided filesystem context, unregistering the devoptab virtual device and unmounting the filesystem in the process.
+void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 
-bool usbHsFsGetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, char *out_label);
-bool usbHsFsSetLogicalUnitContextLabel(UsbHsFsDriveLogicalUnitContext *lun_ctx, const char *label);
+/// Returns the total number of registered devoptab virtual devices.
+u32 usbHsFsMountGetDevoptabDeviceCount(void);
 
 #endif  /* __USBHSFS_MOUNT_H__ */

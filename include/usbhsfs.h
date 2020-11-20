@@ -31,43 +31,46 @@
 extern "C" {
 #endif
 
-/// Initializes the USB host FS interface.
+/// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
+typedef enum {
+    UsbHsFsDeviceFileSystemType_Invalid = 0,
+    UsbHsFsDeviceFileSystemType_FAT12   = 1,
+    UsbHsFsDeviceFileSystemType_FAT16   = 2,
+    UsbHsFsDeviceFileSystemType_FAT32   = 3,
+    UsbHsFsDeviceFileSystemType_exFAT   = 4
+} UsbHsFsDeviceFileSystemType;
+
+/// Struct used to list mounted filesystems as devoptab devices.
+typedef struct {
+    s32 usb_if_id;              ///< USB interface ID. Internal use. May be shared with other UsbHsFsDevice entries.
+    u8 lun;                     ///< Logical unit. Internal use. May be shared with other UsbHsFsDevice entries.
+    u32 fs_idx;                 ///< Filesystem index. Internal use. Exclusive for this UsbHsFsDevice entry.
+    bool write_protect;         ///< Set to true if the logical unit is protected against write operations.
+    char vendor_id[0x10];       ///< Vendor identification string. May be empty. May be shared with other UsbHsFsDevice entries.
+    char product_id[0x12];      ///< Product identification string. May be empty. May be shared with other UsbHsFsDevice entries.
+    char product_revision[0x6]; ///< Product revision string. May be empty. May be shared with other UsbHsFsDevice entries.
+    u64 capacity;               ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
+    char name[32];              ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
+    u8 fs_type;                 ///< UsbHsFsDeviceFileSystemType.
+} UsbHsFsDevice;
+
+/// Initializes the USB Mass Storage Host interface.
 Result usbHsFsInitialize(void);
 
-/// Closes the USB host FS interface.
+/// Closes the USB Mass Storage Host interface.
 void usbHsFsExit(void);
 
-/// Returns a pointer to the usermode drive status change event (with autoclear enabled).
-/// Useful to wait for drive status changes without having to constantly poll the interface.
-/// Returns NULL if the USB host FS interface hasn't been initialized.
-UEvent *usbHsFsGetDriveStatusChangeUserEvent(void);
+/// Returns a pointer to the usermode status change event (with autoclear enabled).
+/// Useful to wait for USB Mass Storage status changes without having to constantly poll the interface.
+/// Returns NULL if the USB Mass Storage Host interface hasn't been initialized.
+UEvent *usbHsFsGetStatusChangeUserEvent(void);
 
-/// Returns the number of available drives.
-u32 usbHsFsGetDriveCount();
+/// Returns the mounted device count.
+u32 usbHsFsGetMountedDeviceCount(void);
 
-/// Lists available drives by copying their IDs on the provided array.
-u32 usbHsFsListDrives(s32 *out_buf, u32 max_count);
-
-/// Gets the max LUN value for the specified drive.
-bool usbHsFsGetDriveMaxLUN(s32 device_id, u8 *out_max_lun);
-
-/// Mounts a drive's LUN.
-/// This is required to do any of the operations below (like getting/setting the label) or using the drive's filesystem.
-/// The mounted filesystem will be "usb-<mount_idx>:/" (usb-0:/, usb-1:/, ...) and will be accessible via the standard fs library.
-bool usbHsFsMount(s32 device_id, u8 lun, u32 *out_mount_idx);
-
-/// Returns whether a drive's LUN is currently mounted.
-bool usbHsFsIsMounted(s32 device_id, u8 lun);
-
-/// Unmounts a drive's LUN.
-/// The LUN must be already mounted for this to succeed.
-bool usbHsFsUnmount(s32 device_id, u8 lun);
-
-/// Retrieves a drive LUN's label.
-bool usbHsFsGetLabel(s32 device_id, u8 lun, char *out_label);
-
-/// Updates a drive LUN's label with a new value.
-bool usbHsFsSetLabel(s32 device_id, u8 lun, const char *label);
+/// Lists up to max_count mounted devices and stores their information in the provided UsbHsFsDevice array.
+/// Returns the total number of written entries.
+u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 
 #ifdef __cplusplus
 }

@@ -32,7 +32,7 @@
 //#include <stddef.h>
 #include <stdarg.h>
 #include <malloc.h>
-//#include <errno.h>
+#include <errno.h>
 #include <ctype.h>
 //#include <math.h>
 #include <time.h>
