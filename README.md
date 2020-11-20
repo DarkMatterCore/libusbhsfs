@@ -38,7 +38,7 @@ Main features
         * FAT32 (via FatFs).
         * exFAT (via FatFs).
         * Completely possible to add support for additional filesystems, as long as their libraries are ported over to Switch.
-    * Uses devoptab virtual device interface to provide a way to use standard I/O calls from libc (e.g. `fopen()`, `diropen()`, etc.) on mounted filesystems from the available logical units.
+    * Uses devoptab virtual device interface to provide a way to use standard I/O calls from libc (e.g. `fopen()`, `opendir()`, etc.) on mounted filesystems from the available logical units.
 * Easy to use library interface:
     * Provides an autoclear user event that is signaled each time a status change is detected by the background thread (new device mounted, device removed).
     * Painless listing of mounted partitions using a simple struct that provides the devoptab device name, as well as other interesting information (filesystem index, filesystem type, write protection, raw logical unit capacity, etc.).
