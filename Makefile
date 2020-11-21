@@ -85,25 +85,25 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 .PHONY: clean all
 
 #---------------------------------------------------------------------------------
-all: lib/lib$(TARGET).a lib/lib$(TARGET)d.a
+all: release debug
 
-lib:
-	@[ -d $@ ] || mkdir -p $@
+release: lib/lib$(TARGET).a
 
-release:
-	@[ -d $@ ] || mkdir -p $@
+debug: lib/lib$(TARGET)d.a
 
-debug:
-	@[ -d $@ ] || mkdir -p $@
+dirs:
+	@mkdir -p release debug lib
 
-lib/lib$(TARGET).a : lib release $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET).a : dirs $(SOURCES) $(INCLUDES)
+	@echo release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
 	DEPSDIR=$(CURDIR)/release \
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile
 
-lib/lib$(TARGET)d.a : lib debug $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET)d.a : dirs $(SOURCES) $(INCLUDES)
+	@echo debug
 	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DDEBUG=1 -Og" \
 	DEPSDIR=$(CURDIR)/debug \
