@@ -23,16 +23,47 @@
 #include "usbhsfs_utils.h"
 
 #ifdef DEBUG
-#define LOG_PATH    "sdmc:/" LIB_TITLE ".log"
+#define LOG_PATH        "/" LIB_TITLE ".log"
+#define LOG_BUF_SIZE    0x1000
 
-static FsFileSystem *g_sdCardFsObj = NULL;
 static Mutex g_logMutex = 0;
+static FsFileSystem *g_sdCardFileSystem = NULL;
+static FsFile g_logFile = {0};
+static s64 g_logFileOffset = 0;
+static char *g_logBuffer = NULL;
 
-static void usbHsFsUtilsCommitSdCardFileSystemChanges(void)
+static bool usbHsFsUtilsGetSdCardFileSystem(void)
 {
-    /* Retrieve pointer to the SD card FsFileSystem object if we haven't already. */
-    if (!g_sdCardFsObj && !(g_sdCardFsObj = fsdevGetDeviceFileSystem("sdmc:"))) return;
-    fsFsCommit(g_sdCardFsObj);
+    if (g_sdCardFileSystem) return true;
+    g_sdCardFileSystem = fsdevGetDeviceFileSystem("sdmc:");
+    return (g_sdCardFileSystem != NULL);
+}
+
+static bool usbHsFsUtilsOpenLogFile(void)
+{
+    Result rc = 0;
+    
+    if (serviceIsActive(&(g_logFile.s))) return true;
+    
+    if (!usbHsFsUtilsGetSdCardFileSystem()) return false;
+    
+    fsFsCreateFile(g_sdCardFileSystem, LOG_PATH, 0, 0);
+    
+    rc = fsFsOpenFile(g_sdCardFileSystem, LOG_PATH, FsOpenMode_Write | FsOpenMode_Append, &g_logFile);
+    if (R_SUCCEEDED(rc))
+    {
+        rc = fsFileGetSize(&g_logFile, &g_logFileOffset);
+        if (R_FAILED(rc)) fsFileClose(&g_logFile);
+    }
+    
+    return R_SUCCEEDED(rc);
+}
+
+static bool usbHsFsUtilsAllocateLogBuffer(void)
+{
+    if (g_logBuffer) return true;
+    g_logBuffer = memalign(LOG_BUF_SIZE, LOG_BUF_SIZE);
+    return (g_logBuffer != NULL);
 }
 
 void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, ...)
@@ -41,23 +72,38 @@ void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, .
     
     mutexLock(&g_logMutex);
     
+    Result rc = 0;
     va_list args;
-    
-    FILE *fd = fopen(LOG_PATH, "a+");
-    if (!fd) goto end;
-    
+    u64 log_str_len = 0;
     time_t now = time(NULL);
     struct tm *ts = localtime(&now);
     
-    fprintf(fd, "%d-%02d-%02d %02d:%02d:%02d -> %s: ", ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+    if (!usbHsFsUtilsOpenLogFile() || !usbHsFsUtilsAllocateLogBuffer()) goto end;
+    
+    snprintf(g_logBuffer, LOG_BUF_SIZE, "%d-%02d-%02d %02d:%02d:%02d -> %s: ", ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+    log_str_len = strlen(g_logBuffer);
+    
+    rc = fsFileWrite(&g_logFile, g_logFileOffset, g_logBuffer, log_str_len, FsWriteOption_None);
+    if (R_FAILED(rc)) goto end;
+    
+    g_logFileOffset += (s64)log_str_len;
     
     va_start(args, fmt);
-    vfprintf(fd, fmt, args);
+    vsnprintf(g_logBuffer, LOG_BUF_SIZE, fmt, args);
     va_end(args);
     
-    fprintf(fd, "\r\n");
-    fclose(fd);
-    usbHsFsUtilsCommitSdCardFileSystemChanges();
+    log_str_len = strlen(g_logBuffer);
+    
+    rc = fsFileWrite(&g_logFile, g_logFileOffset, g_logBuffer, log_str_len, FsWriteOption_None);
+    if (R_FAILED(rc)) goto end;
+    
+    g_logFileOffset += (s64)log_str_len;
+    
+    sprintf(g_logBuffer, "\r\n");
+    log_str_len = strlen(g_logBuffer);
+    
+    rc = fsFileWrite(&g_logFile, g_logFileOffset, g_logBuffer, log_str_len, FsWriteOption_None);
+    if (R_SUCCEEDED(rc)) g_logFileOffset += (s64)log_str_len;
     
 end:
     mutexUnlock(&g_logMutex);
@@ -69,14 +115,49 @@ void usbHsFsUtilsWriteLogBufferToLogFile(const char *src)
     
     mutexLock(&g_logMutex);
     
-    FILE *fd = fopen(LOG_PATH, "a+");
-    if (!fd) goto end;
+    Result rc = 0;
+    u64 src_len = strlen(src);
     
-    fprintf(fd, "%s", src);
-    fclose(fd);
-    usbHsFsUtilsCommitSdCardFileSystemChanges();
+    if (!usbHsFsUtilsOpenLogFile()) goto end;
+    
+    rc = fsFileWrite(&g_logFile, g_logFileOffset, src, src_len, FsWriteOption_None);
+    if (R_SUCCEEDED(rc)) g_logFileOffset += (s64)src_len;
     
 end:
+    mutexUnlock(&g_logMutex);
+}
+
+void usbHsFsUtilsFlushLogFile(void)
+{
+    mutexLock(&g_logMutex);
+    if (serviceIsActive(&(g_logFile.s))) fsFileFlush(&g_logFile);
+    mutexUnlock(&g_logMutex);
+}
+
+void usbHsFsUtilsCloseLogFile(void)
+{
+    mutexLock(&g_logMutex);
+    
+    if (serviceIsActive(&(g_logFile.s)))
+    {
+        fsFileClose(&g_logFile);
+        memset(&g_logFile, 0, sizeof(FsFile));
+    }
+    
+    if (g_sdCardFileSystem)
+    {
+        fsFsCommit(g_sdCardFileSystem);
+        g_sdCardFileSystem = NULL;
+    }
+    
+    if (g_logBuffer)
+    {
+        free(g_logBuffer);
+        g_logBuffer = NULL;
+    }
+    
+    g_logFileOffset = 0;
+    
     mutexUnlock(&g_logMutex);
 }
 

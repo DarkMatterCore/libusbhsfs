@@ -184,6 +184,7 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
         
         /* Free LUN context buffer. */
         free(drive_ctx->lun_ctx);
+        drive_ctx->lun_ctx = NULL;
     }
     
     /* Close USB interface and endpoint sessions. */
@@ -192,10 +193,11 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     if (usbHsIfIsActive(usb_if_session)) usbHsIfClose(usb_if_session);
     
     /* Free dedicated USB control transfer buffer. */
-    if (drive_ctx->ctrl_xfer_buf) free(drive_ctx->ctrl_xfer_buf);
-    
-    /* Clear context. */
-    memset(drive_ctx, 0, sizeof(UsbHsFsDriveContext));
+    if (drive_ctx->ctrl_xfer_buf)
+    {
+        free(drive_ctx->ctrl_xfer_buf);
+        drive_ctx->ctrl_xfer_buf = NULL;
+    }
 }
 
 static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, bool stop_lun)
@@ -211,11 +213,9 @@ static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
         
         /* Free filesystem context buffer. */
         free(lun_ctx->fs_ctx);
+        lun_ctx->fs_ctx = NULL;
     }
     
     /* Stop current LUN. */
     if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(drive_ctx, lun_ctx_idx);
-    
-    /* Clear context. */
-    memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
 }

@@ -192,9 +192,6 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
         default:
             break;
     }
-    
-    /* Clear context. */
-    memset(fs_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
 }
 
 u32 usbHsFsMountGetDevoptabDeviceCount(void)
@@ -259,6 +256,7 @@ end:
     {
         if (ff_res == FR_OK) f_mount(NULL, name, 0);
         free(fs_ctx->fatfs);
+        fs_ctx->fatfs = NULL;
     }
     
     return ret;
@@ -343,8 +341,18 @@ end:
     if (!ret)
     {
         if (ad_res >= 0) RemoveDevice(fs_ctx->name);
-        if (fs_ctx->device) free(fs_ctx->device);
-        if (fs_ctx->name) free(fs_ctx->name);
+        
+        if (fs_ctx->device)
+        {
+            free(fs_ctx->device);
+            fs_ctx->device = NULL;
+        }
+        
+        if (fs_ctx->name)
+        {
+            free(fs_ctx->name);
+            fs_ctx->name = NULL;
+        }
     }
     
     return ret;

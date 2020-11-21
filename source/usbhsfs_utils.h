@@ -42,6 +42,8 @@
 
 void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, ...);
 void usbHsFsUtilsWriteLogBufferToLogFile(const char *src);
+void usbHsFsUtilsFlushLogFile(void);
+void usbHsFsUtilsCloseLogFile(void);
 void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const void *src, size_t src_size);
 #else
 #define USBHSFS_LOG(fmt, ...)

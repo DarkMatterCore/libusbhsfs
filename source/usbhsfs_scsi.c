@@ -286,9 +286,6 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     char hexdump[0x50] = {0};
 #endif
     
-    /* Clear output LUN context. */
-    memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
-    
     /* Send Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, &inquiry_data))
     {

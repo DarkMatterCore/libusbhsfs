@@ -201,8 +201,6 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
         sprintf(outptr, "%s/%s", name, path);
     }
     
-    USBHSFS_LOG("Generated path: \"%s\".", outptr);
-    
     return true;
 }
 
@@ -229,9 +227,8 @@ static time_t ffdev_converttimetoutc(WORD fdate, WORD ftime)
 
 static int ffdev_translate_error(FRESULT res)
 {
-    USBHSFS_LOG("FRESULT: %d.\n", res);
-    
     int ret = 0;
+    
     switch(res)
     {
         case FR_OK:
