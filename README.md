@@ -85,8 +85,8 @@ This project is licensed under the GNU General Public License, version 2 or late
 Credits
 --------------
 
-* DarkMatterCore: UMS device LUN/FS management, Bulk-Only Transport (BOT) driver, library interface.
-* XorTroll: FS mounting system, devoptab device (un)registration, example test application.
+* [DarkMatterCore](https://github.com/DarkMatterCore): UMS device LUN/FS management, Bulk-Only Transport (BOT) driver, library interface.
+* [XorTroll](https://github.com/XorTroll): FS mounting system, devoptab device (un)registration, example test application.
 * Lots of SPC/BOT docs across the Internet - these have been referenced in multiple files from the codebase.
 
 Thanks to
