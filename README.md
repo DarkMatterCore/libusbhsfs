@@ -87,5 +87,20 @@ Credits
 
 * DarkMatterCore: UMS device LUN/FS management, Bulk-Only Transport (BOT) driver, library interface.
 * XorTroll: FS mounting system, devoptab device (un)registration, example test application.
-* libnx: devoptab device management, path handling.
 * Lots of SPC/BOT docs across the Internet - these have been referenced in multiple files from the codebase.
+
+Thanks to
+--------------
+
+* ChaN, for the [FatFs library](http://elm-chan.org/fsw/ff/00index_e.html) (licensed under [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license)).
+* Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
+* [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
+* All the Alpha Testers and Super Users from the nxdumptool Discord server, for being a constant source of ideas (and memes).
+* And last but not least, my girlfriend, for always being by my side and motivating me to keep working on all my projects. I love you.
+
+Changelog
+--------------
+
+**v0.0.1:**
+
+* Initial release. Only capable of mounting one FAT filesystem per logical unit from each connected UMS device.
