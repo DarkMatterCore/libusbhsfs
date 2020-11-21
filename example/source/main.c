@@ -249,7 +249,7 @@ int main(int argc, char **argv)
     /* Initialize console output. */
     consoleInit(NULL);
     
-    printf(APP_TITLE "\nPress + to exit.\n\n");
+    printf(APP_TITLE ". Built on " __DATE__ " - " __TIME__ ".\nLibrary version: %u.%u.%u.\nPress + to exit.\n\n", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
     consoleUpdate(NULL);
     
     /* Initialize USB Mass Storage Host interface. */

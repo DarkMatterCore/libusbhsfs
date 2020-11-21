@@ -31,6 +31,10 @@
 extern "C" {
 #endif
 
+#define LIBUSBHSFS_VERSION_MAJOR    0
+#define LIBUSBHSFS_VERSION_MINOR    0
+#define LIBUSBHSFS_VERSION_MICRO    1
+
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
     UsbHsFsDeviceFileSystemType_Invalid = 0,

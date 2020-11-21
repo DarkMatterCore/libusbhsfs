@@ -74,7 +74,7 @@ Result usbHsFsInitialize(void)
 #ifdef DEBUG
     /* Start new log session. */
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
-    USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", VERSION_MAJOR, VERSION_MINOR, VERSION_MICRO);
+    USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 #endif
     
     /* Allocate memory for the USB interfaces. */

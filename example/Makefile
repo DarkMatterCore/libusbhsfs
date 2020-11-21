@@ -68,8 +68,8 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++17
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-# Use -lusbhsfs instead of -lusbhsfsd to use the library build without debug logging
-LIBS	:=  -lusbhsfsd -lnx
+# Use -lusbhsfsd instead of -lusbhsfs to use the library build with debug logging enabled
+LIBS	:=  -lusbhsfs -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
