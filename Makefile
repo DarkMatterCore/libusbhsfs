@@ -79,6 +79,14 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 .PHONY: clean all
 
 #---------------------------------------------------------------------------------
+LIB_BRANCH := $(shell git symbolic-ref --short HEAD)
+LIB_HASH := $(shell git rev-parse --short HEAD)
+LIB_REV := $(LIB_BRANCH)-$(LIB_HASH)
+
+ifneq (, $(strip $(shell git status --porcelain 2>/dev/null)))
+    LIB_REV := $(LIB_REV)-dirty
+endif
+
 all: release debug
 
 release: lib/lib$(TARGET).a
@@ -105,10 +113,14 @@ lib/lib$(TARGET)d.a : dirs $(SOURCES) $(INCLUDES)
 	-f $(CURDIR)/Makefile
 
 dist-bin: all
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION).tar.bz2 include lib
+	$(eval LIB_VERSION_MAJOR = $(shell grep 'define LIBUSBHSFS_VERSION_MAJOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+	$(eval LIB_VERSION_MINOR = $(shell grep 'define LIBUSBHSFS_VERSION_MINOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+	$(eval LIB_VERSION_MICRO = $(shell grep 'define LIBUSBHSFS_VERSION_MICRO\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+	$(eval LIB_VERSION = $(LIB_VERSION_MAJOR).$(LIB_VERSION_MINOR).$(LIB_VERSION_MICRO)-$(LIB_REV))
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION).tar.bz2 include lib LICENSE.md README.md
 
 dist-src:
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 include source Makefile
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 include source Makefile LICENSE.md README.md
 
 dist: dist-src dist-bin
 

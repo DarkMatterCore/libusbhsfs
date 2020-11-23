@@ -5,19 +5,6 @@
  * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- *
- * libusbhsfs is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * libusbhsfs is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "usbhsfs_utils.h"
@@ -486,15 +473,16 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx
     {
         /* Determine number of blocks to read based on our limit. */
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
+        u64 xfer_size = ((u64)xfer_block_count * (u64)block_length);
         
         /* Read blocks. */
-        USBHSFS_LOG("Reading 0x%X block(s) from LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG("Reading 0x%X block(s) from LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendRead10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
-        data_transferred += (xfer_block_count * block_length);
+        data_transferred += xfer_size;
         cur_block_addr += xfer_block_count;
         block_count -= xfer_block_count;
     }
@@ -523,15 +511,16 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ct
     {
         /* Determine number of blocks to write based on our limit. */
         u32 xfer_block_count = (block_count > max_block_count_per_loop ? max_block_count_per_loop : block_count);
+        u64 xfer_size = ((u64)xfer_block_count * (u64)block_length);
         
         /* Write blocks. */
-        USBHSFS_LOG("Writing 0x%X block(s) to LBA 0x%lX (interface %d, LUN %u).", xfer_block_count, cur_block_addr, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG("Writing 0x%X block(s) to LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendWrite10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
         
         /* Update data. */
-        data_transferred += (xfer_block_count * block_length);
+        data_transferred += xfer_size;
         cur_block_addr += xfer_block_count;
         block_count -= xfer_block_count;
     }
@@ -1045,6 +1034,5 @@ static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx)
     if (R_FAILED(usbHsFsRequestMassStorageReset(drive_ctx))) USBHSFS_LOG("BOT mass storage reset failed! (interface %d).", drive_ctx->usb_if_id);
     
     /* Clear STALL status from both endpoints. */
-    if (R_FAILED(usbHsFsRequestClearEndpointHaltFeature(drive_ctx, false))) USBHSFS_LOG("Failed to clear STALL status from input endpoint! (interface %d).", drive_ctx->usb_if_id);
-    if (R_FAILED(usbHsFsRequestClearEndpointHaltFeature(drive_ctx, true))) USBHSFS_LOG("Failed to clear STALL status from output endpoint! (interface %d).", drive_ctx->usb_if_id);
+    usbHsFsRequestClearStallStatus(drive_ctx);
 }

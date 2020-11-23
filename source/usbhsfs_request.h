@@ -5,19 +5,6 @@
  * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- *
- * libusbhsfs is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * libusbhsfs is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #pragma once
@@ -36,8 +23,6 @@
 void *usbHsFsRequestAllocateCtrlXferBuffer(void);
 
 /// Performs a get max logical units class-specific request.
-/// If this call fails (e.g. request not supported), the mass storage device may STALL the bulk pipes.
-/// In that case, it's recommended to call usbHsFsRequestClearEndpointHaltFeature() on both bulk pipes.
 Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx);
 
 /// Performs a bulk-only mass storage reset class-specific request.
@@ -57,5 +42,13 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsFsDriveContext *drive_ctx, bo
 /// If an error occurs, a STALL status check is performed on the target endpoint. If its present, the STALL status is cleared and the transfer is retried one more time (if retry == true).
 /// This is essentially a nice usbHsEpPostBuffer() wrapper to use for data transfer stages and CSW transfers from SCSI commands.
 Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, void *buf, u32 size, u32 *xfer_size, bool retry);
+
+/// Small wrapper for usbHsFsRequestClearEndpointHaltFeature() that clears a possible STALL status from both endpoints.
+NX_INLINE void usbHsFsRequestClearStallStatus(UsbHsFsDriveContext *drive_ctx)
+{
+    if (!usbHsFsDriveIsValidContext(drive_ctx)) return;
+    usbHsFsRequestClearEndpointHaltFeature(drive_ctx, false);
+    usbHsFsRequestClearEndpointHaltFeature(drive_ctx, true);
+}
 
 #endif  /* __USBHSFS_REQUEST_H__ */

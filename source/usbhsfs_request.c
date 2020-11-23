@@ -5,19 +5,6 @@
  * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- *
- * libusbhsfs is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * libusbhsfs is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "usbhsfs_utils.h"
@@ -75,6 +62,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx)
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
+        usbHsFsRequestClearStallStatus(drive_ctx);  /* If the request fails (e.g. unsupported by the device), we'll attempt to clear a possible STALL status from the endpoints. */
         goto end;
     }
     
@@ -197,16 +185,18 @@ Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, voi
     rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (0x%08X). Attempting to clear possible STALL status.", out_ep ? "output" : "input", rc);
+        USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (0x%08X). Attempting to clear possible STALL status from both endpoints.", out_ep ? "output" : "input", rc);
         
-        /* Check if the target endpoint was STALLed and if we can successfully clear the STALL status from it. Retry the transfer if needed. */
-        if (R_SUCCEEDED(usbHsFsRequestGetEndpointStatus(drive_ctx, out_ep, &status)) && status && R_SUCCEEDED(usbHsFsRequestClearEndpointHaltFeature(drive_ctx, out_ep)))
+        /* Attempt to clear both endpoints if they were STALLed. */
+        rc = 0;
+        if (R_SUCCEEDED(usbHsFsRequestGetEndpointStatus(drive_ctx, out_ep, &status)) && status) rc = usbHsFsRequestClearEndpointHaltFeature(drive_ctx, out_ep);
+        if (R_SUCCEEDED(usbHsFsRequestGetEndpointStatus(drive_ctx, !out_ep, &status)) && status) rc = (usbHsFsRequestClearEndpointHaltFeature(drive_ctx, !out_ep) | rc);
+        
+        /* Retry the transfer if needed. */
+        if (R_SUCCEEDED(rc) && retry)
         {
-            if (retry)
-            {
-                rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
-                if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (retry) (0x%08X).", out_ep ? "output" : "input", rc);
-            }
+            rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
+            if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (retry) (0x%08X).", out_ep ? "output" : "input", rc);
         }
     }
     

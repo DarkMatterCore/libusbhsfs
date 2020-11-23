@@ -80,7 +80,7 @@ Please check the provided test application in `/example` for a more in-depth exa
 License
 --------------
 
-This project is licensed under the GNU General Public License, version 2 or later.
+This project is licensed under the ISC License.
 
 Credits
 --------------

@@ -4,22 +4,9 @@
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
  *
- * Based on fs_dev.c from libnx, et al.
- *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  *
- * libusbhsfs is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of
- * the License, or (at your option) any later version.
- *
- * libusbhsfs is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Loosely based on fs_dev.c from libnx, et al.
  */
 
 #include <sys/param.h>
@@ -33,7 +20,7 @@ static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnit
 
 static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath);
 
-static time_t ffdev_converttimetoutc(WORD fdate, WORD ftime);
+static void ffdev_fill_stat(struct stat *st, const FILINFO *info);
 
 static int ffdev_translate_error(FRESULT res);
 
@@ -44,7 +31,7 @@ static ssize_t   ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len);
 static off_t     ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir);
 static int       ffdev_fstat(struct _reent *r, void *fd, struct stat *st);
 static int       ffdev_stat(struct _reent *r, const char *file, struct stat *st);
-static int       ffdev_link(struct _reent *r, const char *existing, const char  *newLink);
+static int       ffdev_link(struct _reent *r, const char *existing, const char *newLink);
 static int       ffdev_unlink(struct _reent *r, const char *name);
 static int       ffdev_chdir(struct _reent *r, const char *name);
 static int       ffdev_rename(struct _reent *r, const char *oldName, const char *newName);
@@ -141,6 +128,8 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     const u8 *p = (const u8*)path;
     char name[32] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf);
     
+    USBHSFS_LOG("Input path: \"%s\".", path);
+    
     /* Generate FatFs mount name ID. */
     sprintf(name, "%u:", fatfs->pdrv);
     
@@ -201,44 +190,69 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
         sprintf(outptr, "%s/%s", name, path);
     }
     
+    USBHSFS_LOG("Fixed path: \"%s\".", outptr);
+    
     return true;
 }
 
-static time_t ffdev_converttimetoutc(WORD fdate, WORD ftime)
+static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
 {
     Result rc = 0;
     TimeCalendarTime caltime = {0};
     u64 timestamp = 0;
     time_t posixtime = 0;
     
+    /* Clear stat struct. */
+    memset(st, 0, sizeof(struct stat));
+    
+    /* Fill stat struct. */
+    st->st_nlink = 1;
+    
+    if (info->fattrib & AM_DIR)
+    {
+        st->st_mode = (S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
+    } else {
+        st->st_size = (off_t)info->fsize;
+        st->st_mode = (S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    }
+    
     /* Convert date/time into an actual UTC POSIX timestamp using the system's timezone rules. */
-    caltime.year = (1980 + (fdate >> 9));
-    caltime.month = ((fdate >> 5) & 0xF);
-    caltime.day = (fdate & 0x1F);
-    caltime.hour = (ftime >> 11);
-    caltime.minute = ((ftime >> 5) & 0x3F);
-    caltime.second = (ftime & 0x1F);
+    caltime.year = (((info->fdate >> 9) & 0x7F) + 80);  /* DOS time: offset since 1980. POSIX time: offset since 1900. */
+    caltime.month = (((info->fdate >> 5) & 0xF) - 1);   /* DOS time: 1-12 range (inclusive). POSIX time: 0-11 range (inclusive). */
+    caltime.day = (info->fdate & 0x1F);
+    caltime.hour = ((info->ftime >> 11) & 0x1F);
+    caltime.minute = ((info->ftime >> 5) & 0x3F);
+    caltime.second = ((info->ftime & 0x1F) << 1);       /* DOS time: 2-second intervals with a 0-29 range (inclusive, 58 seconds max). POSIX time: 0-59 range (inclusive). */
     
     rc = timeToPosixTimeWithMyRule(&caltime, &timestamp, 1, NULL);
-    if (R_SUCCEEDED(rc)) posixtime = (time_t)timestamp;
+    if (R_SUCCEEDED(rc))
+    {
+        posixtime = (time_t)timestamp;
+        USBHSFS_LOG("DOS timestamp: 0x%04X%04X. Generated POSIX timestamp: %lu.", info->fdate, info->ftime, posixtime);
+    }
     
-    return posixtime;
+    st->st_atime = 0;           /* Not returned by FatFs + only available under exFAT. */
+    st->st_mtime = posixtime;
+    st->st_ctime = 0;           /* Not returned by FatFs + only available under exFAT. */
 }
 
 static int ffdev_translate_error(FRESULT res)
 {
-    int ret = 0;
+    int ret;
     
     switch(res)
     {
         case FR_OK:
+            ret = 0;
             break;
         case FR_DISK_ERR:
-        case FR_MKFS_ABORTED:
+        case FR_NOT_READY:
             ret = EIO;
             break;
-        case FR_NOT_READY:
-            ret = EBUSY;
+        case FR_INT_ERR:
+        case FR_INVALID_NAME:
+        case FR_INVALID_PARAMETER:
+            ret = EINVAL;
             break;
         case FR_NO_FILE:
         case FR_NO_PATH:
@@ -250,17 +264,27 @@ static int ffdev_translate_error(FRESULT res)
         case FR_EXIST:
             ret = EEXIST;
             break;
+        case FR_INVALID_OBJECT:
+            ret = EFAULT;
+            break;
         case FR_WRITE_PROTECTED:
             ret = EROFS;
             break;
-        case FR_NOT_ENABLED:
+        case FR_INVALID_DRIVE:
             ret = ENODEV;
             break;
+        case FR_NOT_ENABLED:
+        case FR_MKFS_ABORTED:
+            ret = ENOEXEC;
+            break;
+        case FR_NO_FILESYSTEM:
+            ret = ENFILE;
+            break;
         case FR_TIMEOUT:
-            ret = ETIME;
+            ret = EAGAIN;
             break;
         case FR_LOCKED:
-            ret = EDEADLK;
+            ret = EBUSY;
             break;
         case FR_NOT_ENOUGH_CORE:
             ret = ENOMEM;
@@ -268,16 +292,12 @@ static int ffdev_translate_error(FRESULT res)
         case FR_TOO_MANY_OPEN_FILES:
             ret = EMFILE;
             break;
-        case FR_INT_ERR:
-        case FR_INVALID_NAME:
-        case FR_INVALID_OBJECT:
-        case FR_INVALID_DRIVE:
-        case FR_NO_FILESYSTEM:
-        case FR_INVALID_PARAMETER:
         default:
-            ret = EINVAL;
+            ret = EPERM;
             break;
     }
+    
+    USBHSFS_LOG("FRESULT: %u. Translated errno: %d.", res, ret);
     
     return ret;
 }
@@ -347,6 +367,8 @@ static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int 
         ffdev_flags |= FA_OPEN_EXISTING;
     }
     
+    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, ffdev_path_buf, flags, ffdev_flags);
+    
     /* Open file. */
     res = f_open(file, ffdev_path_buf, ffdev_flags);
     if (res == FR_OK)
@@ -377,6 +399,8 @@ static int ffdev_close(struct _reent *r, void *fd)
         r->_errno = EINVAL;
         goto end;
     }
+    
+    USBHSFS_LOG("Closing file from \"%u:\".", file->obj.fs->pdrv);
     
     /* Close file. */
     res = f_close(file);
@@ -428,6 +452,8 @@ static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t l
         }
     }
     
+    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, f_tell(file));
+    
     /* Write file data. */
     res = f_write(file, ptr, (UINT)len, &bw);
     if (res == FR_OK)
@@ -466,6 +492,8 @@ static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
         r->_errno = EBADF;
         goto end;
     }
+    
+    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, f_tell(file));
     
     /* Read file data. */
     res = f_read(file, ptr, (UINT)len, &br);
@@ -522,8 +550,12 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
         goto end;
     }
     
-    /* Perform file seek. */
+    /* Calculate actual offset. */
     offset += pos;
+    
+    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, f_tell(file));
+    
+    /* Perform file seek. */
     res = f_lseek(file, (FSIZE_t)offset);
     if (res == FR_OK)
     {
@@ -564,25 +596,14 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     /* Fix input path. */
     if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) goto end;
     
+    USBHSFS_LOG("Getting file stats for \"%s\" (\"%s\").", file, ffdev_path_buf);
+    
     /* Get file stats. */
     res = f_stat(ffdev_path_buf, &info);
     if (res == FR_OK)
     {
         /* Fill stat info. */
-        memset(st, 0, sizeof(struct stat));
-        st->st_nlink = 1;
-        
-        if (info.fattrib & AM_DIR)
-        {
-            st->st_mode = (S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-        } else {
-            st->st_size = (off_t)info.fsize;
-            st->st_mode = (S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-            st->st_atime = 0;   /* Not returned by FatFs + only available under exFAT. */
-            st->st_mtime = ffdev_converttimetoutc(info.fdate, info.ftime);
-            st->st_ctime = 0;   /* Not returned by FatFs + only available under exFAT. */
-        }
-        
+        ffdev_fill_stat(st, &info);
         ret = 0;
     } else {
         r->_errno = ffdev_translate_error(res);
@@ -595,7 +616,7 @@ end:
     return ret;
 }
 
-static int ffdev_link(struct _reent *r, const char *existing, const char  *newLink)
+static int ffdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
@@ -618,6 +639,8 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     
     /* Fix input path. */
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) goto end;
+    
+    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, ffdev_path_buf);
     
     /* Delete file. */
     res = f_unlink(ffdev_path_buf);
@@ -661,6 +684,8 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     /* Fix input paths. */
     if (!ffdev_fixpath(r, oldName, &fs_ctx, old_path) || !ffdev_fixpath(r, newName, &fs_ctx, new_path)) goto end;
     
+    USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
+    
     /* Rename entry. */
     res = f_rename(old_path, new_path);
     if (res == FR_OK)
@@ -693,6 +718,8 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
+    
+    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, ffdev_path_buf);
     
     /* Create directory. */
     res = f_mkdir(ffdev_path_buf);
@@ -728,6 +755,8 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
     
+    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, ffdev_path_buf);
+    
     /* Open directory. */
     res = f_opendir(dir, ffdev_path_buf);
     if (res == FR_OK)
@@ -758,6 +787,8 @@ static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
         r->_errno = EINVAL;
         goto end;
     }
+    
+    USBHSFS_LOG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Reset directory state. */
     res = f_rewinddir(dir);
@@ -791,6 +822,8 @@ static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, s
         goto end;
     }
     
+    USBHSFS_LOG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
+    
     /* Read directory. */
     res = f_readdir(dir, &info);
     if (res == FR_OK)
@@ -803,20 +836,7 @@ static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, s
             strcpy(filename, info.fname);
             
             /* Fill stat info. */
-            memset(filestat, 0, sizeof(struct stat));
-            filestat->st_nlink = 1;
-            
-            if (info.fattrib & AM_DIR)
-            {
-                filestat->st_mode = (S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
-            } else {
-                filestat->st_size = (off_t)info.fsize;
-                filestat->st_mode = (S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-                filestat->st_atime = 0;   /* Not returned by FatFs + only available under exFAT. */
-                filestat->st_mtime = ffdev_converttimetoutc(info.fdate, info.ftime);
-                filestat->st_ctime = 0;   /* Not returned by FatFs + only available under exFAT. */
-            }
-            
+            ffdev_fill_stat(filestat, &info);
             ret = 0;
         } else {
             /* ENOENT signals EOD. */
@@ -847,6 +867,8 @@ static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
         r->_errno = EINVAL;
         goto end;
     }
+    
+    USBHSFS_LOG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Close directory. */
     res = f_closedir(dir);
@@ -886,6 +908,8 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
     /* Generate volume name. */
     sprintf(name, "%u:", fatfs->pdrv);
     
+    USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
+    
     /* Get volume information. */
     res = f_getfree(name, &free_clusters, &fatfs);
     if (res == FR_OK)
@@ -897,7 +921,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
         buf->f_frsize = fatfs->ssize;                                   /* Sector size. */
         buf->f_blocks = ((fatfs->n_fatent - 2) * (DWORD)fatfs->csize);  /* Total cluster count * cluster size in sectors. */
         buf->f_bfree = (free_clusters * (DWORD)fatfs->csize);           /* Free cluster count * cluster size in sectors. */
-        buf->f_bavail = (free_clusters * (DWORD)fatfs->csize);          /* Free cluster count * cluster size in sectors. */
+        buf->f_bavail = buf->f_bfree;                                     /* Free cluster count * cluster size in sectors. */
         buf->f_files = 0;
         buf->f_ffree = 0;
         buf->f_favail = 0;
@@ -939,6 +963,8 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
         goto end;
     }
     
+    USBHSFS_LOG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
+    
     /* Seek to the provided offset. */
     res = f_lseek(file, (FSIZE_t)len);
     if (res == FR_OK)
@@ -971,6 +997,8 @@ static int ffdev_fsync(struct _reent *r, void *fd)
         r->_errno = EINVAL;
         goto end;
     }
+    
+    USBHSFS_LOG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
     
     /* Synchronize file data. */
     res = f_sync(file);
@@ -1042,6 +1070,9 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
         info.fdate = (WORD)(timestamp >> 16);
         info.ftime = (WORD)(timestamp & 0xFF);
     }
+    
+    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, ffdev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
+                caltime.minute, caltime.second, info.fdate, info.ftime);
     
     /* Change timestamp. */
     res = f_utime(ffdev_path_buf, &info);
