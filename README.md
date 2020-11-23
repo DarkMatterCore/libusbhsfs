@@ -56,8 +56,6 @@ Limitations
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/mitm program contexts.
 * Linking issues:
     * Linking issues may arise if a homebrew application that already depends on FatFs (e.g. to mount eMMC partitions) is linked against this library.
-* Relative paths:
-    * Not supported.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
 
@@ -76,6 +74,17 @@ How to use
 * Close the USB Mass Storage Host interface with `usbHsFsExit()` when you're done.
 
 Please check the provided test application in `/example` for a more in-depth example.
+
+Relative path support
+--------------
+
+**Disclaimer:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after successfully calling `usbHsFsSetDefaultDevice()`.
+
+* `usbHsFsSetDefaultDevice()` *must* be used to set a previously listed `UsbHsFsDevice` as the default devoptab device, which will in turn make it possible to use relative paths with standard libc calls on it.
+* `usbHsFsUnsetDefaultDevice()` can be used anytime to unset a `UsbHsFsDevice` that was previously set as the default devoptab device. If the current default devoptab device matches the one that was previously set by the library, then the SD card is set as the new default devoptab device.
+* `usbHsFsGetDefaultDevice()` can be used to fill the provided `UsbHsFsDevice` element with information from a previously set default devoptab device.
+
+For more information, please read the comments from `include/usbhsfs.h`. For an example, please check the provided test application in `/example`.
 
 License
 --------------
@@ -100,6 +109,26 @@ Thanks to
 
 Changelog
 --------------
+
+**v0.0.2:**
+
+* Relicensed library under the ISC License. We really want you people to adopt it and freely use it in your projects.
+* Fixed distribution package version string generation in `Makefile`.
+* `LICENSE.md` and `README.md` are stored in the generated distribution packages.
+* Added support for relative paths.
+    * Please read the **Relative path support** section from the README for more information.
+* A trailing colon is now added to the returned mount names from `UsbHsFsDevice` elements.
+* Fixed devoptab device unregistration.
+* Bulk-Only Transport (BOT) driver:
+    * `usbHsFsRequestGetMaxLogicalUnits()` now clears the STALL status from both endpoints on its own if it fails.
+    * Likewise, `usbHsFsRequestPostBuffer()` now attempts to clear the STALL status from both endpoints if it fails.
+* FatFs devoptab interface:
+    * Fixed error code translations for some FatFs errors.
+    * Created an unified `ffdev_fill_stat()` function for both `ffdev_stat()` and `ffdev_dirnext()`.
+    * Fixed POSIX timestamp conversions from DOS timestamps.
+* Debug build:
+    * Debug messages from `usbHsFsScsiReadLogicalUnitBlocks()` and `usbHsFsScsiReadLogicalUnitBlocks()` now include the total number of bytes to transfer per each loop iteration.
+    * Added debug messages to the FatFs devoptab interface.
 
 **v0.0.1:**
 

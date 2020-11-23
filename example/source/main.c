@@ -15,7 +15,7 @@ static UEvent *g_statusChangeEvent = NULL, g_exitEvent = {0};
 static u32 g_usbDeviceCount = 0;
 static UsbHsFsDevice *g_usbDevices = NULL;
 
-void usbMscFileSystemTest(UsbHsFsDevice *device)
+void usbMscFileSystemTest(UsbHsFsDevice *device, bool test_rpath)
 {
     if (!device) return;
     
@@ -29,8 +29,10 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     struct statvfs fsinfo = {0};
     
-    sprintf(path, "%s:/" APP_TITLE ".txt", device->name);
-    sprintf(new_path, "%s:/test.txt", device->name);
+    bool ret = false;
+    
+    sprintf(path, "%s/" APP_TITLE ".txt", device->name);
+    sprintf(new_path, "%s/test.txt", device->name);
     
     /* Write data to file. */
     printf("\t\t- Write data to file (\"%s\"): ", path);
@@ -91,7 +93,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     consoleUpdate(NULL);
     
     /* Directory listing. */
-    sprintf(path, "%s:/", device->name);
+    sprintf(path, "%s/", device->name);
     printf("\t\t- Directory listing: ");
     consoleUpdate(NULL);
     
@@ -135,11 +137,86 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
         u64 total_size = ((u64)fsinfo.f_blocks * (u64)fsinfo.f_frsize);
         u64 free_space = ((u64)fsinfo.f_bfree * (u64)fsinfo.f_frsize);
         
-        printf("OK!\n\t\t\t- Total FS size: 0x%lX bytes.\n\t\t\t- Free FS space: 0x%lX bytes.\n\n", total_size, free_space);
+        printf("OK!\n\t\t\t- Total FS size: 0x%lX bytes.\n\t\t\t- Free FS space: 0x%lX bytes.\n", total_size, free_space);
     } else {
-        printf("FAILED! (%d).\n\n", errno);
+        printf("FAILED! (%d).\n", errno);
     }
     
+    if (!test_rpath) printf("\n");
+    
+    consoleUpdate(NULL);
+    
+    if (!test_rpath) return;
+    
+    /* Relative path tests. */
+    
+    /* Set default device. */
+    printf("\t\t- Set default device: ");
+    consoleUpdate(NULL);
+    
+    ret = usbHsFsSetDefaultDevice(device);
+    if (ret)
+    {
+        printf("OK!\n");
+    } else {
+        printf("FAILED!\n");
+    }
+    
+    consoleUpdate(NULL);
+    
+    if (!ret) return;
+    
+    /* Directory listing (relative, default device). */
+    /* Must match the previous directory listing. */
+    printf("\t\t- Directory listing (relative, default device): ");
+    consoleUpdate(NULL);
+    
+    dp = opendir("/");
+    if (dp)
+    {
+        printf("OK!\n");
+        consoleUpdate(NULL);
+        
+        while((dt = readdir(dp)))
+        {
+            printf("\t\t\t- /%s [%c].\n", dt->d_name, (dt->d_type & DT_DIR) ? 'D' : 'F');
+            consoleUpdate(NULL);
+        }
+        
+        closedir(dp);
+    } else {
+        printf("FAILED! (%d).\n", errno);
+        consoleUpdate(NULL);
+    }
+    
+    /* Unset default device. */
+    usbHsFsUnsetDefaultDevice();
+    printf("\t\t- Unset default device!\n");
+    consoleUpdate(NULL);
+    
+    /* Directory listing (relative, no default device). */
+    /* Must match the SD card contents. */
+    printf("\t\t- Directory listing (relative, no default device): ");
+    consoleUpdate(NULL);
+    
+    dp = opendir("/");
+    if (dp)
+    {
+        printf("OK!\n");
+        consoleUpdate(NULL);
+        
+        while((dt = readdir(dp)))
+        {
+            printf("\t\t\t- /%s [%c].\n", dt->d_name, (dt->d_type & DT_DIR) ? 'D' : 'F');
+            consoleUpdate(NULL);
+        }
+        
+        closedir(dp);
+    } else {
+        printf("FAILED! (%d).\n", errno);
+    }
+    
+    printf("\n");
     consoleUpdate(NULL);
 }
 
@@ -232,7 +309,8 @@ int usbMscThreadFunc(void *arg)
             consoleUpdate(NULL);
             
             /* Perform filesystem tests on current device. */
-            usbMscFileSystemTest(device);
+            /* Only perform relative path tests if this is the last listed device. */
+            usbMscFileSystemTest(device, i == (listed_device_count - 1));
         }
     }
     

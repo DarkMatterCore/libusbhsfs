@@ -48,6 +48,8 @@ static bool usbHsFsUpdateDriveContexts(bool remove);
 static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx);
 static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if);
 
+static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, UsbHsFsDevice *device);
+
 Result usbHsFsInitialize(void)
 {
     mutexLock(&g_managerMutex);
@@ -215,29 +217,7 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
                 
                 /* Fill device element. */
                 UsbHsFsDevice *device = &(out[ret++]);  /* Increase return value. */
-                memset(device, 0, sizeof(UsbHsFsDevice));
-                
-                device->usb_if_id = drive_ctx->usb_if_id;
-                device->lun = lun_ctx->lun;
-                device->fs_idx = fs_ctx->fs_idx;
-                device->write_protect = lun_ctx->write_protect;
-                sprintf(device->vendor_id, "%s", lun_ctx->vendor_id);
-                sprintf(device->product_id, "%s", lun_ctx->product_id);
-                sprintf(device->product_revision, "%s", lun_ctx->product_revision);
-                device->capacity = lun_ctx->capacity;
-                sprintf(device->name, "%s", fs_ctx->name);
-                
-                switch(fs_ctx->fs_type)
-                {
-                    case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
-                        device->fs_type = fs_ctx->fatfs->fs_type;   /* FatFs type values correlate with our UsbHsFsDeviceFileSystemType enum. */
-                        break;
-                    
-                    /* TO DO: populate this after adding support for additional filesystems. */
-                    
-                    default:
-                        break;
-                }
+                usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
                 
                 /* Jump out of the loops if we have reached a limit */
                 if (ret >= max_count || ret >= device_count) goto end;
@@ -249,6 +229,117 @@ end:
     mutexUnlock(&g_managerMutex);
     
     return ret;
+}
+
+bool usbHsFsSetDefaultDevice(UsbHsFsDevice *device)
+{
+    mutexLock(&g_managerMutex);
+    
+    UsbHsFsDriveContext *drive_ctx = NULL;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = NULL;
+    bool ret = false;
+    
+    if (!g_usbHsFsInitialized || !g_driveCount || !g_driveContexts || !device)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        goto end;
+    }
+    
+    /* Locate drive context. */
+    for(u32 i = 0; i < g_driveCount; i++)
+    {
+        drive_ctx = &(g_driveContexts[i]);
+        if (drive_ctx->usb_if_id == device->usb_if_id) break;
+        drive_ctx = NULL;
+    }
+    
+    if (!drive_ctx)
+    {
+        USBHSFS_LOG("Failed to locate drive context with interface ID %d!", device->usb_if_id);
+        goto end;
+    }
+    
+    /* Locate LUN context. */
+    for(u8 i = 0; i < drive_ctx->lun_count; i++)
+    {
+        lun_ctx = &(drive_ctx->lun_ctx[i]);
+        if (lun_ctx->lun == device->lun) break;
+        lun_ctx = NULL;
+    }
+    
+    if (!lun_ctx)
+    {
+        USBHSFS_LOG("Failed to locate LUN context with LUN #%u in drive context with interface ID %d!", device->lun, device->usb_if_id);
+        goto end;
+    }
+    
+    /* Get filesystem context. */
+    if (device->fs_idx >= lun_ctx->fs_count)
+    {
+        USBHSFS_LOG("Invalid filesystem context index %u for LUN context with LUN #%u in drive context with interface ID %d!", device->fs_idx, device->lun, device->usb_if_id);
+        goto end;
+    }
+    
+    fs_ctx = &(lun_ctx->fs_ctx[device->fs_idx]);
+    
+    /* Set default device. */
+    ret = usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
+    
+end:
+    mutexUnlock(&g_managerMutex);
+    
+    return ret;
+}
+
+bool usbHsFsGetDefaultDevice(UsbHsFsDevice *device)
+{
+    mutexLock(&g_managerMutex);
+    
+    u32 device_id = 0;
+    bool ret = false;
+    
+    if (!g_usbHsFsInitialized || !g_driveCount || !g_driveContexts || !device || (device_id = usbHsFsMountGetDefaultDevoptabDeviceId()) == USB_DEFAULT_DEVOPTAB_INVALID_ID)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        goto end;
+    }
+    
+    /* Find a filesystem context with this device ID. */
+    for(u32 i = 0; i < g_driveCount; i++)
+    {
+        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
+        
+        for(u8 j = 0; j < drive_ctx->lun_count; j++)
+        {
+            UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[j]);
+            
+            for(u32 k = 0; k < lun_ctx->fs_count; k++)
+            {
+                UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[k]);
+                if (fs_ctx->device_id != device_id) continue;
+                
+                /* Fill device element. */
+                usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
+                
+                /* Update return value and jump out of the loops. */
+                ret = true;
+                goto end;
+            }
+        }
+    }
+    
+end:
+    mutexUnlock(&g_managerMutex);
+    
+    return ret;
+}
+
+void usbHsFsUnsetDefaultDevice(void)
+{
+    mutexLock(&g_managerMutex);
+    usbHsFsMountUnsetDefaultDevoptabDevice();
+    mutexUnlock(&g_managerMutex);
 }
 
 /* Non-static function not meant to be disclosed to users. */
@@ -695,4 +786,31 @@ static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if)
     
 end:
     return ret;
+}
+
+static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, UsbHsFsDevice *device)
+{
+    memset(device, 0, sizeof(UsbHsFsDevice));
+    
+    device->usb_if_id = drive_ctx->usb_if_id;
+    device->lun = lun_ctx->lun;
+    device->fs_idx = fs_ctx->fs_idx;
+    device->write_protect = lun_ctx->write_protect;
+    sprintf(device->vendor_id, "%s", lun_ctx->vendor_id);
+    sprintf(device->product_id, "%s", lun_ctx->product_id);
+    sprintf(device->product_revision, "%s", lun_ctx->product_revision);
+    device->capacity = lun_ctx->capacity;
+    sprintf(device->name, "%s:", fs_ctx->name);
+    
+    switch(fs_ctx->fs_type)
+    {
+        case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
+            device->fs_type = fs_ctx->fatfs->fs_type;   /* FatFs type values correlate with our UsbHsFsDeviceFileSystemType enum. */
+            break;
+        
+        /* TO DO: populate this after adding support for additional filesystems. */
+        
+        default:
+            break;
+    }
 }

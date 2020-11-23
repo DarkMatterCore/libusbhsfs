@@ -15,7 +15,10 @@
 #include <sys/iosupport.h>
 #include "fatfs/ff.h"
 
-#define USB_BOT_MAX_LUN 16  /* Max returned value is actually a zero-based index to the highest LUN. */
+#define USB_BOT_MAX_LUN         16                  /* Max returned value is actually a zero-based index to the highest LUN. */
+
+#define USB_MOUNT_NAME_LENGTH   32
+#define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
 
 /// Used by filesystem contexts to determine the FS object to use.
 typedef enum {
@@ -33,7 +36,8 @@ typedef struct {
     /// TO DO: add more FS objects here after implemententing support for other filesystems.
     
     u32 device_id;      ///< ID used as part of the mount name.
-    char *name;         ///< Pointer to the dynamically allocated mount name. Must end with a colon (:).
+    char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).
+    char *cwd;          ///< Pointer to the dynamically allocated current working directory string.
     devoptab_t *device; ///< Pointer to the dynamically allocated devoptab virtual device interface. Used to provide a way to use libcstd I/O calls on the mounted filesystem.
 } UsbHsFsDriveLogicalUnitFileSystemContext;
 
@@ -94,7 +98,7 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitCont
 /// TO DO: update this after adding support for more filesystems.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    return (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type != UsbHsFsDriveLogicalUnitFileSystemType_Invalid && fs_ctx->fatfs && fs_ctx->name && fs_ctx->device);
+    return (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type != UsbHsFsDriveLogicalUnitFileSystemType_Invalid && fs_ctx->fatfs && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
 }
 
 #endif  /* __USBHSFS_DRIVE_H__ */

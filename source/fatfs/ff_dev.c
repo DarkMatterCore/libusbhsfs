@@ -50,7 +50,7 @@ static int       ffdev_utimes(struct _reent *r, const char *filename, const stru
 
 /* Global variables. */
 
-static __thread char ffdev_path_buf[FS_MAX_PATH + 1] = {0};
+static __thread char ffdev_path_buf[USB_MAX_PATH_LENGTH] = {0};
 
 static const devoptab_t ffdev_devoptab = {
     .name         = NULL,
@@ -64,7 +64,7 @@ static const devoptab_t ffdev_devoptab = {
     .stat_r       = ffdev_stat,
     .link_r       = ffdev_link,         ///< Not supported by FatFs.
     .unlink_r     = ffdev_unlink,
-    .chdir_r      = ffdev_chdir,        ///< Not implemented yet.
+    .chdir_r      = ffdev_chdir,
     .rename_r     = ffdev_rename,
     .mkdir_r      = ffdev_mkdir,
     .dirStateSize = sizeof(DIR),
@@ -126,7 +126,8 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     ssize_t units = 0;
     u32 code = 0;
     const u8 *p = (const u8*)path;
-    char name[32] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf);
+    size_t len = 0;
+    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf), *cwd = (*fs_ctx)->cwd;
     
     USBHSFS_LOG("Input path: \"%s\".", path);
     
@@ -167,27 +168,22 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
         p += units;
     } while(code != 0);
     
+    /* Verify fixed path length. */
+    len = (strlen(name) + strlen(path));
+    if (path[0] != '/') len += strlen(cwd);
+    
+    if (len >= USB_MAX_PATH_LENGTH)
+    {
+        r->_errno = ENAMETOOLONG;
+        return false;
+    }
+    
     /* Generate fixed path. */
     if (path[0] == '/')
     {
-        size_t len = (strlen(name) + strlen(path));
-        if (len >= FS_MAX_PATH)
-        {
-            r->_errno = ENAMETOOLONG;
-            return false;
-        }
-        
         sprintf(outptr, "%s%s", name, path);
     } else {
-        /* TO DO: add support for CWD. */
-        size_t len = (strlen(name) + 1 + strlen(path));
-        if (len >= FS_MAX_PATH)
-        {
-            r->_errno = ENAMETOOLONG;
-            return false;
-        }
-        
-        sprintf(outptr, "%s/%s", name, path);
+        sprintf(outptr, "%s%s%s", name, cwd, path);
     }
     
     USBHSFS_LOG("Fixed path: \"%s\".", outptr);
@@ -652,14 +648,53 @@ end:
 
 static int ffdev_chdir(struct _reent *r, const char *name)
 {
-    /* TO DO. */
-    r->_errno = ENOSYS;
-    return -1;
+    FRESULT res = FR_OK;
+    size_t cwd_len = 0;
+    int ret = -1;
+    
+    /* Get drive context and lock its mutex. */
+    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
+    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
+    if (!drive_ctx)
+    {
+        r->_errno = EINVAL;
+        goto end;
+    }
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) goto end;
+    
+    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
+    
+    /* Change directory. */
+    res = f_chdir(ffdev_path_buf);
+    if (res == FR_OK)
+    {
+        /* Update current working directory. */
+        sprintf(fs_ctx->cwd, "%s", strchr(ffdev_path_buf, '/'));
+        
+        cwd_len = strlen(fs_ctx->cwd);
+        if (fs_ctx->cwd[cwd_len - 1] != '/')
+        {
+            fs_ctx->cwd[cwd_len] = '/';
+            fs_ctx->cwd[cwd_len + 1] = '\0';
+        }
+        
+        ret = 0;
+    } else {
+        r->_errno = ffdev_translate_error(res);
+    }
+    
+end:
+    /* Unlock drive mutex. */
+    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
+    
+    return ret;
 }
 
 static int ffdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    char old_path[FS_MAX_PATH] = {0};
+    char old_path[USB_MAX_PATH_LENGTH] = {0};
     char *new_path = ffdev_path_buf;
     FRESULT res = FR_OK;
     int ret = -1;
@@ -880,7 +915,7 @@ end:
 
 static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    char name[32] = {0};
+    char name[USB_MOUNT_NAME_LENGTH] = {0};
     DWORD free_clusters = 0;
     FRESULT res = FR_OK;
     int ret = -1;
@@ -894,10 +929,8 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
         goto end;
     }
     
-    /* Get FATFS object. */
-    FATFS *fatfs = fs_ctx->fatfs;
-    
     /* Generate volume name. */
+    FATFS *fatfs = fs_ctx->fatfs;
     sprintf(name, "%u:", fatfs->pdrv);
     
     USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
