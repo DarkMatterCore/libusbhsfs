@@ -197,10 +197,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
 
 static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
 {
-    Result rc = 0;
-    TimeCalendarTime caltime = {0};
-    u64 timestamp = 0;
-    time_t posixtime = 0;
+    struct tm timeinfo = {0};
     
     /* Clear stat struct. */
     memset(st, 0, sizeof(struct stat));
@@ -216,24 +213,19 @@ static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
         st->st_mode = (S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     }
     
-    /* Convert date/time into an actual UTC POSIX timestamp using the system's timezone rules. */
-    caltime.year = (((info->fdate >> 9) & 0x7F) + 80);  /* DOS time: offset since 1980. POSIX time: offset since 1900. */
-    caltime.month = (((info->fdate >> 5) & 0xF) - 1);   /* DOS time: 1-12 range (inclusive). POSIX time: 0-11 range (inclusive). */
-    caltime.day = (info->fdate & 0x1F);
-    caltime.hour = ((info->ftime >> 11) & 0x1F);
-    caltime.minute = ((info->ftime >> 5) & 0x3F);
-    caltime.second = ((info->ftime & 0x1F) << 1);       /* DOS time: 2-second intervals with a 0-29 range (inclusive, 58 seconds max). POSIX time: 0-59 range (inclusive). */
+    /* Convert date/time into an actual UTC POSIX timestamp using the system local time. */
+    timeinfo.tm_year = (((info->fdate >> 9) & 0x7F) + 80);  /* DOS time: offset since 1980. POSIX time: offset since 1900. */
+    timeinfo.tm_mon = (((info->fdate >> 5) & 0xF) - 1);     /* DOS time: 1-12 range (inclusive). POSIX time: 0-11 range (inclusive). */
+    timeinfo.tm_mday = (info->fdate & 0x1F);
+    timeinfo.tm_hour = ((info->ftime >> 11) & 0x1F);
+    timeinfo.tm_min = ((info->ftime >> 5) & 0x3F);
+    timeinfo.tm_sec = ((info->ftime & 0x1F) << 1);          /* DOS time: 2-second intervals with a 0-29 range (inclusive, 58 seconds max). POSIX time: 0-59 range (inclusive). */
     
-    rc = timeToPosixTimeWithMyRule(&caltime, &timestamp, 1, NULL);
-    if (R_SUCCEEDED(rc))
-    {
-        posixtime = (time_t)timestamp;
-        USBHSFS_LOG("DOS timestamp: 0x%04X%04X. Generated POSIX timestamp: %lu.", info->fdate, info->ftime, posixtime);
-    }
+    st->st_atime = 0;                   /* Not returned by FatFs + only available under exFAT. */
+    st->st_mtime = mktime(&timeinfo);
+    st->st_ctime = 0;                   /* Not returned by FatFs + only available under exFAT. */
     
-    st->st_atime = 0;           /* Not returned by FatFs + only available under exFAT. */
-    st->st_mtime = posixtime;
-    st->st_ctime = 0;           /* Not returned by FatFs + only available under exFAT. */
+    USBHSFS_LOG("DOS timestamp: 0x%04X%04X. Generated POSIX timestamp: %lu.", info->fdate, info->ftime, st->st_mtime);
 }
 
 static int ffdev_translate_error(FRESULT res)
