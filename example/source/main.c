@@ -331,7 +331,7 @@ int main(int argc, char **argv)
     consoleUpdate(NULL);
     
     /* Initialize USB Mass Storage Host interface. */
-    rc = usbHsFsInitialize();
+    rc = usbHsFsInitialize(0);
     if (R_FAILED(rc))
     {
         printf("usbHsFsInitialize() failed! (0x%08X).\n", rc);
