@@ -54,8 +54,6 @@ Limitations
     * Up to 64 FAT volumes can be mounted at the same time across all available USB Mass Storage devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
 * Stack and/or heap memory consumption:
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/mitm program contexts.
-* Linking issues:
-    * Linking issues may arise if a homebrew application that already depends on FatFs (e.g. to mount eMMC partitions) is linked against this library.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
 

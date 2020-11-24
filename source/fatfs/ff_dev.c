@@ -358,7 +358,7 @@ static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int 
     USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, ffdev_path_buf, flags, ffdev_flags);
     
     /* Open file. */
-    res = f_open(file, ffdev_path_buf, ffdev_flags);
+    res = ff_open(file, ffdev_path_buf, ffdev_flags);
     if (res == FR_OK)
     {
         ret = 0;
@@ -391,7 +391,7 @@ static int ffdev_close(struct _reent *r, void *fd)
     USBHSFS_LOG("Closing file from \"%u:\".", file->obj.fs->pdrv);
     
     /* Close file. */
-    res = f_close(file);
+    res = ff_close(file);
     if (res == FR_OK)
     {
         ret = 0;
@@ -430,9 +430,9 @@ static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t l
     }
     
     /* Check if the append flag is enabled. */
-    if ((file->flag & (FA_OPEN_APPEND & ~FA_OPEN_ALWAYS)) && !f_eof(file))
+    if ((file->flag & (FA_OPEN_APPEND & ~FA_OPEN_ALWAYS)) && !ff_eof(file))
     {
-        res = f_lseek(file, f_size(file));
+        res = ff_lseek(file, ff_size(file));
         if (res != FR_OK)
         {
             r->_errno = ffdev_translate_error(res);
@@ -440,10 +440,10 @@ static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t l
         }
     }
     
-    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, f_tell(file));
+    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
     
     /* Write file data. */
-    res = f_write(file, ptr, (UINT)len, &bw);
+    res = ff_write(file, ptr, (UINT)len, &bw);
     if (res == FR_OK)
     {
         ret = (ssize_t)bw;
@@ -481,10 +481,10 @@ static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
         goto end;
     }
     
-    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, f_tell(file));
+    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
     
     /* Read file data. */
-    res = f_read(file, ptr, (UINT)len, &br);
+    res = ff_read(file, ptr, (UINT)len, &br);
     if (res == FR_OK)
     {
         ret = (ssize_t)br;
@@ -521,10 +521,10 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
         case SEEK_SET:  /* Set absolute position relative to zero (start offset). */
             break;
         case SEEK_CUR:  /* Set position relative to the current position. */
-            offset = (s64)f_tell(file);
+            offset = (s64)ff_tell(file);
             break;
         case SEEK_END:  /* Set position relative to EOF. */
-            offset = (s64)f_size(file);
+            offset = (s64)ff_size(file);
             break;
         default:        /* Invalid option. */
             r->_errno = EINVAL;
@@ -541,10 +541,10 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     /* Calculate actual offset. */
     offset += pos;
     
-    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, f_tell(file));
+    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, ff_tell(file));
     
     /* Perform file seek. */
-    res = f_lseek(file, (FSIZE_t)offset);
+    res = ff_lseek(file, (FSIZE_t)offset);
     if (res == FR_OK)
     {
         ret = (off_t)offset;
@@ -587,7 +587,7 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     USBHSFS_LOG("Getting file stats for \"%s\" (\"%s\").", file, ffdev_path_buf);
     
     /* Get file stats. */
-    res = f_stat(ffdev_path_buf, &info);
+    res = ff_stat(ffdev_path_buf, &info);
     if (res == FR_OK)
     {
         /* Fill stat info. */
@@ -631,7 +631,7 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, ffdev_path_buf);
     
     /* Delete file. */
-    res = f_unlink(ffdev_path_buf);
+    res = ff_unlink(ffdev_path_buf);
     if (res == FR_OK)
     {
         ret = 0;
@@ -667,7 +667,7 @@ static int ffdev_chdir(struct _reent *r, const char *name)
     USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
     
     /* Change directory. */
-    res = f_chdir(ffdev_path_buf);
+    res = ff_chdir(ffdev_path_buf);
     if (res == FR_OK)
     {
         /* Update current working directory. */
@@ -714,7 +714,7 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
     
     /* Rename entry. */
-    res = f_rename(old_path, new_path);
+    res = ff_rename(old_path, new_path);
     if (res == FR_OK)
     {
         ret = 0;
@@ -749,7 +749,7 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, ffdev_path_buf);
     
     /* Create directory. */
-    res = f_mkdir(ffdev_path_buf);
+    res = ff_mkdir(ffdev_path_buf);
     if (res == FR_OK)
     {
         ret = 0;
@@ -785,7 +785,7 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, ffdev_path_buf);
     
     /* Open directory. */
-    res = f_opendir(dir, ffdev_path_buf);
+    res = ff_opendir(dir, ffdev_path_buf);
     if (res == FR_OK)
     {
         ret = dirState;
@@ -818,7 +818,7 @@ static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     USBHSFS_LOG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Reset directory state. */
-    res = f_rewinddir(dir);
+    res = ff_rewinddir(dir);
     if (res == FR_OK)
     {
         ret = 0;
@@ -852,7 +852,7 @@ static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, s
     USBHSFS_LOG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
     
     /* Read directory. */
-    res = f_readdir(dir, &info);
+    res = ff_readdir(dir, &info);
     if (res == FR_OK)
     {
         /* Check if we haven't reached EOD. */
@@ -898,7 +898,7 @@ static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
     USBHSFS_LOG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Close directory. */
-    res = f_closedir(dir);
+    res = ff_closedir(dir);
     if (res == FR_OK)
     {
         ret = 0;
@@ -936,7 +936,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
     USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
     
     /* Get volume information. */
-    res = f_getfree(name, &free_clusters, &fatfs);
+    res = ff_getfree(name, &free_clusters, &fatfs);
     if (res == FR_OK)
     {
         /* Fill filesystem stats. */
@@ -991,11 +991,11 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
     USBHSFS_LOG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
     
     /* Seek to the provided offset. */
-    res = f_lseek(file, (FSIZE_t)len);
+    res = ff_lseek(file, (FSIZE_t)len);
     if (res == FR_OK)
     {
         /* Truncate file. */
-        res = f_truncate(file);
+        res = ff_truncate(file);
         if (res == FR_OK) ret = 0;
     }
     
@@ -1026,7 +1026,7 @@ static int ffdev_fsync(struct _reent *r, void *fd)
     USBHSFS_LOG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
     
     /* Synchronize file data. */
-    res = f_sync(file);
+    res = ff_sync(file);
     if (res == FR_OK)
     {
         ret = 0;
@@ -1100,7 +1100,7 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
                 caltime.minute, caltime.second, info.fdate, info.ftime);
     
     /* Change timestamp. */
-    res = f_utime(ffdev_path_buf, &info);
+    res = ff_utime(ffdev_path_buf, &info);
     if (res == FR_OK)
     {
         ret = 0;

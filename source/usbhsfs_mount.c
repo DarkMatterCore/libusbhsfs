@@ -174,7 +174,7 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
             sprintf(name, "%u:", fs_ctx->fatfs->pdrv);
             
             /* Unmount FAT volume. */
-            f_mount(NULL, name, 0);
+            ff_unmount(name);
             
             /* Free FATFS object. */
             free(fs_ctx->fatfs);
@@ -233,7 +233,7 @@ bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemConte
     {
         /* Change current FatFs drive. */
         sprintf(name, "%u:", fs_ctx->fatfs->pdrv);
-        res = f_chdrive(name);
+        res = ff_chdrive(name);
         if (res != FR_OK)
         {
             USBHSFS_LOG("Failed to change default FatFs drive to \"%s\"! (device \"%s\").", name, fs_ctx->name);
@@ -323,7 +323,7 @@ static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnit
     }
     
     /* Try to mount FAT volume. */
-    ff_res = f_mount(fs_ctx->fatfs, name, 1);
+    ff_res = ff_mount(fs_ctx->fatfs, name, 1);
     if (ff_res != FR_OK)
     {
         USBHSFS_LOG("Failed to mount FAT volume! (%u) (interface %d, LUN %u, FS %u).", ff_res, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
@@ -343,7 +343,7 @@ end:
     /* Free stuff if something went wrong. */
     if (!ret && fs_ctx->fatfs)
     {
-        if (ff_res == FR_OK) f_mount(NULL, name, 0);
+        if (ff_res == FR_OK) ff_unmount(name);
         free(fs_ctx->fatfs);
         fs_ctx->fatfs = NULL;
     }
