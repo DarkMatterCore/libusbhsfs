@@ -174,9 +174,14 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 }
 #endif  /* DEBUG */
 
-bool usbHsFsUtilsIsSXOS(void)
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void)
 {
     return (usbHsFsUtilsCheckRunningServiceByName("tx") && !usbHsFsUtilsCheckRunningServiceByName("rnx"));
+}
+
+bool usbHsFsUtilsIsFspUsbRunning(void)
+{
+    return usbHsFsUtilsCheckRunningServiceByName("fsp-usb");
 }
 
 void usbHsFsUtilsTrimString(char *str)

@@ -77,9 +77,17 @@ Result usbHsFsInitialize(u8 event_idx)
     
     /* Check if we're running under SX OS. */
     /* This CFW offers system-wide UMS support - we definitely don't want to run under it to avoid undesired results. */
-    if (usbHsFsUtilsIsSXOS())
+    if (usbHsFsUtilsSXOSCustomFirmwareCheck())
     {
         USBHSFS_LOG("Error: running under SX OS!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
+        goto end;
+    }
+    
+    /* Check if the deprecated fsp-usb service is running. We also don't want to run alongside it. */
+    if (usbHsFsUtilsIsFspUsbRunning())
+    {
+        USBHSFS_LOG("Error: fsp-usb is running!");
         rc = MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
         goto end;
     }

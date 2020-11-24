@@ -36,7 +36,8 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 #define USBHSFS_LOG(fmt, ...)
 #endif
 
-bool usbHsFsUtilsIsSXOS(void);
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void);
+bool usbHsFsUtilsIsFspUsbRunning(void);
 
 void usbHsFsUtilsTrimString(char *str);
 
