@@ -498,6 +498,13 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ct
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
     bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
     
+    /* Make sure write protection is disabled. */
+    if (lun_ctx->write_protect)
+    {
+        USBHSFS_LOG("Error: write protection enabled! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun);
+        return false;
+    }
+    
     /* Set max block count per Write command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
     /* Long LBA LUNs: up to UINT32_MAX blocks should be supported, but some tests with 4 TB Seagate drives show that only up to SCSI_RW10_MAX_BLOCK_COUNT + 1 blocks can be written at once. */
