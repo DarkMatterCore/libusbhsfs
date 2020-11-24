@@ -24,6 +24,7 @@ static bool g_usbHsFsInitialized = false;
 
 static UsbHsInterfaceFilter g_usbInterfaceFilter = {0};
 static Event g_usbInterfaceAvailableEvent = {0}, *g_usbInterfaceStateChangeEvent = NULL;
+static u8 g_usbInterfaceAvailableEventIndex = 0;
 
 static UsbHsInterface *g_usbInterfaces = NULL;
 static const size_t g_usbInterfacesMaxSize = (MAX_USB_INTERFACES * sizeof(UsbHsInterface));
@@ -50,12 +51,12 @@ static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if);
 
 static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, UsbHsFsDevice *device);
 
-Result usbHsFsInitialize(void)
+Result usbHsFsInitialize(u8 event_idx)
 {
     mutexLock(&g_managerMutex);
     
     Result rc = 0;
-    bool usbhs_init = false;
+    bool usbhs_init = false, usb_event_created = false;
     
     /* Check if the interface has already been initialized. */
     if (g_usbHsFsInitialized) goto end;
@@ -65,6 +66,14 @@ Result usbHsFsInitialize(void)
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 #endif
+    
+    /* Check if the provided event index value is valid. */
+    if (event_idx > 2)
+    {
+        USBHSFS_LOG("Invalid event index value provided! (%u).", event_idx);
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+        goto end;
+    }
     
     /* Allocate memory for the USB interfaces. */
     g_usbInterfaces = malloc(g_usbInterfacesMaxSize);
@@ -93,12 +102,17 @@ Result usbHsFsInitialize(void)
     
     /* Create USB interface available event for our filter. */
     /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
-    rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, true, 0, &g_usbInterfaceFilter);
+    rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, true, event_idx, &g_usbInterfaceFilter);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsCreateInterfaceAvailableEvent failed! (0x%08X).", rc);
         goto end;
     }
+    
+    usb_event_created = true;
+    
+    /* Update USB interface available event index. */
+    g_usbInterfaceAvailableEventIndex = event_idx;
     
     /* Retrieve the interface change event. */
     /* This will be signaled each time a device is removed from the console. */
@@ -125,6 +139,8 @@ end:
     /* Close usb:hs service if initialization failed. */
     if (R_FAILED(rc))
     {
+        if (usb_event_created) usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, event_idx);
+        
         if (usbhs_init) usbHsExit();
         
         if (g_usbInterfaces)
@@ -154,7 +170,8 @@ void usbHsFsExit(void)
     usbHsFsCloseDriveManagerThread();
     
     /* Destroy the USB interface available event we previously created for our filter. */
-    usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, 0);
+    usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, g_usbInterfaceAvailableEventIndex);
+    g_usbInterfaceAvailableEventIndex = 0;
     
     /* Close usb:hs service. */
     usbHsExit();

@@ -808,7 +808,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     ScsiCommandStatusWrapper csw = {0};
     ScsiRequestSenseDataFixedFormat sense_data = {0};
     
-    bool ret = false, receive = (cbw->bmCBWFlags == USB_ENDPOINT_IN);
+    bool ret = false, receive = (cbw->bmCBWFlags == USB_ENDPOINT_IN), unexpected_csw = false;
     
 #ifdef DEBUG
     char hexdump[0x30] = {0};
@@ -838,6 +838,31 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         if (rest_size != xfer_size)
         {
             USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            
+            /* Check if we received an unexpected CSW. */
+            if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
+            {
+                memcpy(&csw, drive_ctx->ctrl_xfer_buf, sizeof(ScsiCommandStatusWrapper));
+                if (csw.dCSWSignature == __builtin_bswap32(SCSI_CSW_SIGNATURE) && csw.dCSWTag == cbw->dCBWTag)
+                {
+#ifdef DEBUG
+                    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &csw, sizeof(ScsiCommandStatusWrapper));
+                    USBHSFS_LOG("Data from unexpected CSW (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, cbw->bCBWLUN, hexdump);
+#endif
+                    
+                    /* Check if we got a Phase Error status. */
+                    if (csw.bCSWStatus == ScsiCommandStatus_PhaseError)
+                    {
+                        USBHSFS_LOG("Phase error status in unexpected CSW! (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
+                        usbHsFsScsiResetRecovery(drive_ctx);
+                    }
+                    
+                    /* Update unexpected CSW flag and jump straight to the Request Sense section. */
+                    unexpected_csw = true;
+                    goto req_sense;
+                }
+            }
+            
             goto end;
         }
         
@@ -850,7 +875,9 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     
     /* Receive CSW. */
     ret = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
-    if (ret && csw.bCSWStatus != ScsiCommandStatus_Passed && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
+    
+req_sense:
+    if ((ret || unexpected_csw) && csw.bCSWStatus != ScsiCommandStatus_Passed && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
     {
         /* Send Request Sense SCSI command. */
         if (!usbHsFsScsiSendRequestSenseCommand(drive_ctx, cbw->bCBWLUN, &sense_data))
