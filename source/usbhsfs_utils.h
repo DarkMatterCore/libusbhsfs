@@ -36,6 +36,8 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 #define USBHSFS_LOG(fmt, ...)
 #endif
 
+bool usbHsFsUtilsIsSXOS(void);
+
 void usbHsFsUtilsTrimString(char *str);
 
 NX_INLINE void usbHsFsUtilsSleep(u64 seconds)

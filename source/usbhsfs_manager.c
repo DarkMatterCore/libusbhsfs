@@ -75,6 +75,15 @@ Result usbHsFsInitialize(u8 event_idx)
         goto end;
     }
     
+    /* Check if we're running under SX OS. */
+    /* This CFW offers system-wide UMS support - we definitely don't want to run under it to avoid undesired results. */
+    if (usbHsFsUtilsIsSXOS())
+    {
+        USBHSFS_LOG("Error: running under SX OS!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
+        goto end;
+    }
+    
     /* Allocate memory for the USB interfaces. */
     g_usbInterfaces = malloc(g_usbInterfacesMaxSize);
     if (!g_usbInterfaces)
