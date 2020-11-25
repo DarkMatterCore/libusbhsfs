@@ -169,11 +169,6 @@
 /  To enable the 64-bit LBA, also exFAT needs to be enabled. (FF_FS_EXFAT == 1) */
 
 
-#define FF_MIN_GPT		0x100000000
-/* Minimum number of sectors to switch GPT format to create partition in ff_mkfs and
-/  ff_fdisk function. 0x100000000 max. This option has no effect when FF_LBA64 == 0. */
-
-
 #define FF_USE_TRIM		0
 /* This option switches support for ATA-TRIM. (0:Disable or 1:Enable)
 /  To enable Trim function, also CTRL_TRIM command should be implemented to the
@@ -242,9 +237,9 @@
 #define FF_SYNC_t		HANDLE
 /* The option FF_FS_REENTRANT switches the re-entrancy (thread safe) of the FatFs
 /  module itself. Note that regardless of this option, file access to different
-/  volume is always re-entrant and volume control functions, ff_mount(), ff_mkfs()
-/  and ff_fdisk() function, are always not re-entrant. Only file/directory access
-/  to the same volume is under control of this function.
+/  volume is always re-entrant and volume control functions and ff_mount() are
+/  always not re-entrant. Only file/directory access to the same volume is under
+/  control of this function.
 /
 /   0: Disable re-entrancy. FF_FS_TIMEOUT and FF_SYNC_t have no effect.
 /   1: Enable re-entrancy. Also user provided synchronization handlers,

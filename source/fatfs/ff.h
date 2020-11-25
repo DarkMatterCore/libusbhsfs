@@ -306,8 +306,6 @@ FRESULT ff_setlabel (const TCHAR* label);							/* Set volume label */
 FRESULT ff_forward (FIL* fp, UINT(*func)(const BYTE*,UINT), UINT btf, UINT* bf);	/* Forward data to the stream */
 FRESULT ff_expand (FIL* fp, FSIZE_t fsz, BYTE opt);					/* Allocate a contiguous block to the file */
 FRESULT ff_mount (FATFS* fs, const TCHAR* path, BYTE opt);			/* Mount/Unmount a logical drive */
-FRESULT ff_mkfs (const TCHAR* path, const MKFS_PARM* opt, void* work, UINT len);	/* Create a FAT volume */
-FRESULT ff_fdisk (BYTE pdrv, const LBA_t ptbl[], void* work);		/* Divide a physical drive into some partitions */
 FRESULT ff_setcp (WORD cp);											/* Set current code page */
 int ff_putc (TCHAR c, FIL* fp);										/* Put a character to the file */
 int ff_puts (const TCHAR* str, FIL* cp);								/* Put a string to the file */
@@ -389,13 +387,6 @@ int ff_del_syncobj (FF_SYNC_t sobj);	/* Delete a sync object */
 
 /* Fast seek controls (2nd argument of ff_lseek) */
 #define CREATE_LINKMAP	((FSIZE_t)0 - 1)
-
-/* Format options (2nd argument of ff_mkfs) */
-#define FM_FAT		0x01
-#define FM_FAT32	0x02
-#define FM_EXFAT	0x04
-#define FM_ANY		0x07
-#define FM_SFD		0x08
 
 /* Filesystem type (FATFS.fs_type) */
 #define FS_FAT12	1
