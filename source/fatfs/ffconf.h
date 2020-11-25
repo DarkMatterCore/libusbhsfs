@@ -38,10 +38,6 @@
 /  ff_findnext(). (0:Disable, 1:Enable 2:Enable with matching altname[] too) */
 
 
-#define FF_USE_MKFS		0
-/* This option switches ff_mkfs() function. (0:Disable or 1:Enable) */
-
-
 #define FF_USE_FASTSEEK	0
 /* This option switches fast seek function. (0:Disable or 1:Enable) */
 
@@ -156,15 +152,6 @@
 
 #define FF_VOLUMES		64
 /* Number of volumes (logical drives) to be used. (1-100) */
-
-
-#define FF_MULTI_PARTITION	0
-/* This option switches support for multiple volumes on the physical drive.
-/  By default (0), each logical drive number is bound to the same physical drive
-/  number and only an FAT volume found on the physical drive will be mounted.
-/  When this function is enabled (1), each logical drive number can be bound to
-/  arbitrary physical drive and partition listed in the VolToPart[]. Also ff_fdisk()
-/  funciton will be available. */
 
 
 #define FF_MIN_SS		512

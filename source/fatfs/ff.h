@@ -58,17 +58,6 @@ typedef WORD			WCHAR;	/* UTF-16 character type */
 #endif
 
 
-/* Definitions of volume management */
-
-#if FF_MULTI_PARTITION		/* Multiple partition configuration */
-typedef struct {
-	BYTE pd;	/* Physical drive number */
-	BYTE pt;	/* Partition: 0:Auto detect, 1-4:Forced partition) */
-} PARTITION;
-extern PARTITION VolToPart[];	/* Volume - Partition mapping table */
-#endif
-
-
 
 /* Type of path name strings on FatFs API */
 
