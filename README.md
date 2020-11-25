@@ -76,13 +76,16 @@ Please check the provided test application in `/example` for a more in-depth exa
 Relative path support
 --------------
 
-**Disclaimer:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after successfully calling `usbHsFsSetDefaultDevice()`.
+**Disclaimer:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after a successful `chdir()` call using an absolute path from a mounted volume in a UMS device. If such thing occurs, and you still need to perform additional operations with relative paths, just call `chdir()` again.
 
-* `usbHsFsSetDefaultDevice()` *must* be used to set a previously listed `UsbHsFsDevice` as the default devoptab device, which will in turn make it possible to use relative paths with standard libc calls on it.
-* `usbHsFsUnsetDefaultDevice()` can be used anytime to unset a `UsbHsFsDevice` that was previously set as the default devoptab device. If the current default devoptab device matches the one that was previously set by the library, then the SD card is set as the new default devoptab device.
-* `usbHsFsGetDefaultDevice()` can be used to fill the provided `UsbHsFsDevice` element with information from a previously set default devoptab device.
+A `chdir()` call using an absolute path to a directory from a mounted volume (e.g. `"ums0:/"`) must be issued to change both the default devoptab device and the current working directory. This will effectively place you at the provided directory, and all I/O operations performed with relative paths shall work on it.
 
-For more information, please read the comments from `include/usbhsfs.h`. For an example, please check the provided test application in `/example`.
+The SD card will be set as the new default devoptab device under two different conditions:
+
+* If the UMS device that holds the volume set as the default devoptab device is removed from the console.
+* If the USB Mass Storage Host interface is closed via `usbHsFsExit()` and a volume from an available UMS device was set as the default devoptab device.
+
+For an example, please check the provided test application in `/example`.
 
 License
 --------------

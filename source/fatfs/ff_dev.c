@@ -12,7 +12,9 @@
 #include <sys/param.h>
 #include <fcntl.h>
 
-#include "ff_dev.h"
+#include "../usbhsfs_utils.h"
+#include "../usbhsfs_manager.h"
+#include "../usbhsfs_mount.h"
 
 /* Function prototypes. */
 
@@ -648,6 +650,7 @@ end:
 
 static int ffdev_chdir(struct _reent *r, const char *name)
 {
+    DIR dir = {0};
     FRESULT res = FR_OK;
     size_t cwd_len = 0;
     int ret = -1;
@@ -666,10 +669,13 @@ static int ffdev_chdir(struct _reent *r, const char *name)
     
     USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
     
-    /* Change directory. */
-    res = ff_chdir(ffdev_path_buf);
+    /* Open directory. */
+    res = ff_opendir(&dir, ffdev_path_buf);
     if (res == FR_OK)
     {
+        /* Close directory. */
+        ff_closedir(&dir);
+        
         /* Update current working directory. */
         sprintf(fs_ctx->cwd, "%s", strchr(ffdev_path_buf, '/'));
         
@@ -679,6 +685,9 @@ static int ffdev_chdir(struct _reent *r, const char *name)
             fs_ctx->cwd[cwd_len] = '/';
             fs_ctx->cwd[cwd_len + 1] = '\0';
         }
+        
+        /* Set default devoptab device. */
+        usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
         
         ret = 0;
     } else {

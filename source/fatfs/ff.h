@@ -148,13 +148,11 @@ typedef struct {
 	DWORD	last_clst;		/* Last allocated cluster */
 	DWORD	free_clst;		/* Number of free clusters */
 #endif
-#if FF_FS_RPATH
 	DWORD	cdir;			/* Current directory start cluster (0:root) */
 #if FF_FS_EXFAT
 	DWORD	cdc_scl;		/* Containing directory start cluster (invalid when cdir is 0) */
 	DWORD	cdc_size;		/* b31-b8:Size of containing directory, b7-b0: Chain status */
 	DWORD	cdc_ofs;		/* Offset in the containing directory (invalid when cdir is 0) */
-#endif
 #endif
 	DWORD	n_fatent;		/* Number of FAT entries (number of clusters + 2) */
 	DWORD	fsize;			/* Size of an FAT [sectors] */
@@ -313,9 +311,6 @@ FRESULT ff_rename (const TCHAR* path_old, const TCHAR* path_new);	/* Rename/Move
 FRESULT ff_stat (const TCHAR* path, FILINFO* fno);					/* Get file status */
 FRESULT ff_chmod (const TCHAR* path, BYTE attr, BYTE mask);			/* Change attribute of a file/dir */
 FRESULT ff_utime (const TCHAR* path, const FILINFO* fno);			/* Change timestamp of a file/dir */
-FRESULT ff_chdir (const TCHAR* path);								/* Change current directory */
-FRESULT ff_chdrive (const TCHAR* path);								/* Change current drive */
-FRESULT ff_getcwd (TCHAR* buff, UINT len);							/* Get current directory */
 FRESULT ff_getfree (const TCHAR* path, DWORD* nclst, FATFS** fatfs);	/* Get number of free clusters on the drive */
 FRESULT ff_getlabel (const TCHAR* path, TCHAR* label, DWORD* vsn);	/* Get volume label */
 FRESULT ff_setlabel (const TCHAR* label);							/* Set volume label */

@@ -460,10 +460,6 @@ typedef struct {
 static FATFS* FatFs[FF_VOLUMES];	/* Pointer to the filesystem objects (logical drives) */
 static WORD Fsid;					/* Filesystem mount ID */
 
-#if FF_FS_RPATH != 0
-static BYTE CurrVol;				/* Current drive */
-#endif
-
 #if FF_FS_LOCK != 0
 static FILESEM Files[FF_FS_LOCK];	/* Open object lock semaphores */
 #endif
@@ -1923,7 +1919,7 @@ static int cmp_lfn (		/* 1:matched, 0:not matched */
 }
 
 
-#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 || FF_USE_LABEL || FF_FS_EXFAT
+#if FF_FS_MINIMIZE <= 1 || FF_USE_LABEL || FF_FS_EXFAT
 /*-----------------------------------------------------*/
 /* FAT-LFN: Pick a part of file name from an LFN entry */
 /*-----------------------------------------------------*/
@@ -2133,7 +2129,7 @@ static DWORD xsum32 (	/* Returns 32-bit checksum */
 #endif
 
 
-#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2
+#if FF_FS_MINIMIZE <= 1
 /*------------------------------------------------------*/
 /* exFAT: Get object information from a directory block */
 /*------------------------------------------------------*/
@@ -2172,7 +2168,7 @@ static void get_xfileinfo (
 	fno->fdate = ld_word(dirb + XDIR_ModTime + 2);	/* Date */
 }
 
-#endif	/* FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 */
+#endif	/* FF_FS_MINIMIZE <= 1 */
 
 
 /*-----------------------------------*/
@@ -2243,7 +2239,7 @@ static void init_alloc_info (
 
 
 
-#if !FF_FS_READONLY || FF_FS_RPATH != 0
+#if !FF_FS_READONLY
 /*------------------------------------------------*/
 /* exFAT: Load the object's directory entry block */
 /*------------------------------------------------*/
@@ -2347,7 +2343,7 @@ static void create_xdir (
 
 
 
-#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 || FF_USE_LABEL || FF_FS_EXFAT
+#if FF_FS_MINIMIZE <= 1 || FF_USE_LABEL || FF_FS_EXFAT
 /*-----------------------------------------------------------------------*/
 /* Read an object from the directory                                     */
 /*-----------------------------------------------------------------------*/
@@ -2425,7 +2421,7 @@ static FRESULT dir_read (
 	return res;
 }
 
-#endif	/* FF_FS_MINIMIZE <= 1 || FF_USE_LABEL || FF_FS_RPATH >= 2 */
+#endif	/* FF_FS_MINIMIZE <= 1 || FF_USE_LABEL || FF_FS_EXFAT */
 
 
 
@@ -2661,7 +2657,7 @@ static FRESULT dir_remove (	/* FR_OK:Succeeded, FR_DISK_ERR:A disk error */
 
 
 
-#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2
+#if FF_FS_MINIMIZE <= 1
 /*-----------------------------------------------------------------------*/
 /* Get file information from directory entry                             */
 /*-----------------------------------------------------------------------*/
@@ -2763,7 +2759,7 @@ static void get_fileinfo (
 	fno->fdate = ld_word(dp->dir + DIR_ModTime + 2);	/* Date */
 }
 
-#endif /* FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 */
+#endif /* FF_FS_MINIMIZE <= 1 */
 
 
 
@@ -2883,7 +2879,6 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 	}
 	*path = p;					/* Return pointer to the next segment */
 
-#if FF_FS_RPATH != 0
 	if ((di == 1 && lfn[di - 1] == '.') ||
 		(di == 2 && lfn[di - 1] == '.' && lfn[di - 2] == '.')) {	/* Is this segment a dot name? */
 		lfn[di] = 0;
@@ -2893,7 +2888,7 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 		dp->fn[i] = cf | NS_DOT;		/* This is a dot entry */
 		return FR_OK;
 	}
-#endif
+
 	while (di) {						/* Snip off trailing spaces and dots if exist */
 		wc = lfn[di - 1];
 		if (wc != ' ' && wc != '.') break;
@@ -2989,7 +2984,7 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 	p = *path; sfn = dp->fn;
 	mem_set(sfn, ' ', 11);
 	si = i = 0; ni = 8;
-#if FF_FS_RPATH != 0
+
 	if (p[si] == '.') { /* Is this a dot entry? */
 		for (;;) {
 			c = (BYTE)p[si++];
@@ -3001,7 +2996,7 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 		sfn[NSFLAG] = (c <= ' ') ? NS_LAST | NS_DOT : NS_DOT;	/* Set last segment flag if end of the path */
 		return FR_OK;
 	}
-#endif
+
 	for (;;) {
 		c = (BYTE)p[si++];				/* Get a byte */
 		if (c <= ' ') break; 			/* Break if end of the path name */
@@ -3061,18 +3056,15 @@ static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
 	FATFS *fs = dp->obj.fs;
 
 
-#if FF_FS_RPATH != 0
 	if (*path != '/' && *path != '\\') {	/* Without heading separator */
 		dp->obj.sclust = fs->cdir;				/* Start from current directory */
-	} else
-#endif
-	{										/* With heading separator */
+	} else {										/* With heading separator */
 		while (*path == '/' || *path == '\\') path++;	/* Strip heading separator */
 		dp->obj.sclust = 0;					/* Start from root directory */
 	}
 #if FF_FS_EXFAT
 	dp->obj.n_frag = 0;	/* Invalidate last fragment counter of the object */
-#if FF_FS_RPATH != 0
+
 	if (fs->fs_type == FS_EXFAT && dp->obj.sclust) {	/* exFAT: Retrieve the sub-directory's status */
 		DIR dj;
 
@@ -3084,7 +3076,6 @@ static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
 		dp->obj.objsize = ld_dword(fs->dirbuf + XDIR_FileSize);
 		dp->obj.stat = fs->dirbuf[XDIR_GenFlags] & 2;
 	}
-#endif
 #endif
 
 	if ((UINT)*path < ' ') {				/* Null path name is the origin directory itself */
@@ -3099,7 +3090,7 @@ static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
 			ns = dp->fn[NSFLAG];
 			if (res != FR_OK) {				/* Failed to find the object */
 				if (res == FR_NO_FILE) {	/* Object is not found */
-					if (FF_FS_RPATH && (ns & NS_DOT)) {	/* If dot entry is not exist, stay there */
+					if (ns & NS_DOT) {	/* If dot entry is not exist, stay there */
 						if (!(ns & NS_LAST)) continue;	/* Continue to follow if not last segment */
 						dp->fn[NSFLAG] = NS_NONAME;
 						res = FR_OK;
@@ -3171,11 +3162,6 @@ static int get_ldnumber (	/* Returns logical drive number (-1:invalid drive numb
 	}
 
 	/* No drive prefix is found */
-#if FF_FS_RPATH != 0
-	vol = CurrVol;	/* Default drive is current drive */
-#else
-	vol = 0;		/* Default drive is 0 */
-#endif
 	return vol;		/* Return the default drive */
 }
 
@@ -3562,9 +3548,7 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 	fs->dirbuf = DirBuf;	/* Static directory block scratchpad buuffer */
 #endif
 #endif
-#if FF_FS_RPATH != 0
 	fs->cdir = 0;			/* Initialize current directory */
-#endif
 #if FF_FS_LOCK != 0			/* Clear file lock semaphores */
 	clear_lock(fs);
 #endif
@@ -4196,172 +4180,6 @@ FRESULT ff_close (
 
 
 
-
-#if FF_FS_RPATH >= 1
-/*-----------------------------------------------------------------------*/
-/* Change Current Directory or Current Drive, Get Current Directory      */
-/*-----------------------------------------------------------------------*/
-
-FRESULT ff_chdrive (
-	const TCHAR* path		/* Drive number to set */
-)
-{
-	int vol;
-
-
-	/* Get logical drive number */
-	vol = get_ldnumber(&path);
-	if (vol < 0) return FR_INVALID_DRIVE;
-	CurrVol = (BYTE)vol;	/* Set it as current volume */
-
-	return FR_OK;
-}
-
-
-
-FRESULT ff_chdir (
-	const TCHAR* path	/* Pointer to the directory path */
-)
-{
-	FRESULT res;
-	DIR dj;
-	FATFS *fs;
-	DEF_NAMBUF
-
-
-	/* Get logical drive */
-	res = mount_volume(&path, &fs, 0);
-	if (res == FR_OK) {
-		dj.obj.fs = fs;
-		INIT_NAMBUF(fs);
-		res = follow_path(&dj, path);		/* Follow the path */
-		if (res == FR_OK) {					/* Follow completed */
-			if (dj.fn[NSFLAG] & NS_NONAME) {	/* Is it the start directory itself? */
-				fs->cdir = dj.obj.sclust;
-#if FF_FS_EXFAT
-				if (fs->fs_type == FS_EXFAT) {
-					fs->cdc_scl = dj.obj.c_scl;
-					fs->cdc_size = dj.obj.c_size;
-					fs->cdc_ofs = dj.obj.c_ofs;
-				}
-#endif
-			} else {
-				if (dj.obj.attr & AM_DIR) {	/* It is a sub-directory */
-#if FF_FS_EXFAT
-					if (fs->fs_type == FS_EXFAT) {
-						fs->cdir = ld_dword(fs->dirbuf + XDIR_FstClus);		/* Sub-directory cluster */
-						fs->cdc_scl = dj.obj.sclust;						/* Save containing directory information */
-						fs->cdc_size = ((DWORD)dj.obj.objsize & 0xFFFFFF00) | dj.obj.stat;
-						fs->cdc_ofs = dj.blk_ofs;
-					} else
-#endif
-					{
-						fs->cdir = ld_clust(fs, dj.dir);					/* Sub-directory cluster */
-					}
-				} else {
-					res = FR_NO_PATH;		/* Reached but a file */
-				}
-			}
-		}
-		FREE_NAMBUF();
-		if (res == FR_NO_FILE) res = FR_NO_PATH;
-	}
-
-	LEAVE_FF(fs, res);
-}
-
-
-#if FF_FS_RPATH >= 2
-FRESULT ff_getcwd (
-	TCHAR* buff,	/* Pointer to the directory path */
-	UINT len		/* Size of buff in unit of TCHAR */
-)
-{
-	FRESULT res;
-	DIR dj;
-	FATFS *fs;
-	UINT i, n;
-	DWORD ccl;
-	TCHAR *tp = buff;
-#if FF_VOLUMES >= 2
-	UINT vl;
-#endif
-	FILINFO fno;
-	DEF_NAMBUF
-
-
-	/* Get logical drive */
-	buff[0] = 0;	/* Set null string to get current volume */
-	res = mount_volume((const TCHAR**)&buff, &fs, 0);	/* Get current volume */
-	if (res == FR_OK) {
-		dj.obj.fs = fs;
-		INIT_NAMBUF(fs);
-
-		/* Follow parent directories and create the path */
-		i = len;			/* Bottom of buffer (directory stack base) */
-		if (!FF_FS_EXFAT || fs->fs_type != FS_EXFAT) {	/* (Cannot do getcwd on exFAT and returns root path) */
-			dj.obj.sclust = fs->cdir;				/* Start to follow upper directory from current directory */
-			while ((ccl = dj.obj.sclust) != 0) {	/* Repeat while current directory is a sub-directory */
-				res = dir_sdi(&dj, 1 * SZDIRE);	/* Get parent directory */
-				if (res != FR_OK) break;
-				res = move_window(fs, dj.sect);
-				if (res != FR_OK) break;
-				dj.obj.sclust = ld_clust(fs, dj.dir);	/* Goto parent directory */
-				res = dir_sdi(&dj, 0);
-				if (res != FR_OK) break;
-				do {							/* Find the entry links to the child directory */
-					res = DIR_READ_FILE(&dj);
-					if (res != FR_OK) break;
-					if (ccl == ld_clust(fs, dj.dir)) break;	/* Found the entry */
-					res = dir_next(&dj, 0);
-				} while (res == FR_OK);
-				if (res == FR_NO_FILE) res = FR_INT_ERR;/* It cannot be 'not found'. */
-				if (res != FR_OK) break;
-				get_fileinfo(&dj, &fno);		/* Get the directory name and push it to the buffer */
-				for (n = 0; fno.fname[n]; n++) ;	/* Name length */
-				if (i < n + 1) {	/* Insufficient space to store the path name? */
-					res = FR_NOT_ENOUGH_CORE; break;
-				}
-				while (n) buff[--i] = fno.fname[--n];	/* Stack the name */
-				buff[--i] = '/';
-			}
-		}
-		if (res == FR_OK) {
-			if (i == len) buff[--i] = '/';	/* Is it the root-directory? */
-#if FF_VOLUMES >= 2			/* Put drive prefix */
-			vl = 0;
-
-			if (CurrVol < 10 && i >= 3) {
-				*tp++ = (TCHAR)'0' + CurrVol;
-				*tp++ = (TCHAR)':';
-				vl = 2;
-			} else
-            if (CurrVol >= 10 && i >= 4) {
-                *tp++ = (TCHAR)'0' + (CurrVol / 10);
-                *tp++ = (TCHAR)'0' + (CurrVol - ((CurrVol / 10) * 10));
-				*tp++ = (TCHAR)':';
-				vl = 3;
-			}
-
-			if (vl == 0) res = FR_NOT_ENOUGH_CORE;
-#endif
-			/* Add current directory path */
-			if (res == FR_OK) {
-				do *tp++ = buff[i++]; while (i < len);	/* Copy stacked path string */
-			}
-		}
-		FREE_NAMBUF();
-	}
-
-	*tp = 0;
-	LEAVE_FF(fs, res);
-}
-
-#endif /* FF_FS_RPATH >= 2 */
-#endif /* FF_FS_RPATH >= 1 */
-
-
-
 #if FF_FS_MINIMIZE <= 2
 /*-----------------------------------------------------------------------*/
 /* Seek File Read/Write Pointer                                          */
@@ -4909,7 +4727,7 @@ FRESULT ff_unlink (
 		dj.obj.fs = fs;
 		INIT_NAMBUF(fs);
 		res = follow_path(&dj, path);		/* Follow the file path */
-		if (FF_FS_RPATH && res == FR_OK && (dj.fn[NSFLAG] & NS_DOT)) {
+		if (res == FR_OK && (dj.fn[NSFLAG] & NS_DOT)) {
 			res = FR_INVALID_NAME;			/* Cannot remove dot entry */
 		}
 #if FF_FS_LOCK != 0
@@ -4935,12 +4753,10 @@ FRESULT ff_unlink (
 					dclst = ld_clust(fs, dj.dir);
 				}
 				if (dj.obj.attr & AM_DIR) {			/* Is it a sub-directory? */
-#if FF_FS_RPATH != 0
+
 					if (dclst == fs->cdir) {		 	/* Is it the current directory? */
 						res = FR_DENIED;
-					} else
-#endif
-					{
+					} else {
 						sdj.obj.fs = fs;				/* Open the sub-directory */
 						sdj.obj.sclust = dclst;
 #if FF_FS_EXFAT
@@ -5001,7 +4817,7 @@ FRESULT ff_mkdir (
 		INIT_NAMBUF(fs);
 		res = follow_path(&dj, path);			/* Follow the file path */
 		if (res == FR_OK) res = FR_EXIST;		/* Name collision? */
-		if (FF_FS_RPATH && res == FR_NO_FILE && (dj.fn[NSFLAG] & NS_DOT)) {	/* Invalid name? */
+		if (res == FR_NO_FILE && (dj.fn[NSFLAG] & NS_DOT)) {	/* Invalid name? */
 			res = FR_INVALID_NAME;
 		}
 		if (res == FR_NO_FILE) {				/* It is clear to create a new directory */

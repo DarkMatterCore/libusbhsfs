@@ -29,13 +29,7 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
 u32 usbHsFsMountGetDevoptabDeviceCount(void);
 
 /// Sets the devoptab device from the provided filesystem context as the default devoptab device.
+/// Called by the chdir() function from devoptab interfaces.
 bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
-
-/// Checks if the current default devoptab device is the one previously set by usbHsFsMountSetDefaultDevoptabDevice().
-/// If so, the SD card is set as the new default devoptab device.
-void usbHsFsMountUnsetDefaultDevoptabDevice(void);
-
-/// Returns the device ID for the current default devoptab device.
-u32 usbHsFsMountGetDefaultDevoptabDeviceId(void);
 
 #endif  /* __USBHSFS_MOUNT_H__ */

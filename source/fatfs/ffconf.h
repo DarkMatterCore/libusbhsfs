@@ -150,15 +150,6 @@
 */
 
 
-#define FF_FS_RPATH		1
-/* This option configures support for relative path.
-/
-/   0: Disable relative path and remove related functions.
-/   1: Enable relative path. ff_chdir() and ff_chdrive() are available.
-/   2: ff_getcwd() function is available in addition to 1.
-*/
-
-
 /*---------------------------------------------------------------------------/
 / Drive/Volume Configurations
 /---------------------------------------------------------------------------*/

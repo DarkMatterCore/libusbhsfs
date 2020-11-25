@@ -11,11 +11,15 @@
 #include "usbhsfs_mount.h"
 #include "fatfs/ff_dev.h"
 
+#define MOUNT_NAME_PREFIX   "ums"
+
 /* Global variables. */
 
 static u32 g_devoptabDeviceCount = 0;
 static u32 *g_devoptabDeviceIds = NULL;
+
 static u32 g_devoptabDefaultDeviceId = USB_DEFAULT_DEVOPTAB_INVALID_ID;
+static Mutex g_devoptabDefaultDeviceMutex = 0;
 
 static bool g_fatFsVolumeTable[FF_VOLUMES] = { false };
 
@@ -25,6 +29,8 @@ static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnit
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
+
+static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id);
 
 bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
@@ -115,8 +121,8 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
     char name[USB_MOUNT_NAME_LENGTH] = {0};
     u32 *tmp_device_ids = NULL;
     
-    /* Unset default devoptab device, if needed. */
-    if (g_devoptabDefaultDeviceId == fs_ctx->device_id) usbHsFsMountUnsetDefaultDevoptabDevice();
+    /* Unset default devoptab device. */
+    usbHsFsMountUnsetDefaultDevoptabDevice(fs_ctx->device_id);
     
     /* Unregister devoptab interface. */
     sprintf(name, "%s:", fs_ctx->name);
@@ -198,21 +204,22 @@ u32 usbHsFsMountGetDevoptabDeviceCount(void)
 
 bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    if (!g_devoptabDeviceCount || !g_devoptabDeviceIds || !usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx))
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        return false;
-    }
+    mutexLock(&g_devoptabDefaultDeviceMutex);
     
     const devoptab_t *cur_default_devoptab = NULL;
     int new_default_device = -1;
     char name[USB_MOUNT_NAME_LENGTH] = {0};
-    FRESULT res = FR_OK;
     bool ret = false;
+    
+    if (!g_devoptabDeviceCount || !g_devoptabDeviceIds || !usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx))
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        goto end;
+    }
     
     /* Get current default devoptab device index. */
     cur_default_devoptab = GetDeviceOpTab("");
-    if (cur_default_devoptab && cur_default_devoptab->name == fs_ctx->name)
+    if (cur_default_devoptab && cur_default_devoptab->deviceData == fs_ctx)
     {
         /* Device already set as default. */
         USBHSFS_LOG("Device \"%s\" already set as default.", fs_ctx->name);
@@ -229,24 +236,11 @@ bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemConte
         goto end;
     }
     
-    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_FAT)
-    {
-        /* Change current FatFs drive. */
-        sprintf(name, "%u:", fs_ctx->fatfs->pdrv);
-        res = ff_chdrive(name);
-        if (res != FR_OK)
-        {
-            USBHSFS_LOG("Failed to change default FatFs drive to \"%s\"! (device \"%s\").", name, fs_ctx->name);
-            goto end;
-        }
-    }
-    
     /* Set default devoptab device. */
     setDefaultDevice(new_default_device);
     cur_default_devoptab = GetDeviceOpTab("");
-    if (!cur_default_devoptab || cur_default_devoptab->name != fs_ctx->name)
+    if (!cur_default_devoptab || cur_default_devoptab->deviceData != fs_ctx)
     {
-        if (cur_default_devoptab->name) USBHSFS_LOG("%s", cur_default_devoptab->name);
         USBHSFS_LOG("Failed to set default devoptab device to index %d! (device \"%s\").", new_default_device, fs_ctx->name);
         goto end;
     }
@@ -260,32 +254,9 @@ bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemConte
     ret = true;
     
 end:
+    mutexUnlock(&g_devoptabDefaultDeviceMutex);
+    
     return ret;
-}
-
-void usbHsFsMountUnsetDefaultDevoptabDevice(void)
-{
-    if (g_devoptabDefaultDeviceId == USB_DEFAULT_DEVOPTAB_INVALID_ID) return;
-    
-    u32 device_id = 0;
-    const devoptab_t *cur_default_devoptab = GetDeviceOpTab("");
-    
-    /* Check if the current default devoptab device is the one we previously set. */
-    /* If so, set the SD card as the new default devoptab device. */
-    if (cur_default_devoptab && cur_default_devoptab->name && strlen(cur_default_devoptab->name) >= 4 && sscanf(cur_default_devoptab->name, "ums%u", &device_id) == 1 && \
-        g_devoptabDefaultDeviceId == device_id)
-    {
-        USBHSFS_LOG("Setting SD card as the default devoptab device.");
-        setDefaultDevice(FindDevice("sdmc:"));
-    }
-    
-    /* Update default device ID. */
-    g_devoptabDefaultDeviceId = USB_DEFAULT_DEVOPTAB_INVALID_ID;
-}
-
-u32 usbHsFsMountGetDefaultDevoptabDeviceId(void)
-{
-    return g_devoptabDefaultDeviceId;
 }
 
 static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
@@ -368,7 +339,9 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *l
     }
     
     fs_ctx->device_id = usbHsFsMountGetAvailableDevoptabDeviceId();
-    sprintf(fs_ctx->name, "ums%u", fs_ctx->device_id);
+    USBHSFS_LOG("Available device ID: %u (interface %d, LUN %u, FS %u).", ret, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+    
+    sprintf(fs_ctx->name, MOUNT_NAME_PREFIX "%u", fs_ctx->device_id);
     sprintf(name, "%s:", fs_ctx->name); /* Will be used if something goes wrong and we end up having to remove the devoptab device. */
     
     /* Allocate memory for the current working directory. */
@@ -405,7 +378,11 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *l
             break;
     }
     
-    if (!fs_device) goto end;
+    if (!fs_device)
+    {
+        USBHSFS_LOG("Failed to get pointer to devoptab interface! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        goto end;
+    }
     
     /* Copy devoptab interface data and set mount name and device data. */
     memcpy(fs_ctx->device, fs_device, sizeof(devoptab_t));
@@ -485,4 +462,32 @@ static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void)
     }
     
     return ret;
+}
+
+static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id)
+{
+    mutexLock(&g_devoptabDefaultDeviceMutex);
+    
+    /* Check if the provided device ID matches the current default devoptab device ID. */
+    if (g_devoptabDefaultDeviceId != USB_DEFAULT_DEVOPTAB_INVALID_ID && g_devoptabDefaultDeviceId == device_id)
+    {
+        USBHSFS_LOG("Current default devoptab device matches provided device ID! (%u).", device_id);
+        
+        u32 cur_device_id = 0;
+        const devoptab_t *cur_default_devoptab = GetDeviceOpTab("");
+        
+        /* Check if the current default devoptab device is the one we previously set. */
+        /* If so, set the SD card as the new default devoptab device. */
+        if (cur_default_devoptab && cur_default_devoptab->name && strlen(cur_default_devoptab->name) >= 4 && sscanf(cur_default_devoptab->name, MOUNT_NAME_PREFIX "%u", &cur_device_id) == 1 && \
+            cur_device_id == device_id)
+        {
+            USBHSFS_LOG("Setting SD card as the default devoptab device.");
+            setDefaultDevice(FindDevice("sdmc:"));
+        }
+        
+        /* Update default device ID. */
+        g_devoptabDefaultDeviceId = USB_DEFAULT_DEVOPTAB_INVALID_ID;
+    }
+    
+    mutexUnlock(&g_devoptabDefaultDeviceMutex);
 }
