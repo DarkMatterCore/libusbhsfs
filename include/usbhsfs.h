@@ -48,6 +48,7 @@ typedef struct {
 /// Initializes the USB Mass Storage Host interface.
 /// event_idx represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the 0 - 2 range (inclusive).
 /// If you're not using any usb:hs interface available events on your own, set this value to 0.
+/// This function will fail if the application linked against the library is running under SX OS, or if the deprecated fsp-usb service is running in the background.
 Result usbHsFsInitialize(u8 event_idx);
 
 /// Closes the USB Mass Storage Host interface.
