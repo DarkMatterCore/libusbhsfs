@@ -1993,7 +1993,7 @@ static void gen_numname (
 	UINT seq			/* Sequence number */
 )
 {
-	BYTE ns[8], c;
+	BYTE ns[8] = {0}, c;
 	UINT i, j;
 	WCHAR wc;
 	DWORD sreg;
@@ -2022,7 +2022,7 @@ static void gen_numname (
 		ns[i--] = c;
 		seq /= 16;
 	} while (seq);
-	ns[i] = '~';
+	if (i >= 0) ns[i] = '~';
 
 	/* Append the number to the SFN body */
 	for (j = 0; j < i && dst[j] != ' '; j++) {

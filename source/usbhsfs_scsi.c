@@ -308,29 +308,9 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
-    if (!usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
                                          &mode_parameter_header_6))
     {
-        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-        
-        /* Send Mode Sense (10) SCSI command. */
-        /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
-        if (!usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
-                                               sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
-        {
-            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-            goto end;
-        }
-        
-#ifdef DEBUG
-        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_10, sizeof(ScsiModeParameterHeader10));
-        USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
-#endif
-        
-        /* Update Write Protect and FUA supported flags. */
-        write_protect = (mode_parameter_header_10.wp == 1);
-        fua_supported = (mode_parameter_header_10.dpofua == 1);
-    } else {
 #ifdef DEBUG
         usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_6, sizeof(ScsiModeParameterHeader6));
         USBHSFS_LOG("Mode Sense (6) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
@@ -339,6 +319,26 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         /* Update Write Protect and FUA supported flags. */
         write_protect = (mode_parameter_header_6.wp == 1);
         fua_supported = (mode_parameter_header_6.dpofua == 1);
+    } else {
+        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        
+        /* Send Mode Sense (10) SCSI command. */
+        /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
+        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+                                               sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
+        {
+#ifdef DEBUG
+            usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_10, sizeof(ScsiModeParameterHeader10));
+            USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
+#endif
+            
+            /* Update Write Protect and FUA supported flags. */
+            write_protect = (mode_parameter_header_10.wp == 1);
+            fua_supported = (mode_parameter_header_10.dpofua == 1);
+        } else {
+            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+            goto end;
+        }
     }
     
     /* Send Test Unit Ready SCSI command. */
@@ -884,7 +884,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     ret = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
     
 req_sense:
-    if ((ret || unexpected_csw) && csw.bCSWStatus != ScsiCommandStatus_Passed && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
+    if (((ret && csw.bCSWStatus != ScsiCommandStatus_Passed) || unexpected_csw) && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
     {
         /* Send Request Sense SCSI command. */
         if (!usbHsFsScsiSendRequestSenseCommand(drive_ctx, cbw->bCBWLUN, &sense_data))
@@ -913,12 +913,13 @@ req_sense:
                 /* Check if we're dealing with a medium not present. */
                 if (sense_data.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT)
                 {
+                    USBHSFS_LOG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
                     ret = false;
                     break;
                 }
                 
-                /* Wait some time (3s). */
-                usbHsFsUtilsSleep(3);
+                /* Wait some time (1s). */
+                usbHsFsUtilsSleep(1);
             case ScsiSenseKey_AbortedCommand:
                 /* Retry command once more. */
                 USBHSFS_LOG("Retrying command 0x%02X (0x%X) (interface %d, LUN %u).", cbw->CBWCB[0], sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);

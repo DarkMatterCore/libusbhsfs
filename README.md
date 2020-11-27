@@ -42,6 +42,7 @@ Main features
 * Easy to use library interface:
     * Provides an autoclear user event that is signaled each time a status change is detected by the background thread (new device mounted, device removed).
     * Painless listing of mounted partitions using a simple struct that provides the devoptab device name, as well as other interesting information (filesystem index, filesystem type, write protection, raw logical unit capacity, etc.).
+* Supports the `usbfs` service from SX OS.
 
 Limitations
 --------------
@@ -53,9 +54,14 @@ Limitations
     * Only one FAT volume can be mounted per logical unit. Fixing this requires rewriting critical parts of the FatFs library.
     * Up to 64 FAT volumes can be mounted at the same time across all available USB Mass Storage devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
 * Stack and/or heap memory consumption:
-    * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/mitm program contexts.
+    * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
+* `usbfs` service from SX OS:
+    * Only a single FAT volume from a single drive can be mounted.
+    * Relative paths aren't supported.
+    * `chdir()`, `rename()`, `dirreset()` and `utimes()` aren't supported.
+    * There are probably other limitations we don't even know about, due to the closed-source nature of this CFW.
 
 How to use
 --------------
@@ -76,7 +82,9 @@ Please check the provided test application in `/example` for a more in-depth exa
 Relative path support
 --------------
 
-**Disclaimer:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after a successful `chdir()` call using an absolute path from a mounted volume in a UMS device. If such thing occurs, and you still need to perform additional operations with relative paths, just call `chdir()` again.
+**Disclaimer #1:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after a successful `chdir()` call using an absolute path from a mounted volume in a UMS device. If such thing occurs, and you still need to perform additional operations with relative paths, just call `chdir()` again.
+
+**Disclaimer #2:** relative path support is not available under SX OS!
 
 A `chdir()` call using an absolute path to a directory from a mounted volume (e.g. `"ums0:/"`) must be issued to change both the default devoptab device and the current working directory. This will effectively place you at the provided directory, and all I/O operations performed with relative paths shall work on it.
 
@@ -105,6 +113,8 @@ Thanks to
 * ChaN, for the [FatFs library](http://elm-chan.org/fsw/ff/00index_e.html) (licensed under [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license)).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
 * [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
+* [FennecTECH](https://github.com/fennectech), for breaking stuff on a regular basis.
+* [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
 * All the Alpha Testers and Super Users from the nxdumptool Discord server, for being a constant source of ideas (and memes).
 * And last but not least, my girlfriend, for always being by my side and motivating me to keep working on all my projects. I love you.
 

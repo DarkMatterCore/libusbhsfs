@@ -17,7 +17,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 LIB_TITLE	:=	usbhsfs
 
 TARGET		:=	${LIB_TITLE}
-SOURCES		:=	source source/fatfs
+SOURCES		:=	source source/fatfs source/sxos
 DATA		:=	data
 INCLUDES	:=	include
 

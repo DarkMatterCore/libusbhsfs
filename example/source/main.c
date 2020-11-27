@@ -21,7 +21,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     char path[FS_MAX_PATH] = {0}, tmp[0x40] = {0}, new_path[FS_MAX_PATH] = {0};
     
-    FILE *fd = NULL;
+    FILE *fd = NULL, *ums_fd = NULL;
     struct stat st = {0};
     
     DIR *dp = NULL;
@@ -30,6 +30,9 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     struct statvfs fsinfo = {0};
     
     int ret = -1;
+    
+    u8 *buf = NULL;
+    size_t blksize = 0x800000;
     
     sprintf(path, "%s/" APP_TITLE ".txt", device->name);
     sprintf(new_path, "%s/test.txt", device->name);
@@ -166,6 +169,50 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
         
         if (!dp && i == 0) break;
     }
+    
+    /* File copy. */
+    sprintf(path, "sdmc:/test.file");
+    sprintf(new_path, "%s/test.file", device->name);
+    printf("\t\t- File copy (\"%s\" -> \"%s\"): ", path, new_path);
+    consoleUpdate(NULL);
+    
+    fd = fopen(path, "rb");
+    ums_fd = fopen(path, "wb");
+    buf = malloc(blksize);
+    
+    if (fd && ums_fd && buf)
+    {
+        printf("OK!\n");
+        consoleUpdate(NULL);
+        
+        fseek(fd, 0, SEEK_END);
+        size_t file_size = ftell(fd);
+        rewind(fd);
+        
+        printf("\t\t\t- File size (\"%s\"): 0x%lX bytes. Please wait.\n", path, file_size);
+        consoleUpdate(NULL);
+        
+        time_t start = time(NULL), now = start;
+        
+        for(size_t off = 0; off < file_size; off += blksize)
+        {
+            if (blksize > (file_size - off)) blksize = (file_size - off);
+            
+            fread(buf, 1, blksize, fd);
+            fwrite(buf, 1, blksize, ums_fd);
+        }
+        
+        now = time(NULL);
+        printf("\t\t\t- Process completed in %lu seconds.\n", now - start);
+        consoleUpdate(NULL);
+    } else {
+        printf("FAILED! (%d).\n", errno);
+        consoleUpdate(NULL);
+    }
+    
+    if (buf) free(buf);
+    if (ums_fd) fclose(fd);
+    if (fd) fclose(fd);
     
     printf("\n");
     consoleUpdate(NULL);
