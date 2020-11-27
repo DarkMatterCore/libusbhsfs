@@ -27,6 +27,7 @@
 #ifdef DEBUG
 #define USBHSFS_LOG(fmt, ...)   usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
 
+/// Logfile management functions.
 void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, ...);
 void usbHsFsUtilsWriteLogBufferToLogFile(const char *src);
 void usbHsFsUtilsFlushLogFile(void);
@@ -36,8 +37,16 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 #define USBHSFS_LOG(fmt, ...)
 #endif
 
+/// Returns true if the we're running under SX OS.
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void);
+
+/// Returns true if the fsp-usb service is running in the background.
+bool usbHsFsUtilsIsFspUsbRunning(void);
+
+/// Trims whitespace characters from the provided string.
 void usbHsFsUtilsTrimString(char *str);
 
+/// Simple wrapper to sleep the current thread for a specific number of full seconds.
 NX_INLINE void usbHsFsUtilsSleep(u64 seconds)
 {
     if (seconds) svcSleepThread(seconds * (u64)1000000000);

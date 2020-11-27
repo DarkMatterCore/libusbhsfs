@@ -20,7 +20,7 @@ extern "C" {
 
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    0
-#define LIBUSBHSFS_VERSION_MICRO    2
+#define LIBUSBHSFS_VERSION_MICRO    3
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
@@ -32,6 +32,7 @@ typedef enum {
 } UsbHsFsDeviceFileSystemType;
 
 /// Struct used to list mounted filesystems as devoptab devices.
+/// Everything but the vendor_id, product_id, product_revision and name fields is empty/zeroed-out under SX OS.
 typedef struct {
     s32 usb_if_id;              ///< USB interface ID. Internal use. May be shared with other UsbHsFsDevice entries.
     u8 lun;                     ///< Logical unit. Internal use. May be shared with other UsbHsFsDevice entries.
@@ -46,7 +47,10 @@ typedef struct {
 } UsbHsFsDevice;
 
 /// Initializes the USB Mass Storage Host interface.
-Result usbHsFsInitialize(void);
+/// event_idx represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the 0 - 2 range (inclusive).
+/// If you're not using any usb:hs interface available events on your own, set this value to 0. If running under SX OS, this value will be ignored.
+/// This function will fail if the deprecated fsp-usb service is running in the background.
+Result usbHsFsInitialize(u8 event_idx);
 
 /// Closes the USB Mass Storage Host interface.
 void usbHsFsExit(void);
@@ -62,22 +66,6 @@ u32 usbHsFsGetMountedDeviceCount(void);
 /// Lists up to max_count mounted devices and stores their information in the provided UsbHsFsDevice array.
 /// Returns the total number of written entries.
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
-
-/// Looks for the devoptab interface from the provided UsbHsFsDevice and sets it as the default devoptab device.
-/// This isn't automatically performed by the library, and it's necessary to provide support for operations with relative paths while using a specific device.
-/// Bear in mind that all calls to fsdevMount*() functions from libnx (or any wrappers around them) *can* and *will* override the default devoptab device if used a successful call to this function.
-/// If such thing occurs, and you still need to perform additional operations with relative paths on a UsbHsFsDevice, just call this function again.
-bool usbHsFsSetDefaultDevice(UsbHsFsDevice *device);
-
-/// Fills the provided UsbHsFsDevice element with information from a previously set default devoptab device (using usbHsFsSetDefaultDevice()).
-bool usbHsFsGetDefaultDevice(UsbHsFsDevice *device);
-
-/// Checks if the current default devoptab device is the one previously set by usbHsFsSetDefaultDevice().
-/// If so, the SD card is set as the new default devoptab device.
-/// Even though it's possible to manually perform this action, it is also automatically performed under two different conditions:
-/// a) While closing the USB Mass Storage Host interface (using usbHsFsExit()).
-/// b) If the UMS device previously set as the default devoptab device is removed from the console.
-void usbHsFsUnsetDefaultDevice(void);
 
 #ifdef __cplusplus
 }

@@ -308,29 +308,9 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
-    if (!usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
                                          &mode_parameter_header_6))
     {
-        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-        
-        /* Send Mode Sense (10) SCSI command. */
-        /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
-        if (!usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
-                                               sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
-        {
-            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-            goto end;
-        }
-        
-#ifdef DEBUG
-        usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_10, sizeof(ScsiModeParameterHeader10));
-        USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
-#endif
-        
-        /* Update Write Protect and FUA supported flags. */
-        write_protect = (mode_parameter_header_10.wp == 1);
-        fua_supported = (mode_parameter_header_10.dpofua == 1);
-    } else {
 #ifdef DEBUG
         usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_6, sizeof(ScsiModeParameterHeader6));
         USBHSFS_LOG("Mode Sense (6) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
@@ -339,6 +319,26 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         /* Update Write Protect and FUA supported flags. */
         write_protect = (mode_parameter_header_6.wp == 1);
         fua_supported = (mode_parameter_header_6.dpofua == 1);
+    } else {
+        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        
+        /* Send Mode Sense (10) SCSI command. */
+        /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
+        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+                                               sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
+        {
+#ifdef DEBUG
+            usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &mode_parameter_header_10, sizeof(ScsiModeParameterHeader10));
+            USBHSFS_LOG("Mode Sense (10) data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
+#endif
+            
+            /* Update Write Protect and FUA supported flags. */
+            write_protect = (mode_parameter_header_10.wp == 1);
+            fua_supported = (mode_parameter_header_10.dpofua == 1);
+        } else {
+            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+            goto end;
+        }
     }
     
     /* Send Test Unit Ready SCSI command. */
@@ -497,6 +497,13 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ct
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
     bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
+    
+    /* Make sure write protection is disabled. */
+    if (lun_ctx->write_protect)
+    {
+        USBHSFS_LOG("Error: write protection enabled! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun);
+        return false;
+    }
     
     /* Set max block count per Write command. */
     /* Short LBA LUNs: this is just SCSI_RW10_MAX_BLOCK_COUNT. */
@@ -808,7 +815,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     ScsiCommandStatusWrapper csw = {0};
     ScsiRequestSenseDataFixedFormat sense_data = {0};
     
-    bool ret = false, receive = (cbw->bmCBWFlags == USB_ENDPOINT_IN);
+    bool ret = false, receive = (cbw->bmCBWFlags == USB_ENDPOINT_IN), unexpected_csw = false;
     
 #ifdef DEBUG
     char hexdump[0x30] = {0};
@@ -838,6 +845,31 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         if (rest_size != xfer_size)
         {
             USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            
+            /* Check if we received an unexpected CSW. */
+            if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
+            {
+                memcpy(&csw, drive_ctx->ctrl_xfer_buf, sizeof(ScsiCommandStatusWrapper));
+                if (csw.dCSWSignature == __builtin_bswap32(SCSI_CSW_SIGNATURE) && csw.dCSWTag == cbw->dCBWTag)
+                {
+#ifdef DEBUG
+                    usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &csw, sizeof(ScsiCommandStatusWrapper));
+                    USBHSFS_LOG("Data from unexpected CSW (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, cbw->bCBWLUN, hexdump);
+#endif
+                    
+                    /* Check if we got a Phase Error status. */
+                    if (csw.bCSWStatus == ScsiCommandStatus_PhaseError)
+                    {
+                        USBHSFS_LOG("Phase error status in unexpected CSW! (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
+                        usbHsFsScsiResetRecovery(drive_ctx);
+                    }
+                    
+                    /* Update unexpected CSW flag and jump straight to the Request Sense section. */
+                    unexpected_csw = true;
+                    goto req_sense;
+                }
+            }
+            
             goto end;
         }
         
@@ -850,7 +882,9 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     
     /* Receive CSW. */
     ret = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
-    if (ret && csw.bCSWStatus != ScsiCommandStatus_Passed && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
+    
+req_sense:
+    if (((ret && csw.bCSWStatus != ScsiCommandStatus_Passed) || unexpected_csw) && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
     {
         /* Send Request Sense SCSI command. */
         if (!usbHsFsScsiSendRequestSenseCommand(drive_ctx, cbw->bCBWLUN, &sense_data))
@@ -879,12 +913,13 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
                 /* Check if we're dealing with a medium not present. */
                 if (sense_data.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT)
                 {
+                    USBHSFS_LOG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
                     ret = false;
                     break;
                 }
                 
-                /* Wait some time (3s). */
-                usbHsFsUtilsSleep(3);
+                /* Wait some time (1s). */
+                usbHsFsUtilsSleep(1);
             case ScsiSenseKey_AbortedCommand:
                 /* Retry command once more. */
                 USBHSFS_LOG("Retrying command 0x%02X (0x%X) (interface %d, LUN %u).", cbw->CBWCB[0], sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);

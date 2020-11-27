@@ -12,9 +12,6 @@
 #ifndef __FF_DEV_H__
 #define __FF_DEV_H__
 
-#include "../usbhsfs_utils.h"
-#include "../usbhsfs_manager.h"
-
 const devoptab_t *ffdev_get_devoptab();
 
 #endif  /* __FF_DEV_H__ */

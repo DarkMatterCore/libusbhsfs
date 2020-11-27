@@ -9,9 +9,15 @@
 
 #include "usbhsfs_utils.h"
 
+/* Function prototypes. */
+
+static bool usbHsFsUtilsCheckRunningServiceByName(const char *name);
+
 #ifdef DEBUG
 #define LOG_PATH        "/" LIB_TITLE ".log"
 #define LOG_BUF_SIZE    0x1000
+
+/* Global variables. */
 
 static Mutex g_logMutex = 0;
 static FsFileSystem *g_sdCardFileSystem = NULL;
@@ -168,6 +174,16 @@ void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const voi
 }
 #endif  /* DEBUG */
 
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void)
+{
+    return (usbHsFsUtilsCheckRunningServiceByName("tx") && !usbHsFsUtilsCheckRunningServiceByName("rnx"));
+}
+
+bool usbHsFsUtilsIsFspUsbRunning(void)
+{
+    return usbHsFsUtilsCheckRunningServiceByName("fsp-usb");
+}
+
 void usbHsFsUtilsTrimString(char *str)
 {
     size_t strsize = 0;
@@ -188,4 +204,23 @@ void usbHsFsUtilsTrimString(char *str)
     while(isspace((unsigned char)*start)) start++;
     
     if (start != str) memmove(str, start, end - start + 1);
+}
+
+static bool usbHsFsUtilsCheckRunningServiceByName(const char *name)
+{
+    if (!name || !*name) return false;
+    
+    Result rc = 0;
+    Handle handle = INVALID_HANDLE;
+    SmServiceName service_name = smEncodeName(name);
+    bool running = false;
+    
+    rc = smRegisterService(&handle, service_name, false, 1);
+    if (R_FAILED(rc)) USBHSFS_LOG("smRegisterService failed for \"%s\"! (0x%08X).", name, rc);
+    running = R_FAILED(rc);
+    
+    if (handle != INVALID_HANDLE) svcCloseHandle(handle);
+    if (!running) smUnregisterService(service_name);
+    
+    return running;
 }

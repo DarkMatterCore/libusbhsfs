@@ -42,6 +42,7 @@ Main features
 * Easy to use library interface:
     * Provides an autoclear user event that is signaled each time a status change is detected by the background thread (new device mounted, device removed).
     * Painless listing of mounted partitions using a simple struct that provides the devoptab device name, as well as other interesting information (filesystem index, filesystem type, write protection, raw logical unit capacity, etc.).
+* Supports the `usbfs` service from SX OS.
 
 Limitations
 --------------
@@ -53,11 +54,14 @@ Limitations
     * Only one FAT volume can be mounted per logical unit. Fixing this requires rewriting critical parts of the FatFs library.
     * Up to 64 FAT volumes can be mounted at the same time across all available USB Mass Storage devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
 * Stack and/or heap memory consumption:
-    * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/mitm program contexts.
-* Linking issues:
-    * Linking issues may arise if a homebrew application that already depends on FatFs (e.g. to mount eMMC partitions) is linked against this library.
+    * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
+* `usbfs` service from SX OS:
+    * Only a single FAT volume from a single drive can be mounted.
+    * Relative paths aren't supported.
+    * `chdir()`, `rename()`, `dirreset()` and `utimes()` aren't supported.
+    * There are probably other limitations we don't even know about, due to the closed-source nature of this CFW.
 
 How to use
 --------------
@@ -78,13 +82,18 @@ Please check the provided test application in `/example` for a more in-depth exa
 Relative path support
 --------------
 
-**Disclaimer:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after successfully calling `usbHsFsSetDefaultDevice()`.
+**Disclaimer #1:** all `fsdevMount*()` calls from libnx (and any wrappers around them) **can** and **will** override the default devoptab device if used after a successful `chdir()` call using an absolute path from a mounted volume in a UMS device. If such thing occurs, and you still need to perform additional operations with relative paths, just call `chdir()` again.
 
-* `usbHsFsSetDefaultDevice()` *must* be used to set a previously listed `UsbHsFsDevice` as the default devoptab device, which will in turn make it possible to use relative paths with standard libc calls on it.
-* `usbHsFsUnsetDefaultDevice()` can be used anytime to unset a `UsbHsFsDevice` that was previously set as the default devoptab device. If the current default devoptab device matches the one that was previously set by the library, then the SD card is set as the new default devoptab device.
-* `usbHsFsGetDefaultDevice()` can be used to fill the provided `UsbHsFsDevice` element with information from a previously set default devoptab device.
+**Disclaimer #2:** relative path support is not available under SX OS!
 
-For more information, please read the comments from `include/usbhsfs.h`. For an example, please check the provided test application in `/example`.
+A `chdir()` call using an absolute path to a directory from a mounted volume (e.g. `"ums0:/"`) must be issued to change both the default devoptab device and the current working directory. This will effectively place you at the provided directory, and all I/O operations performed with relative paths shall work on it.
+
+The SD card will be set as the new default devoptab device under two different conditions:
+
+* If the UMS device that holds the volume set as the default devoptab device is removed from the console.
+* If the USB Mass Storage Host interface is closed via `usbHsFsExit()` and a volume from an available UMS device was set as the default devoptab device.
+
+For an example, please check the provided test application in `/example`.
 
 License
 --------------
@@ -104,11 +113,38 @@ Thanks to
 * ChaN, for the [FatFs library](http://elm-chan.org/fsw/ff/00index_e.html) (licensed under [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license)).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
 * [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
+* [FennecTECH](https://github.com/fennectech), for breaking stuff on a regular basis.
+* [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
 * All the Alpha Testers and Super Users from the nxdumptool Discord server, for being a constant source of ideas (and memes).
 * And last but not least, my girlfriend, for always being by my side and motivating me to keep working on all my projects. I love you.
 
 Changelog
 --------------
+
+**v0.0.3:**
+
+* Added support for a custom event index passed to `usbHsFsInitialize()`, which is internally used with `usbHsCreateInterfaceAvailableEvent()` / `usbHsDestroyInterfaceAvailableEvent()`. Developers listening for other specific USB interfaces on their own should no longer have issues with the library.
+* Added fsp-usb check. `usbHsFsInitialize()` will now fail on purpose if fsp-usb is running in the background.
+* Renamed FatFs library functions to avoid linking errors in homebrew apps that already depend on it.
+* Fixed FatFs warnings when building the library with `-O3`. Thanks to [ITotalJustice](https://github.com/ITotalJustice)!
+* Changes to relative path support:
+    * Modified FatFs to remove all references to `ff_chdrive()`, `ff_chdir()`, `ff_getcwd()` and `FF_FS_RPATH`. We take care of handling the current working directory and only pass absolute paths to FatFs. The code to resolve paths with dot entries wasn't removed.
+    * `ffdev_chdir()` now just opens the directory from the provided path to make sure it exists, then closes it immediately.
+    * The default devoptab device is now set by the `chdir()` function from devoptab interfaces, using `usbHsFsMountSetDefaultDevoptabDevice()`. This means it's effectively possible to change the current directory and the default devoptab device in one go, just by calling `chdir()` with an absolute path (e.g. `chdir("ums0:/")`).
+    * It's possible to `chdir()` back to the SD card to change the default devoptab device (e.g. `chdir("sdmc:/)`).
+    * If the UMS device that holds the volume set as the default devoptab device is removed from the console, the SD card will be set as the new default devoptab device.
+    * Removed `usbHsFsSetDefaultDevice()`, `usbHsFsGetDefaultDevice()` and `usbHsFsUnsetDefaultDevice()` - just use `chdir()` now.
+    * Limitations regarding `fsdevMount*()` calls from libnx still apply. Can't do anything about it.
+    * Please read the **Relative path support** section from the README for more information.
+* BOT driver:
+    * Added support for unexpected CSWs received through an input endpoint during data transfer stages. Thanks to [duckbill007](https://github.com/duckbill007) for reporting this issue!
+    * Always issue a Request Sense command if an unexpected CSW is received.
+    * Make sure write protection is disabled before issuing any SCP WRITE commands.
+    * Reduced wait time if a "Not Ready" sense key is received after issuing a Request Sense command.
+* Added support for the `usbfs` service from SX OS. Thanks to [blawar](https://github.com/blawar) for providing the updated `usbfs` service calls!
+    * Please read the **Limitations** section from the README for more information.
+* Updated test application to reflect all these changes.
+    * It is now also capable of performing a test file copy to the UMS filesystem if `test.file` is available at the SD card root directory.
 
 **v0.0.2:**
 
