@@ -121,6 +121,31 @@ Thanks to
 Changelog
 --------------
 
+**v0.0.3:**
+
+* Added support for a custom event index passed to `usbHsFsInitialize()`, which is internally used with `usbHsCreateInterfaceAvailableEvent()` / `usbHsDestroyInterfaceAvailableEvent()`. Developers listening for other specific USB interfaces on their own should no longer have issues with the library.
+* Added fsp-usb check. `usbHsFsInitialize()` will now fail on purpose if fsp-usb is running in the background.
+* Renamed FatFs library functions to avoid linking errors in homebrew apps that already depend on it.
+* Fixed FatFs warnings when building the library with `-O3`. Thanks to [ITotalJustice](https://github.com/ITotalJustice)!
+* Changes to relative path support:
+    * Modified FatFs to remove all references to `ff_chdrive()`, `ff_chdir()`, `ff_getcwd()` and `FF_FS_RPATH`. We take care of handling the current working directory and only pass absolute paths to FatFs. The code to resolve paths with dot entries wasn't removed.
+    * `ffdev_chdir()` now just opens the directory from the provided path to make sure it exists, then closes it immediately.
+    * The default devoptab device is now set by the `chdir()` function from devoptab interfaces, using `usbHsFsMountSetDefaultDevoptabDevice()`. This means it's effectively possible to change the current directory and the default devoptab device in one go, just by calling `chdir()` with an absolute path (e.g. `chdir("ums0:/")`).
+    * It's possible to `chdir()` back to the SD card to change the default devoptab device (e.g. `chdir("sdmc:/)`).
+    * If the UMS device that holds the volume set as the default devoptab device is removed from the console, the SD card will be set as the new default devoptab device.
+    * Removed `usbHsFsSetDefaultDevice()`, `usbHsFsGetDefaultDevice()` and `usbHsFsUnsetDefaultDevice()` - just use `chdir()` now.
+    * Limitations regarding `fsdevMount*()` calls from libnx still apply. Can't do anything about it.
+    * Please read the **Relative path support** section from the README for more information.
+* BOT driver:
+    * Added support for unexpected CSWs received through an input endpoint during data transfer stages. Thanks to [duckbill007](https://github.com/duckbill007) for reporting this issue!
+    * Always issue a Request Sense command if an unexpected CSW is received.
+    * Make sure write protection is disabled before issuing any SCP WRITE commands.
+    * Reduced wait time if a "Not Ready" sense key is received after issuing a Request Sense command.
+* Added support for the `usbfs` service from SX OS. Thanks to [blawar](https://github.com/blawar) for providing the updated `usbfs` service calls!
+    * Please read the **Limitations** section from the README for more information.
+* Updated test application to reflect all these changes.
+    * It is now also capable of performing a test file copy to the UMS filesystem if `test.file` is available at the SD card root directory.
+
 **v0.0.2:**
 
 * Relicensed library under the ISC License. We really want you people to adopt it and freely use it in your projects.
