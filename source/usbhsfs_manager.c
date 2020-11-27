@@ -263,7 +263,7 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
     u32 device_count = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_sxOSDeviceAvailable ? 1 : 0)) : 0);
     u32 ret = 0;
     
-    if (!g_driveCount || !g_driveContexts || !device_count || !out || !max_count)
+    if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count || !out || !max_count)
     {
         USBHSFS_LOG("Invalid parameters!");
         goto end;
