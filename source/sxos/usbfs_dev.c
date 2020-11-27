@@ -446,6 +446,7 @@ static int usbfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *
         buf->f_fsid    = 0;
         buf->f_flag    = ST_NOSUID;
         buf->f_namemax = 0;
+        ret = 0;
     } else {
         r->_errno = EINVAL;
     }

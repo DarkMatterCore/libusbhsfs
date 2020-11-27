@@ -260,9 +260,10 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
 {
     mutexLock(&g_managerMutex);
     
-    u32 device_count = 0, ret = 0;
+    u32 device_count = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_sxOSDeviceAvailable ? 1 : 0)) : 0);
+    u32 ret = 0;
     
-    if (!g_usbHsFsInitialized || !g_driveCount || !g_driveContexts || (!g_isSXOS && !(device_count = usbHsFsMountGetDevoptabDeviceCount())) || (g_isSXOS && !g_sxOSDeviceAvailable) || !out || !max_count)
+    if (!g_driveCount || !g_driveContexts || !device_count || !out || !max_count)
     {
         USBHSFS_LOG("Invalid parameters!");
         goto end;
@@ -272,7 +273,7 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
     {
         /* Copy device data, update return value and jump to the end. */
         memcpy(out, &g_sxOSDevice, sizeof(UsbHsFsDevice));
-        ret = 1;
+        ret = device_count;
         goto end;
     }
     
