@@ -75,9 +75,10 @@ How to use
 * Get the mounted device count with `usbHsFsGetMountedDeviceCount()`.
 * List mounted devices with `usbHsFsListMountedDevices()`.
 * Perform I/O operations using the returned mount names from the listed devices.
+* If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it, use `usbHsFsUnmountDevice()`.
 * Close the USB Mass Storage Host interface with `usbHsFsExit()` when you're done.
 
-Please check the provided test application in `/example` for a more in-depth example.
+Please check both the header file located at `/include/usbhsfs.h` and the provided test application in `/example` for additional information.
 
 Relative path support
 --------------
