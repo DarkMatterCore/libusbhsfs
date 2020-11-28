@@ -52,7 +52,7 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg);
 static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg);
 static bool usbHsFsUpdateDriveContexts(bool remove);
 
-static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx);
+static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool stop_lun);
 static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if);
 
 static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, UsbHsFsDevice *device);
@@ -298,6 +298,48 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
             }
         }
     }
+    
+end:
+    mutexUnlock(&g_managerMutex);
+    
+    return ret;
+}
+
+bool usbHsFsUnmountDevice(UsbHsFsDevice *device)
+{
+    mutexLock(&g_managerMutex);
+    
+    u32 drive_ctx_idx = 0;
+    bool ret = false;
+    
+    if (!g_usbHsFsInitialized || g_isSXOS || (!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        goto end;
+    }
+    
+    /* Locate drive context. */
+    for(drive_ctx_idx = 0; drive_ctx_idx < g_driveCount; drive_ctx_idx++)
+    {
+        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[drive_ctx_idx]);
+        if (drive_ctx->usb_if_id == device->usb_if_id) break;
+    }
+    
+    if (drive_ctx_idx >= g_driveCount)
+    {
+        USBHSFS_LOG("Unable to find a matching drive context with USB interface ID %d.", device->usb_if_id);
+        goto end;
+    }
+    
+    /* Destroy drive context and remove it from our buffer. */
+    usbHsFsRemoveDriveContextFromListByIndex(drive_ctx_idx, true);
+    
+    /* Signal user-mode event. */
+    USBHSFS_LOG("Signaling status change event.");
+    ueventSignal(&g_usbStatusChangeEvent);
+    
+    /* Update return value. */
+    ret = true;
     
 end:
     mutexUnlock(&g_managerMutex);
@@ -661,7 +703,7 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
             {
                 /* Remove drive context from list and update drive index. */
                 USBHSFS_LOG("Removing drive context with ID %d.", cur_drive_ctx->usb_if_session.ID);
-                usbHsFsRemoveDriveContextFromListByIndex(i--);
+                usbHsFsRemoveDriveContextFromListByIndex(i--, false);
                 ctx_count++;
             }
         }
@@ -709,14 +751,14 @@ end:
     return ret;
 }
 
-static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx)
+static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool stop_lun)
 {
     if (!g_driveContexts || !g_driveCount || drive_ctx_idx >= g_driveCount) return;
     
     UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[drive_ctx_idx]), *tmp_drive_ctx = NULL;
     
     mutexLock(&(drive_ctx->mutex));
-    usbHsFsDriveDestroyContext(drive_ctx, false);
+    usbHsFsDriveDestroyContext(drive_ctx, stop_lun);
     mutexUnlock(&(drive_ctx->mutex));
     
     USBHSFS_LOG("Destroyed drive context with index %u.", drive_ctx_idx);

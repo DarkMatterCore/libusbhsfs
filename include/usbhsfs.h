@@ -53,9 +53,10 @@ typedef struct {
 Result usbHsFsInitialize(u8 event_idx);
 
 /// Closes the USB Mass Storage Host interface.
+/// If there are any UMS devices with mounted filesystems connected to the console when this function is called, their filesystems will be unmounted and their logical units will be stopped.
 void usbHsFsExit(void);
 
-/// Returns a pointer to the usermode status change event (with autoclear enabled).
+/// Returns a pointer to the user-mode status change event (with autoclear enabled).
 /// Useful to wait for USB Mass Storage status changes without having to constantly poll the interface.
 /// Returns NULL if the USB Mass Storage Host interface hasn't been initialized.
 UEvent *usbHsFsGetStatusChangeUserEvent(void);
@@ -66,6 +67,13 @@ u32 usbHsFsGetMountedDeviceCount(void);
 /// Lists up to max_count mounted devices and stores their information in the provided UsbHsFsDevice array.
 /// Returns the total number of written entries.
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
+
+/// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
+/// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
+/// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
+/// If running under SX OS, this function does absolutely nothing and returns right away.
+/// If successful, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+bool usbHsFsUnmountDevice(UsbHsFsDevice *device);
 
 #ifdef __cplusplus
 }
