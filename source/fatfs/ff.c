@@ -454,10 +454,6 @@ static WORD Fsid;					/* Filesystem mount ID */
 static FILESEM Files[FF_FS_LOCK];	/* Open object lock semaphores */
 #endif
 
-#if FF_LBA64
-static const BYTE GUID_MS_Basic[16] = {0xA2,0xA0,0xD0,0xEB,0xE5,0xB9,0x33,0x44,0x87,0xC0,0x68,0xB6,0xB7,0x26,0x99,0xC7};
-#endif
-
 
 
 /*--------------------------------*/
@@ -3143,149 +3139,6 @@ static int get_ldnumber (	/* Returns logical drive number (-1:invalid drive numb
 
 
 
-
-/*-----------------------------------------------------------------------*/
-/* GPT support functions                                                 */
-/*-----------------------------------------------------------------------*/
-
-#if FF_LBA64
-
-/* Calculate CRC32 in byte-by-byte */
-
-static DWORD crc32 (	/* Returns next CRC value */
-	DWORD crc,			/* Current CRC value */
-	BYTE d				/* A byte to be processed */
-)
-{
-	BYTE b;
-
-
-	for (b = 1; b; b <<= 1) {
-		crc ^= (d & b) ? 1 : 0;
-		crc = (crc & 1) ? crc >> 1 ^ 0xEDB88320 : crc >> 1;
-	}
-	return crc;
-}
-
-
-/* Check validity of GPT header */
-
-static int test_gpt_header (	/* 0:Invalid, 1:Valid */
-	const BYTE* gpth			/* Pointer to the GPT header */
-)
-{
-	UINT i;
-	DWORD bcc;
-
-
-	if (mem_cmp(gpth + GPTH_Sign, "EFI PART" "\0\0\1\0" "\x5C\0\0", 16)) return 0;	/* Check sign, version (1.0) and length (92) */
-	for (i = 0, bcc = 0xFFFFFFFF; i < 92; i++) {		/* Check header BCC */
-		bcc = crc32(bcc, i - GPTH_Bcc < 4 ? 0 : gpth[i]);
-	}
-	if (~bcc != ld_dword(gpth + GPTH_Bcc)) return 0;
-	if (ld_dword(gpth + GPTH_PteSize) != SZ_GPTE) return 0;	/* Table entry size (must be SZ_GPTE bytes) */
-	if (ld_dword(gpth + GPTH_PtNum) > 128) return 0;	/* Table size (must be 128 entries or less) */
-
-	return 1;
-}
-
-#endif
-
-
-
-/*-----------------------------------------------------------------------*/
-/* Load a sector and check if it is an FAT VBR                           */
-/*-----------------------------------------------------------------------*/
-
-/* Check what the sector is */
-
-static UINT check_fs (	/* 0:FAT VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 3:Not FAT and invalid BS, 4:Disk error */
-	FATFS* fs,			/* Filesystem object */
-	LBA_t sect			/* Sector to load and check if it is an FAT-VBR or not */
-)
-{
-	WORD w, sign;
-	BYTE b;
-
-
-	fs->wflag = 0; fs->winsect = (LBA_t)0 - 1;		/* Invaidate window */
-	if (move_window(fs, sect) != FR_OK) return 4;	/* Load the boot sector */
-	sign = ld_word(fs->win + BS_55AA);
-#if FF_FS_EXFAT
-	if (sign == 0xAA55 && !mem_cmp(fs->win + BS_JmpBoot, "\xEB\x76\x90" "EXFAT   ", 11)) return 1;	/* It is an exFAT VBR */
-#endif
-	b = fs->win[BS_JmpBoot];
-	if (b == 0xEB || b == 0xE9 || b == 0xE8) {	/* Valid JumpBoot code? (short jump, near jump or near call) */
-		if (sign == 0xAA55 && !mem_cmp(fs->win + BS_FilSysType32, "FAT32   ", 8)) return 0;	/* It is an FAT32 VBR */
-		/* FAT volumes formatted with early MS-DOS lack boot signature and FAT string, so that we need to identify the FAT VBR without them. */
-		w = ld_word(fs->win + BPB_BytsPerSec);
-		if ((w & (w - 1)) == 0 && w >= FF_MIN_SS && w <= FF_MAX_SS) {	/* Properness of sector size */
-			b = fs->win[BPB_SecPerClus];
-			if (b != 0 && (b & (b - 1)) == 0						/* Properness of cluster size */
-			&& (fs->win[BPB_NumFATs] == 1 || fs->win[BPB_NumFATs] == 2)	/* Properness of number of FATs */
-			&& ld_word(fs->win + BPB_RootEntCnt) != 0				/* Properness of root entry count */
-			&& ld_word(fs->win + BPB_FATSz16) != 0) {				/* Properness of FAT size */
-				return 0;	/* Sector can be presumed an FAT VBR */
-			}
-		}
-	}
-	return sign == 0xAA55 ? 2 : 3;	/* Not an FAT VBR (valid or invalid BS) */
-}
-
-
-/* Find an FAT volume */
-/* (It supports only generic partitioning rules, MBR, GPT and SFD) */
-
-static UINT find_volume (	/* Returns BS status found in the hosting drive */
-	FATFS* fs,		/* Filesystem object */
-	UINT part		/* Partition to fined = 0:auto, 1..:forced */
-)
-{
-	UINT fmt, i;
-	DWORD mbr_pt[4];
-
-
-	fmt = check_fs(fs, 0);				/* Load sector 0 and check if it is an FAT VBR as SFD */
-	if (fmt != 2 && (fmt >= 3 || part == 0)) return fmt;	/* Returns if it is a FAT VBR as auto scan, not a BS or disk error */
-
-	/* Sector 0 is not an FAT VBR or forced partition number wants a partition */
-
-#if FF_LBA64
-	if (fs->win[MBR_Table + PTE_System] == 0xEE) {	/* GPT protective MBR? */
-		DWORD n_ent, v_ent, ofs;
-		QWORD pt_lba;
-
-		if (move_window(fs, 1) != FR_OK) return 4;	/* Load GPT header sector (next to MBR) */
-		if (!test_gpt_header(fs->win)) return 3;	/* Check if GPT header is valid */
-		n_ent = ld_dword(fs->win + GPTH_PtNum);		/* Number of entries */
-		pt_lba = ld_qword(fs->win + GPTH_PtOfs);	/* Table location */
-		for (v_ent = i = 0; i < n_ent; i++) {		/* Find FAT partition */
-			if (move_window(fs, pt_lba + i * SZ_GPTE / SS(fs)) != FR_OK) return 4;	/* PT sector */
-			ofs = i * SZ_GPTE % SS(fs);												/* Offset in the sector */
-			if (!mem_cmp(fs->win + ofs + GPTE_PtGuid, GUID_MS_Basic, 16)) {	/* MS basic data partition? */
-				v_ent++;
-				fmt = check_fs(fs, ld_qword(fs->win + ofs + GPTE_FstLba));	/* Load VBR and check status */
-				if (part == 0 && fmt <= 1) return fmt;			/* Auto search (valid FAT volume found first) */
-				if (part != 0 && v_ent == part) return fmt;		/* Forced partition order (regardless of it is valid or not) */
-			}
-		}
-		return 3;	/* Not found */
-	}
-#endif
-	if (part > 4) return 3;	/* MBR has 4 partitions max */
-	for (i = 0; i < 4; i++) {		/* Load partition offset in the MBR */
-		mbr_pt[i] = ld_dword(fs->win + MBR_Table + i * SZ_PTE + PTE_StLba);
-	}
-	i = part ? part - 1 : 0;		/* Table index to find first */
-	do {							/* Find an FAT volume */
-		fmt = mbr_pt[i] ? check_fs(fs, mbr_pt[i]) : 3;	/* Check if the partition is FAT */
-	} while (part == 0 && fmt >= 2 && ++i < 4);
-	return fmt;
-}
-
-
-
-
 /*-----------------------------------------------------------------------*/
 /* Determine logical drive number and mount the volume if needed         */
 /*-----------------------------------------------------------------------*/
@@ -3302,7 +3155,7 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 	DWORD tsect, sysect, fasize, nclst, szbfat;
 	WORD nrsv;
 	FATFS *fs;
-	UINT fmt;
+	UINT fmt = 0;
 
 
 	/* Get logical drive number */
@@ -3346,16 +3199,13 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 	if (SS(fs) > FF_MAX_SS || SS(fs) < FF_MIN_SS || (SS(fs) & (SS(fs) - 1))) return FR_DISK_ERR;
 #endif
 
-	/* Find an FAT volume on the drive */
-	fmt = find_volume(fs, 0);
-	if (fmt == 4) return FR_DISK_ERR;		/* An error occured in the disk I/O layer */
-	if (fmt >= 2) return FR_NO_FILESYSTEM;	/* No FAT volume is found */
-	bsect = fs->winsect;					/* Volume location */
+	bsect = fs->winsect;					/* Set volume location */
 
 	/* An FAT volume is found (bsect). Following code initializes the filesystem object */
 
 #if FF_FS_EXFAT
-	if (fmt == 1) {
+    WORD sign = ld_word(fs->win + BS_55AA);
+    if (sign == 0xAA55 && !mem_cmp(fs->win + BS_JmpBoot, "\xEB\x76\x90" "EXFAT   ", 11)) {
 		QWORD maxlba;
 		DWORD so, cv, bcl, i;
 

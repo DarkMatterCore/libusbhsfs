@@ -305,7 +305,7 @@ end:
     return ret;
 }
 
-bool usbHsFsUnmountDevice(UsbHsFsDevice *device)
+bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
 {
     mutexLock(&g_managerMutex);
     
@@ -334,9 +334,12 @@ bool usbHsFsUnmountDevice(UsbHsFsDevice *device)
     /* Destroy drive context and remove it from our buffer. */
     usbHsFsRemoveDriveContextFromListByIndex(drive_ctx_idx, true);
     
-    /* Signal user-mode event. */
-    USBHSFS_LOG("Signaling status change event.");
-    ueventSignal(&g_usbStatusChangeEvent);
+    if (signal_status_event)
+    {
+        /* Signal user-mode event. */
+        USBHSFS_LOG("Signaling status change event.");
+        ueventSignal(&g_usbStatusChangeEvent);
+    }
     
     /* Update return value. */
     ret = true;

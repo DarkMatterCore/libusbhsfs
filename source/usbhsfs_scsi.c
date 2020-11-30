@@ -226,6 +226,15 @@ typedef struct {
     u8 reserved_2[0x10];
 } ScsiReadCapacity16Data;
 
+static_assert(sizeof(ScsiCommandBlockWrapper) == 0x1F, "Bad ScsiCommandBlockWrapper size! Expected 0x1F.");
+static_assert(sizeof(ScsiCommandStatusWrapper) == 0xD, "Bad ScsiCommandStatusWrapper size! Expected 0xD.");
+static_assert(sizeof(ScsiRequestSenseDataFixedFormat) == 0x12, "Bad ScsiRequestSenseDataFixedFormat size! Expected 0x12.");
+static_assert(sizeof(ScsiInquiryStandardData) == 0x24, "Bad ScsiInquiryStandardData size! Expected 0x24.");
+static_assert(sizeof(ScsiModeParameterHeader6) == 0x4, "Bad ScsiModeParameterHeader6 size! Expected 0x4.");
+static_assert(sizeof(ScsiModeParameterHeader10) == 0x8, "Bad ScsiModeParameterHeader10 size! Expected 0x8.");
+static_assert(sizeof(ScsiReadCapacity10Data) == 0x8, "Bad ScsiReadCapacity10Data size! Expected 0x8.");
+static_assert(sizeof(ScsiReadCapacity16Data) == 0x20, "Bad ScsiReadCapacity16Data size! Expected 0x20.");
+
 /* Function prototypes. */
 
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
@@ -908,6 +917,10 @@ req_sense:
             case ScsiSenseKey_Completed:
                 /* Proceed normally. */
                 USBHSFS_LOG("Proceeding normally (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
+                
+                /* Retry Inquiry command if we're dealing with an unexpected CSW with no sense data. */
+                if (unexpected_csw && cbw->CBWCB[0] == ScsiCommandOperationCode_Inquiry) ret = usbHsFsScsiTransferCommand(drive_ctx, cbw, buf);
+                
                 break;
             case ScsiSenseKey_NotReady:
                 /* Check if we're dealing with a medium not present. */

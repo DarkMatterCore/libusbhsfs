@@ -9,9 +9,176 @@
 
 #include "usbhsfs_utils.h"
 #include "usbhsfs_mount.h"
+#include "usbhsfs_scsi.h"
 #include "fatfs/ff_dev.h"
 
-#define MOUNT_NAME_PREFIX   "ums"
+#define MOUNT_NAME_PREFIX      "ums"
+
+#define BOOT_SIGNATURE          0xAA55
+
+#define MBR_PARTITION_COUNT     4
+
+#ifdef DEBUG
+#define FS_TYPE_STR(x)      ((x) == UsbHsFsDriveLogicalUnitFileSystemType_FAT ? "FAT" : ((x) == UsbHsFsDriveLogicalUnitFileSystemType_NTFS ? "NTFS" : "EXT"))
+#endif
+
+/* Type definitions. */
+
+/// DOS 2.0 BIOS Parameter Block. Used for FAT12 (13 bytes).
+#pragma pack(push, 1)
+typedef struct {
+    u16 sector_size;        ///< Logical sector size in bytes. Belongs to the DOS 2.0 BPB area.
+    u8 sectors_per_cluster; ///< Logical sectors per cluster. Belongs to the DOS 2.0 BPB area.
+    u16 reserved_sectors;   ///< Reserved sectors. Belongs to the DOS 2.0 BPB area.
+    u8 num_fats;            ///< Number of FATs. Belongs to the DOS 2.0 BPB area.
+    u16 root_dir_entries;   ///< Root directory entries. Belongs to the DOS 2.0 BPB area.
+    u16 total_sectors;      ///< Total logical sectors. Belongs to the DOS 2.0 BPB area.
+    u8 media_desc;          ///< Media descriptor. Belongs to the DOS 2.0 BPB area.
+    u16 sectors_per_fat;    ///< Logical sectors per FAT. Belongs to the DOS 2.0 BPB area.
+} DOS_2_0_BPB;
+#pragma pack(pop)
+
+/// DOS 3.31 BIOS Parameter Block. Used for FAT12, FAT16 and FAT16B (25 bytes).
+#pragma pack(push, 1)
+typedef struct {
+    DOS_2_0_BPB dos_2_0_bpb;    ///< DOS 2.0 BIOS Parameter Block.
+    u16 sectors_per_track;      ///< Physical sectors per track.
+    u16 num_heads;              ///< Number of heads.
+    u32 hidden_sectors;         ///< Hidden sectors.
+    u32 total_sectors;          ///< Large total logical sectors.
+} DOS_3_31_BPB;
+#pragma pack(pop)
+
+/// DOS 7.1 Extended BIOS Parameter Block (full variant). Used for FAT32 (79 bytes).
+#pragma pack(push, 1)
+typedef struct {
+    DOS_3_31_BPB dos_3_31_bpb;  ///< DOS 3.31 BIOS Parameter Block.
+    u32 sectors_per_fat;        ///< Logical sectors per FAT.
+    u16 mirroring_flags;        ///< Mirroring flags.
+    u16 version;                ///< Version.
+    u32 root_dir_cluster;       ///< Root directory cluster.
+    u16 fsinfo_sector;          ///< Location of FS Information Sector.
+    u16 backup_sector;          ///< Location of Backup Sector.
+    u8 boot_filename[0xC];      ///< Boot filename.
+    u8 pdrv;                    ///< Physical drive number.
+    u8 flags;                   ///< Flags.
+    u8 ext_boot_sig;            ///< Extended boot signature (0x29).
+    u32 vol_serial_num;         ///< Volume serial number.
+    u8 vol_label[0xB];          ///< Volume label.
+    u8 fs_type[0x8];            ///< Filesystem type. Padded with spaces (0x20). Set to "FAT32   " if this is an FAT32 VBR.
+} DOS_7_1_EBPB;
+#pragma pack(pop)
+
+/// Volume Boot Record (VBR). Represents the first sector from every FAT and NTFS filesystem. If a drive is formatted using Super Floppy Drive (SFD) configuration, this is located at LBA 0.
+typedef struct {
+    u8 jmp_boot[0x3];           ///< Jump boot code. First byte must match 0xEB (short jump), 0xE9 (near jump) or 0xE8 (near call). Set to "\xEB\x76\x90" is this is an exFAT VBR.
+    char oem_name[0x8];         ///< OEM name. Padded with spaces (0x20). Set to "EXFAT   " if this is an exFAT VBR. Set to "NTFS    " if this is an NTFS VBR.
+    DOS_7_1_EBPB dos_7_1_ebpb;  ///< DOS 7.1 Extended BIOS Parameter Block (full variant).
+    u8 boot_code[0x1A3];        ///< File system and operating system specific boot code.
+    u8 pdrv;                    ///< Physical drive number.
+    u16 boot_sig;               ///< Matches BOOT_SIGNATURE for FAT32, exFAT and NTFS. Serves a different purpose under other FAT filesystems.
+} VolumeBootRecord;
+
+/// Master Boot Record (MBR) partition types. All these types support logical block addresses. Types with CHS addressing only have been excluded.
+typedef enum {
+    MasterBootRecordPartitionType_Empty                                 = 0x00,
+    MasterBootRecordPartitionType_FAT12                                 = 0x01,
+    MasterBootRecordPartitionType_FAT16                                 = 0x04,
+    MasterBootRecordPartitionType_ExtendedBootRecord_CHS                = 0x05,
+    MasterBootRecordPartitionType_FAT16B                                = 0x06,
+    MasterBootRecordPartitionType_NTFS_exFAT                            = 0x07,
+    MasterBootRecordPartitionType_FAT32_CHS                             = 0x0B,
+    MasterBootRecordPartitionType_FAT32_LBA                             = 0x0C,
+    MasterBootRecordPartitionType_FAT16B_LBA                            = 0x0E,
+    MasterBootRecordPartitionType_ExtendedBootRecord_LBA                = 0x0F,
+    MasterBootRecordPartitionType_FAT12_Hidden                          = 0x11, ///< Corresponds to MasterBootRecordPartitionType_FAT12.
+    MasterBootRecordPartitionType_FAT16_Hidden                          = 0x14, ///< Corresponds to MasterBootRecordPartitionType_FAT16.
+    MasterBootRecordPartitionType_ExtendedBootRecord_CHS_Hidden         = 0x15, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
+    MasterBootRecordPartitionType_FAT16B_Hidden                         = 0x16, ///< Corresponds to MasterBootRecordPartitionType_FAT16B.
+    MasterBootRecordPartitionType_NTFS_exFAT_Hidden                     = 0x17, ///< Corresponds to MasterBootRecordPartitionType_NTFS_exFAT.
+    MasterBootRecordPartitionType_FAT32_CHS_Hidden                      = 0x1B, ///< Corresponds to MasterBootRecordPartitionType_FAT32_CHS.
+    MasterBootRecordPartitionType_FAT32_LBA_Hidden                      = 0x1C, ///< Corresponds to MasterBootRecordPartitionType_FAT32_LBA.
+    MasterBootRecordPartitionType_FAT16B_LBA_Hidden                     = 0x1E, ///< Corresponds to MasterBootRecordPartitionType_FAT16B_LBA.
+    MasterBootRecordPartitionType_ExtendedBootRecord_LBA_Hidden         = 0x1F, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_LBA.
+    MasterBootRecordPartitionType_LinuxFileSystem                       = 0x83,
+    MasterBootRecordPartitionType_ExtendedBootRecord_Linux              = 0x85, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
+    MasterBootRecordPartitionType_FAT12_FreeDOS_Hidden                  = 0x8D, ///< Corresponds to MasterBootRecordPartitionType_FAT12.
+    MasterBootRecordPartitionType_FAT16_FreeDOS_Hidden                  = 0x90, ///< Corresponds to MasterBootRecordPartitionType_FAT16.
+    MasterBootRecordPartitionType_ExtendedBootRecord_CHS_FreeDOS_Hidden = 0x91, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
+    MasterBootRecordPartitionType_FAT16B_FreeDOS_Hidden                 = 0x92, ///< Corresponds to MasterBootRecordPartitionType_FAT16B.
+    MasterBootRecordPartitionType_LinuxFileSystem_Hidden                = 0x93, ///< Corresponds to MasterBootRecordPartitionType_LinuxFileSystem.
+    MasterBootRecordPartitionType_FAT32_CHS_FreeDOS_Hidden              = 0x97, ///< Corresponds to MasterBootRecordPartitionType_FAT32_CHS.
+    MasterBootRecordPartitionType_FAT32_LBA_FreeDOS_Hidden              = 0x98, ///< Corresponds to MasterBootRecordPartitionType_FAT32_LBA.
+    MasterBootRecordPartitionType_FAT16B_LBA_FreeDOS_Hidden             = 0x9A, ///< Corresponds to MasterBootRecordPartitionType_FAT16B_LBA.
+    MasterBootRecordPartitionType_ExtendedBootRecord_LBA_FreeDOS_Hidden = 0x9B, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_LBA.
+    MasterBootRecordPartitionType_GPT_Protective_MBR                    = 0xEE
+} MasterBootRecordPartitionType;
+
+/// Master Boot Record (MBR) partition entry.
+typedef struct {
+    u8 status;          ///< Partition status. We won't use this.
+    u8 chs_start[0x3];  ///< Cylinder-head-sector address to the first block in the partition. Unused nowadays.
+    u8 type;            ///< MasterBootRecordPartitionType.
+    u8 chs_end[0x3];    ///< Cylinder-head-sector address to the last block in the partition. Unused nowadays.
+    u32 lba;            ///< Logical block address to the first block in the partition.
+    u32 block_count;    ///< Logical block count in the partition.
+} MasterBootRecordPartitionEntry;
+
+/// Master Boot Record (MBR). Always located at LBA 0, as long as SFD configuration isn't used (VBR at LBA 0).
+#pragma pack(push, 1)
+typedef struct {
+    u8 code_area[0x1BE];                                            ///< Bootstrap code area. We won't use this.
+    MasterBootRecordPartitionEntry partitions[MBR_PARTITION_COUNT]; ///< Primary partition entries.
+    u16 boot_sig;                                                   ///< Boot signature. Must match BOOT_SIGNATURE.
+} MasterBootRecord;
+#pragma pack(pop)
+
+/// Extended Boot Record (EBR). Represents a way to store more than 4 partitions in a MBR-formatted logical unit using linked lists.
+typedef struct {
+    u8 code_area[0x1BE];                        ///< Bootstrap code area. Normally empty.
+    MasterBootRecordPartitionEntry partition;   ///< Primary partition entry.
+    MasterBootRecordPartitionEntry next_ebr;    ///< Next EBR in the chain.
+    u8 reserved[0x20];                          ///< Normally empty.
+    u16 boot_sig;                               ///< Boot signature. Must match BOOT_SIGNATURE.
+} ExtendedBootRecord;
+
+/// Globally Unique ID Partition Table (GPT) entry. These usually start at LBA 2.
+typedef struct {
+    u8 type_guid[0x10];     ///< Partition type GUID.
+    u8 unique_guid[0x10];   ///< Unique partition GUID.
+    u64 lba_start;          ///< First LBA.
+    u64 lba_end;            ///< Last LBA (inclusive).
+    u64 flags;              ///< Attribute flags.
+    u16 name[0x24];         ///< Partition name (36 UTF-16LE code units).
+} GuidPartitionTableEntry;
+
+/// Globally Unique ID Partition Table (GPT) header. If available, it's always located at LBA 1.
+typedef struct {
+    u64 signature;                  ///< Must match "EFI PART".
+    u32 revision;                   ///< GUID Partition Table revision.
+    u32 header_size;                ///< Header size. Must match 0x5C.
+    u32 header_crc32;               ///< Little-endian CRC32 checksum calculated over this header, with this field zeroed during calculation.
+    u8 reserved_1[0x4];             ///< Reserved.
+    u64 cur_header_lba;             ///< LBA from this GPT header.
+    u64 backup_header_lba;          ///< LBA from the backup GPT header.
+    u64 partition_lba_start;        ///< First usable LBA for partitions (primary partition table last LBA + 1).
+    u64 partition_lba_end;          ///< Last usable LBA (secondary partition table first LBA - 1).
+    u8 disk_guid[0x10];             ///< Disk GUID.
+    u64 partition_array_lba;        ///< Starting LBA of array of partition entries (always 2 in primary copy).
+    u32 partition_array_count;      ///< Number of partition entries in array.
+    u32 partition_array_entry_size; ///< Size of a single partition entry (usually 0x80).
+    u32 partition_array_crc32;      ///< Little-endian CRC32 checksum calculated over the partition array.
+    u8 reserved_2[0x1A4];           ///< Reserved; must be zeroes for the rest of the block.
+} GuidPartitionTableHeader;
+
+static_assert(sizeof(DOS_2_0_BPB) == 0xD, "Bad DOS_2_0_BPB size! Expected 0xD.");
+static_assert(sizeof(DOS_3_31_BPB) == 0x19, "Bad DOS_3_31_BPB size! Expected 0x19.");
+static_assert(sizeof(DOS_7_1_EBPB) == 0x4F, "Bad DOS_7_1_EBPB size! Expected 0x4F.");
+static_assert(sizeof(VolumeBootRecord) == 0x200, "Bad VolumeBootRecord size! Expected 0x200.");
+static_assert(sizeof(MasterBootRecord) == 0x200, "Bad MasterBootRecord size! Expected 0x200.");
+static_assert(sizeof(MasterBootRecordPartitionEntry) == 0x10, "Bad MasterBootRecordPartitionEntry size! Expected 0x10.");
+static_assert(sizeof(GuidPartitionTableEntry) == 0x80, "Bad GuidPartitionTableEntry size! Expected 0x80.");
+static_assert(sizeof(GuidPartitionTableHeader) == 0x200, "Bad GuidPartitionTableHeader size! Expected 0x200.");
 
 /* Global variables. */
 
@@ -23,93 +190,65 @@ static Mutex g_devoptabDefaultDeviceMutex = 0;
 
 static bool g_fatFsVolumeTable[FF_VOLUMES] = { false };
 
+static const u8 g_microsoftBasicDataPartitionGuid[0x10] = { 0xA2, 0xA0, 0xD0, 0xEB, 0xE5, 0xB9, 0x33, 0x44, 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7 };   /* EBD0A0A2-B9E5-4433-87C0-68B6B72699C7. */
+static const u8 g_linuxFilesystemDataGuid[0x10] = { 0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4 };           /* 0FC63DAF-8483-4772-8E79-3D69D8477DE4. */
+
 /* Function prototypes. */
 
-static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block);
+static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt);
+
+static u8 usbHsFsMountInspectVolumeBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 block_addr);
+static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba);
+static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba);
+
+static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type);
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
 
 static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id);
 
-bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveLogicalUnitContext *lun_ctx)
+bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
 {
-    if (!usbHsFsDriveIsValidLogicalUnitContext(lun_ctx))
+    if (!usbHsFsDriveIsValidContext(drive_ctx))
     {
         USBHSFS_LOG("Invalid parameters!");
         return false;
     }
     
-    UsbHsFsDriveLogicalUnitFileSystemContext *tmp_fs_ctx = NULL;
-    u32 mounted_count = 0;
-    bool ret = false, realloc_buf = true, realloc_failed = false;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     
-    /* Loop through the supported filesystems. */
-    /* TO DO: update this after adding support for additional filesystems. */
-    for(u8 i = UsbHsFsDriveLogicalUnitFileSystemType_FAT; i <= UsbHsFsDriveLogicalUnitFileSystemType_FAT; i++)
+    u8 *block = NULL;
+    u8 fs_type = 0;
+    bool ret = false;
+    
+    /* Allocate memory to hold data from a single logical block. */
+    block = malloc(lun_ctx->block_length);
+    if (!block)
     {
-        if (realloc_buf)
-        {
-            /* Reallocate filesystem context buffer. */
-            tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count + 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
-            if (!tmp_fs_ctx)
-            {
-                USBHSFS_LOG("Failed to reallocate filesystem context buffer! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
-                realloc_failed = true;
-                break;
-            }
-            
-            lun_ctx->fs_ctx = tmp_fs_ctx;
-            
-            /* Get pointer to current filesystem context. */
-            tmp_fs_ctx = &(lun_ctx->fs_ctx[(lun_ctx->fs_count)++]); /* Increase filesystem context count. */
-            realloc_buf = false;
-        }
-        
-        /* Clear filesystem context. */
-        memset(tmp_fs_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
-        
-        /* Set filesystem context properties. */
-        tmp_fs_ctx->lun_ctx = lun_ctx;
-        tmp_fs_ctx->fs_idx = (lun_ctx->fs_count - 1);
-        tmp_fs_ctx->fs_type = i;
-        
-        /* Mount and register filesystem. */
-        bool mounted = false;
-        switch(i)
-        {
-            case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
-                mounted = usbHsFsMountRegisterLogicalUnitFatFileSystem(lun_ctx, tmp_fs_ctx);
-                break;
-            
-            
-            /* TO DO: populate this after adding support for additional filesystems. */
-            
-            
-            default:
-                USBHSFS_LOG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", i, lun_ctx->usb_if_id, lun_ctx->lun, tmp_fs_ctx->fs_idx);
-                break;
-        }
-        
-        if (mounted)
-        {
-            /* Update variables. */
-            mounted_count++;
-            realloc_buf = true;
-        }
+        USBHSFS_LOG("Failed to allocate memory to hold logical block data! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
+        goto end;
     }
     
-    /* Update return value. */
-    ret = (!realloc_failed && mounted_count > 0);
-    
-    /* Free stuff if something went wrong. */
-    if (!ret && lun_ctx->fs_ctx)
+    /* Check if we're dealing with a SFD-formatted logical unit with a VBR at LBA 0. */
+    fs_type = usbHsFsMountInspectVolumeBootRecord(drive_ctx, lun_ctx_idx, block, 0);
+    if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported)
     {
-        for(u32 i = 0; i < mounted_count; i++) usbHsFsMountDestroyLogicalUnitFileSystemContext(&(lun_ctx->fs_ctx[i]));
-        free(lun_ctx->fs_ctx);
-        lun_ctx->fs_ctx = NULL;
-        lun_ctx->fs_count = 0;
+        /* Mount volume at LBA 0 right away. */
+        ret = usbHsFsMountRegisterVolume(lun_ctx, block, 0, fs_type);
+    } else
+    if (fs_type == UsbHsFsDriveLogicalUnitFileSystemType_Unsupported)
+    {
+        /* Parse MBR. */
+        ret = usbHsFsMountParseMasterBootRecord(drive_ctx, lun_ctx_idx, block);
+    } else {
+        USBHSFS_LOG("Unable to locate a valid boot sector! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
     }
+    
+end:
+    if (block) free(block);
     
     return ret;
 }
@@ -259,7 +398,353 @@ end:
     return ret;
 }
 
-static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block)
+{
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    MasterBootRecord mbr = {0};
+    bool ret = false;
+    
+    memcpy(&mbr, block, sizeof(MasterBootRecord));
+    
+    /* Parse MBR partition entries. */
+    for(u8 i = 0; i < MBR_PARTITION_COUNT; i++)
+    {
+        MasterBootRecordPartitionEntry *partition = &(mbr.partitions[i]);
+        usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, partition->type, partition->lba, true);
+    }
+    
+    /* Update return value. */
+    ret = (lun_ctx->fs_count > 0);
+    
+    return ret;
+}
+
+static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt)
+{
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    u8 fs_type = 0;
+    
+    switch(type)
+    {
+        case MasterBootRecordPartitionType_Empty:
+            USBHSFS_LOG("Found empty partition entry (interface %d, LUN %u). Skipping.", lun_ctx->usb_if_id, lun_ctx->lun);
+            break;
+        case MasterBootRecordPartitionType_FAT12:
+        case MasterBootRecordPartitionType_FAT16:
+        case MasterBootRecordPartitionType_FAT16B:
+        case MasterBootRecordPartitionType_NTFS_exFAT:
+        case MasterBootRecordPartitionType_FAT32_CHS:
+        case MasterBootRecordPartitionType_FAT32_LBA:
+        case MasterBootRecordPartitionType_FAT16B_LBA:
+        case MasterBootRecordPartitionType_FAT12_Hidden:
+        case MasterBootRecordPartitionType_FAT16_Hidden:
+        case MasterBootRecordPartitionType_FAT16B_Hidden:
+        case MasterBootRecordPartitionType_NTFS_exFAT_Hidden:
+        case MasterBootRecordPartitionType_FAT32_CHS_Hidden:
+        case MasterBootRecordPartitionType_FAT32_LBA_Hidden:
+        case MasterBootRecordPartitionType_FAT16B_LBA_Hidden:
+        case MasterBootRecordPartitionType_FAT12_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_FAT16_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_FAT16B_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_FAT32_CHS_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_FAT32_LBA_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_FAT16B_LBA_FreeDOS_Hidden:
+            USBHSFS_LOG("Found FAT/NTFS partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            
+            /* Inspect VBR. Register the volume if we detect a supported VBR. */
+            fs_type = usbHsFsMountInspectVolumeBootRecord(drive_ctx, lun_ctx_idx, block, lba);
+            if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(lun_ctx, block, lba, fs_type))
+            {
+                USBHSFS_LOG("Successfully registered %s volume at LBA 0x%lX (interface %d, LUN %u).", FS_TYPE_STR(fs_type), lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            }
+            
+            break;
+        case MasterBootRecordPartitionType_LinuxFileSystem:
+        case MasterBootRecordPartitionType_LinuxFileSystem_Hidden:
+            USBHSFS_LOG("Found Linux partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            break;
+        case MasterBootRecordPartitionType_ExtendedBootRecord_CHS:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_LBA:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_CHS_Hidden:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_LBA_Hidden:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_Linux:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_CHS_FreeDOS_Hidden:
+        case MasterBootRecordPartitionType_ExtendedBootRecord_LBA_FreeDOS_Hidden:
+            USBHSFS_LOG("Found EBR partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            
+            /* Parse EBR. */
+            if (parse_ebr_gpt) usbHsFsMountParseExtendedBootRecord(drive_ctx, lun_ctx_idx, block, lba);
+            
+            break;
+        case MasterBootRecordPartitionType_GPT_Protective_MBR:
+            USBHSFS_LOG("Found GPT partition entry at LBA 0x%lX (interface %d, LUN %u).", lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            
+            /* Parse GPT. */
+            if (parse_ebr_gpt) usbHsFsMountParseGuidPartitionTable(drive_ctx, lun_ctx_idx, block, lba);
+            break;
+        default:
+            USBHSFS_LOG("Found unsupported partition entry with type 0x%02X (interface %d, LUN %u). Skipping.", type, lun_ctx->usb_if_id, lun_ctx->lun);
+            break;
+    }
+}
+
+static u8 usbHsFsMountInspectVolumeBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 block_addr)
+{
+    u32 block_length = drive_ctx->lun_ctx[lun_ctx_idx].block_length;
+    u8 ret = UsbHsFsDriveLogicalUnitFileSystemType_Invalid;
+    
+#ifdef DEBUG
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+#endif
+    
+    /* Read block at the provided address from this LUN. */
+    if (!usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx_idx, block, block_addr, 1))
+    {
+        USBHSFS_LOG("Failed to read block at LBA 0x%lX! (interface %d, LUN %u).", block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
+        goto end;
+    }
+    
+    VolumeBootRecord *vbr = (VolumeBootRecord*)block;
+    u8 jmp_code = vbr->jmp_boot[0];
+    u16 boot_sig = vbr->boot_sig;
+    
+    DOS_2_0_BPB *dos_2_0_bpb = &(vbr->dos_7_1_ebpb.dos_3_31_bpb.dos_2_0_bpb);
+    u8 sectors_per_cluster = dos_2_0_bpb->sectors_per_cluster, num_fats = dos_2_0_bpb->num_fats;
+    u16 sector_size = dos_2_0_bpb->sector_size, root_dir_entries = dos_2_0_bpb->root_dir_entries, sectors_per_fat = dos_2_0_bpb->sectors_per_fat;
+    
+    /* Check if we have a valid boot sector signature. */
+    if (boot_sig == BOOT_SIGNATURE)
+    {
+        /* Check if this is an exFAT VBR. */
+        if (!memcmp(vbr->jmp_boot, "\xEB\x76\x90" "EXFAT   ", 11))
+        {
+            ret = UsbHsFsDriveLogicalUnitFileSystemType_FAT;
+            goto end;
+        }
+        
+        /* Check if this is an NTFS VBR. */
+        if (!memcmp(vbr->oem_name, "NTFS    ", 8))
+        {
+            ret = UsbHsFsDriveLogicalUnitFileSystemType_NTFS;
+            goto end;
+        }
+    }
+    
+    /* Check if we have a valid jump boot code. */
+    if (jmp_code == 0xEB || jmp_code == 0xE9 || jmp_code == 0xE8)
+    {
+        /* Check if this is a FAT32 VBR. */
+        if (boot_sig == BOOT_SIGNATURE && !memcmp(vbr->dos_7_1_ebpb.fs_type, "FAT32   ", 8))
+        {
+            ret = UsbHsFsDriveLogicalUnitFileSystemType_FAT;
+            goto end;
+        }
+        
+        /* FAT volumes formatted with old tools lack a boot sector signature and a filesystem type string, so we'll try to identify the FAT VBR without them. */
+        if ((sector_size & (sector_size - 1)) == 0 && sector_size <= (u16)block_length && sectors_per_cluster != 0 && (sectors_per_cluster & (sectors_per_cluster - 1)) == 0 && \
+            (num_fats == 1 || num_fats == 2) && root_dir_entries != 0 && sectors_per_fat != 0) ret = UsbHsFsDriveLogicalUnitFileSystemType_FAT;
+    }
+    
+    /* Change return value if we couldn't identify a potential VBR but there's valid boot signature. */
+    /* We may be dealing with a MBR/EBR. */
+    if (ret == UsbHsFsDriveLogicalUnitFileSystemType_Invalid && boot_sig == BOOT_SIGNATURE) ret = UsbHsFsDriveLogicalUnitFileSystemType_Unsupported;
+    
+end:
+    if (ret > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported) USBHSFS_LOG("Found %s VBR at LBA 0x%lX (interface %d, LUN %u).", FS_TYPE_STR(ret), block_addr, lun_ctx->usb_if_id, lun_ctx->lun);
+    
+    return ret;
+}
+
+static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba)
+{
+    ExtendedBootRecord ebr = {0};
+    u64 next_ebr_lba = 0, part_lba = 0;
+    
+    do {
+        /* Read current EBR sector. */
+        if (!usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx_idx, block, ebr_lba + next_ebr_lba, 1))
+        {
+            USBHSFS_LOG("Failed to read EBR at LBA 0x%lX! (interface %d, LUN %u).", ebr_lba, drive_ctx->usb_if_id, drive_ctx->lun_ctx[lun_ctx_idx].lun);
+            break;
+        }
+        
+        /* Copy EBR data to struct. */
+        memcpy(&ebr, block, sizeof(ExtendedBootRecord));
+        
+        /* Check boot signature. */
+        if (ebr.boot_sig == BOOT_SIGNATURE)
+        {
+            /* Calculate LBAs for the current partition and the next EBR in the chain. */
+            part_lba = (ebr_lba + next_ebr_lba + ebr.partition.lba);
+            next_ebr_lba = ebr.next_ebr.lba;
+            
+            /* Parse partition entry. */
+            usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, ebr.partition.type, part_lba, false);
+        } else {
+            /* Reset LBA from next EBR. */
+            next_ebr_lba = 0;
+        }
+    } while(next_ebr_lba);
+}
+
+static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba)
+{
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    GuidPartitionTableHeader gpt_header = {0};
+    u32 header_crc32 = 0, header_crc32_calc = 0, part_count = 0, part_per_block = 0, part_array_block_count = 0;
+    u64 part_lba = 0;
+    u8 fs_type = 0;
+    
+    /* Read block where the GPT header is located. */
+    if (!usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx_idx, block, gpt_lba, 1))
+    {
+        USBHSFS_LOG("Failed to read GPT header from LBA 0x%lX! (interface %d, LUN %u).", gpt_lba, lun_ctx->usb_if_id, lun_ctx->lun);
+        return;
+    }
+    
+    /* Copy GPT header data. */
+    memcpy(&gpt_header, block, sizeof(GuidPartitionTableHeader));
+    
+    /* Verify GPT header signature, revision and header size fields. */
+    if (memcmp(&(gpt_header.signature), "EFI PART" "\x00\x00\x01\x00" "\x5C\x00\x00\x00", 16) != 0)
+    {
+        USBHSFS_LOG("Invalid GPT header at LBA 0x%lX! (interface %d, LUN %u).", gpt_lba, lun_ctx->usb_if_id, lun_ctx->lun);
+        return;
+    }
+    
+    /* Verify GPT header CRC32 checksum. */
+    header_crc32 = gpt_header.header_crc32;
+    gpt_header.header_crc32 = 0;
+    header_crc32_calc = crc32Calculate(&gpt_header, gpt_header.header_size);
+    gpt_header.header_crc32 = header_crc32;
+    
+    if (header_crc32_calc != header_crc32)
+    {
+        USBHSFS_LOG("Invalid CRC32 checksum for GPT header at LBA 0x%lX! (%08X != %08X) (interface %d, LUN %u).", gpt_lba, header_crc32_calc, header_crc32, lun_ctx->usb_if_id, lun_ctx->lun);
+        return;
+    }
+    
+    /* Verify GPT partition entry size. */
+    if (gpt_header.partition_array_entry_size != sizeof(GuidPartitionTableEntry))
+    {
+        USBHSFS_LOG("Invalid GPT partition entry size in GPT header at LBA 0x%lX! (0x%X != 0x%lX) (interface %d, LUN %u).", gpt_lba, gpt_header.partition_array_entry_size, \
+                    sizeof(GuidPartitionTableEntry), lun_ctx->usb_if_id, lun_ctx->lun);
+        return;
+    }
+    
+    /* Get GPT partition entry count. Only process the first 128 entries if there's more than that. */
+    part_count = gpt_header.partition_array_count;
+    if (part_count > 128) part_count = 128;
+    
+    /* Calculate number of partition entries per block and the total block count for the whole partition array. */
+    part_lba = gpt_header.partition_array_lba;
+    part_per_block = (lun_ctx->block_length / (u32)sizeof(GuidPartitionTableEntry));
+    part_array_block_count = (part_count / part_per_block);
+    
+    /* Parse GPT partition entries. */
+    for(u32 i = 0; i < part_array_block_count; i++)
+    {
+        /* Read current partition array block. */
+        if (!usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx_idx, block, part_lba + i, 1))
+        {
+            USBHSFS_LOG("Failed to read GPT partition array block #%u from LBA 0x%lX! (interface %d, LUN %u).", i, part_lba + i, lun_ctx->usb_if_id, lun_ctx->lun);
+            break;
+        }
+        
+        for(u32 j = 0; j < part_per_block; j++)
+        {
+            GuidPartitionTableEntry *gpt_entry = (GuidPartitionTableEntry*)(block + (j * sizeof(GuidPartitionTableEntry)));
+            u64 entry_lba = gpt_entry->lba_start;
+            
+            if (!memcmp(gpt_entry->type_guid, g_microsoftBasicDataPartitionGuid, sizeof(g_microsoftBasicDataPartitionGuid)))
+            {
+                /* We're dealing with a Microsoft Basic Data Partition entry. */
+                USBHSFS_LOG("Found Microsoft Basic Data Partition entry at LBA 0x%lX (interface %d, LUN %u).", entry_lba, lun_ctx->usb_if_id, lun_ctx->lun);
+                
+                /* Inspect VBR. Register the volume if we detect a supported VBR. */
+                fs_type = usbHsFsMountInspectVolumeBootRecord(drive_ctx, lun_ctx_idx, block, entry_lba);
+                if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(lun_ctx, block, entry_lba, fs_type))
+                {
+                    USBHSFS_LOG("Successfully registered %s volume at LBA 0x%lX (interface %d, LUN %u).", FS_TYPE_STR(fs_type), entry_lba, lun_ctx->usb_if_id, lun_ctx->lun);
+                }
+            } else
+            if (!memcmp(gpt_entry->type_guid, g_linuxFilesystemDataGuid, sizeof(g_linuxFilesystemDataGuid)))
+            {
+                /* We're dealing with a Linux Filesystem Data entry. */
+                USBHSFS_LOG("Found Linux Filesystem Data entry at LBA 0x%lX (interface %d, LUN %u).", gpt_entry->lba_start, lun_ctx->usb_if_id, lun_ctx->lun);
+            }
+        }
+    }
+}
+
+static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type)
+{
+    UsbHsFsDriveLogicalUnitFileSystemContext *tmp_fs_ctx = NULL;
+    bool ret = false;
+    
+    /* Reallocate filesystem context buffer. */
+    tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count + 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+    if (!tmp_fs_ctx)
+    {
+        USBHSFS_LOG("Failed to reallocate filesystem context buffer! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
+        goto end;
+    }
+    
+    lun_ctx->fs_ctx = tmp_fs_ctx;
+    
+    /* Get pointer to current filesystem context. */
+    tmp_fs_ctx = &(lun_ctx->fs_ctx[(lun_ctx->fs_count)++]); /* Increase filesystem context count. */
+    
+    /* Clear filesystem context. */
+    memset(tmp_fs_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+    
+    /* Set filesystem context properties. */
+    tmp_fs_ctx->lun_ctx = lun_ctx;
+    tmp_fs_ctx->fs_idx = (lun_ctx->fs_count - 1);
+    tmp_fs_ctx->fs_type = fs_type;
+    
+    /* Mount and register filesystem. */
+    switch(fs_type)
+    {
+        case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
+            ret = usbHsFsMountRegisterFatVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
+            break;
+        
+        
+        /* TO DO: populate this after adding support for additional filesystems. */
+        
+        
+        default:
+            USBHSFS_LOG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_type, lun_ctx->usb_if_id, lun_ctx->lun, tmp_fs_ctx->fs_idx);
+            break;
+    }
+    
+    if (!ret)
+    {
+        if (lun_ctx->fs_count > 1)
+        {
+            /* Reallocate filesystem context buffer. */
+            tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count - 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+            if (tmp_fs_ctx)
+            {
+                lun_ctx->fs_ctx = tmp_fs_ctx;
+                tmp_fs_ctx = NULL;
+            }
+        } else {
+            /* Free filesystem context buffer. */
+            free(lun_ctx->fs_ctx);
+            lun_ctx->fs_ctx = NULL;
+        }
+        
+        /* Decrease filesystem context count. */
+        (lun_ctx->fs_count)--;
+    }
+    
+end:
+    return ret;
+}
+
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
 {
     u8 pdrv = 0;
     char name[USB_MOUNT_NAME_LENGTH] = {0};
@@ -292,6 +777,10 @@ static bool usbHsFsMountRegisterLogicalUnitFatFileSystem(UsbHsFsDriveLogicalUnit
         USBHSFS_LOG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
+    
+    /* Copy VBR data. */
+    fs_ctx->fatfs->winsect = (LBA_t)block_addr;
+    memcpy(fs_ctx->fatfs->win, block, sizeof(VolumeBootRecord));
     
     /* Try to mount FAT volume. */
     ff_res = ff_mount(fs_ctx->fatfs, name, 1);

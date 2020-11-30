@@ -72,8 +72,8 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 /// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
 /// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
 /// If running under SX OS, this function does absolutely nothing and returns right away.
-/// If successful, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
-bool usbHsFsUnmountDevice(UsbHsFsDevice *device);
+/// If successful, and signal_status_event is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
 
 #ifdef __cplusplus
 }

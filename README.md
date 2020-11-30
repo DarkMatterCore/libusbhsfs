@@ -32,6 +32,11 @@ Main features
         * Bulk-Only Mass Storage Reset (0xFF).
 * Supports USB Mass Storage devices with long logical block addresses (64-bit LBAs) and variable logical block sizes (512 - 4096 bytes).
 * Background thread that takes care of starting all available logical units from each newly connected USB Mass Storage device, as well as mounting the available filesystems from each one whenever possible.
+    * Supported partitioning schemes:
+        * Super Floppy Drive (SFD) (Volume Boot Record @ LBA 0).
+        * Master Boot Record (MBR).
+        * Extended Boot Record (EBR).
+        * GUID Partition Table (GPT) + protective MBR.
     * Supported filesystems:
         * FAT12 (via FatFs).
         * FAT16 (via FatFs).
@@ -42,6 +47,7 @@ Main features
 * Easy to use library interface:
     * Provides an autoclear user event that is signaled each time a status change is detected by the background thread (new device mounted, device removed).
     * Painless listing of mounted partitions using a simple struct that provides the devoptab device name, as well as other interesting information (filesystem index, filesystem type, write protection, raw logical unit capacity, etc.).
+    * Provides a way to safely unmount UMS devices at runtime.
 * Supports the `usbfs` service from SX OS.
 
 Limitations

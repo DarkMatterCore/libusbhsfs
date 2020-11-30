@@ -20,10 +20,13 @@
 #define USB_MOUNT_NAME_LENGTH   32
 #define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
 
-/// Used by filesystem contexts to determine the FS object to use.
+/// Used by filesystem contexts to determine which FS object to use.
 typedef enum {
-    UsbHsFsDriveLogicalUnitFileSystemType_Invalid = 0,
-    UsbHsFsDriveLogicalUnitFileSystemType_FAT     = 1
+    UsbHsFsDriveLogicalUnitFileSystemType_Invalid     = 0,  ///< Invalid boot signature.
+    UsbHsFsDriveLogicalUnitFileSystemType_Unsupported = 1,  ///< Valid boot signature, unsupported FS.
+    UsbHsFsDriveLogicalUnitFileSystemType_FAT         = 2,  ///< FAT filesystem (FAT12, FAT16, FAT32, exFAT).
+    UsbHsFsDriveLogicalUnitFileSystemType_NTFS        = 3,  ///< NTFS filesystem.
+    UsbHsFsDriveLogicalUnitFileSystemType_EXT         = 4   ///< EXT* filesystem.
 } UsbHsFsDriveLogicalUnitFileSystemType;
 
 /// Used to handle filesystems from LUNs.
@@ -98,7 +101,7 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitCont
 /// TO DO: update this after adding support for more filesystems.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    return (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type != UsbHsFsDriveLogicalUnitFileSystemType_Invalid && fs_ctx->fatfs && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
+    return (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && fs_ctx->fatfs && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
 }
 
 #endif  /* __USBHSFS_DRIVE_H__ */

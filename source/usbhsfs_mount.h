@@ -20,7 +20,7 @@
 
 /// Initializes filesystem contexts for the provided LUN context.
 /// If this function succeeds, at least one filesystem will have been both mounted and registered as a devoptab virtual device.
-bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveLogicalUnitContext *lun_ctx);
+bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx);
 
 /// Destroys the provided filesystem context, unregistering the devoptab virtual device and unmounting the filesystem in the process.
 void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);

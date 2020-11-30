@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <time.h>
+#include <assert.h>
 #include <switch.h>
 
 #define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
