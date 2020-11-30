@@ -6,7 +6,7 @@ Currently WIP.
 Main features
 --------------
 
-* Supports USB Mass Storage devices that implement at least one USB interface descriptor with the following properties:
+* Supports USB Mass Storage (UMS) devices that implement at least one USB interface descriptor with the following properties:
     * bInterfaceClass: 0x08 (USB Mass Storage Class).
     * bInterfaceSubClass: 0x06 (SCSI Transparent Command Set SubClass).
     * bInterfaceProtocol: 0x50 (Bulk-Only Transport [BOT] Protocol).
@@ -30,8 +30,8 @@ Main features
     * Supported BOT class-specific requests:
         * Get Max LUN (0xFE).
         * Bulk-Only Mass Storage Reset (0xFF).
-* Supports USB Mass Storage devices with long logical block addresses (64-bit LBAs) and variable logical block sizes (512 - 4096 bytes).
-* Background thread that takes care of starting all available logical units from each newly connected USB Mass Storage device, as well as mounting the available filesystems from each one whenever possible.
+* Supports UMS devices with long logical block addresses (64-bit LBAs) and variable logical block sizes (512 - 4096 bytes).
+* Background thread that takes care of starting all available logical units from each newly connected UMS device, as well as mounting the available filesystems from each one whenever possible.
     * Supported partitioning schemes:
         * Super Floppy Drive (SFD) (Volume Boot Record @ LBA 0).
         * Master Boot Record (MBR).
@@ -54,11 +54,10 @@ Limitations
 --------------
 
 * Bulk-Only Transport (BOT) driver:
-    * Up to 32 different USB Mass Storage interfaces can be used at the same time. Increasing this limit isn't harmful, but makes the library take up additional heap memory.
-    * Only a single SCSI operation can be performed at any given time per USB Mass Storage device, regardless of their number of logical units. This is an official limitation of the BOT protocol. Mutexes are used to avoid multiple SCSI operations from taking place at the same time on the same USB Mass Storage device.
+    * Up to 32 different USB Mass Storage Class interfaces can be used at the same time. Increasing this limit isn't harmful, but makes the library take up additional heap memory.
+    * Only a single SCSI operation can be performed at any given time per UMS device, regardless of their number of logical units. This is an official limitation of the BOT protocol. Mutexes are used to avoid multiple SCSI operations from taking place at the same time on the same UMS device.
 * FatFs library:
-    * Only one FAT volume can be mounted per logical unit. Fixing this requires rewriting critical parts of the FatFs library.
-    * Up to 64 FAT volumes can be mounted at the same time across all available USB Mass Storage devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
+    * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
 * Stack and/or heap memory consumption:
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
@@ -76,13 +75,13 @@ How to use
     * Two different builds are generated: a normal build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
     * In case you need to report any bugs, please make sure you're using the debug build and provide its logfile.
 * Include the `usbhsfs.h` header file somewhere in your code.
-* Initialize the USB Mass Storage Host interface with `usbHsFsInitialize()`.
+* Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.
 * Retrieve a pointer to the user-mode UMS status change event with `usbHsFsGetStatusChangeUserEvent()` and wait for that event to be signaled (e.g. under a different thread).
 * Get the mounted device count with `usbHsFsGetMountedDeviceCount()`.
 * List mounted devices with `usbHsFsListMountedDevices()`.
 * Perform I/O operations using the returned mount names from the listed devices.
 * If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it, use `usbHsFsUnmountDevice()`.
-* Close the USB Mass Storage Host interface with `usbHsFsExit()` when you're done.
+* Close the USB Mass Storage Class Host interface with `usbHsFsExit()` when you're done.
 
 Please check both the header file located at `/include/usbhsfs.h` and the provided test application in `/example` for additional information.
 
@@ -98,7 +97,7 @@ A `chdir()` call using an absolute path to a directory from a mounted volume (e.
 The SD card will be set as the new default devoptab device under two different conditions:
 
 * If the UMS device that holds the volume set as the default devoptab device is removed from the console.
-* If the USB Mass Storage Host interface is closed via `usbHsFsExit()` and a volume from an available UMS device was set as the default devoptab device.
+* If the USB Mass Storage Class Host interface is closed via `usbHsFsExit()` and a volume from an available UMS device was set as the default devoptab device.
 
 For an example, please check the provided test application in `/example`.
 
@@ -119,9 +118,10 @@ Thanks to
 
 * ChaN, for the [FatFs library](http://elm-chan.org/fsw/ff/00index_e.html) (licensed under [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license)).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
-* [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
-* [FennecTECH](https://github.com/fennectech), for breaking stuff on a regular basis.
 * [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
+* [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
+* [ITotalJustice](https://github.com/ITotalJustice), for testing the partition table parsing algorithm.
+* [FennecTECH](https://github.com/fennectech), for breaking stuff on a regular basis.
 * All the Alpha Testers and Super Users from the nxdumptool Discord server, for being a constant source of ideas (and memes).
 * And last but not least, my girlfriend, for always being by my side and motivating me to keep working on all my projects. I love you.
 
