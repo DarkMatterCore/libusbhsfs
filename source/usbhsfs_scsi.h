@@ -26,6 +26,6 @@ void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_
 bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count);
 
 /// Writes logical blocks to a drive LUN using the provided LUN context. Suitable for filesystem libraries.
-bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count);
+bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, const void *buf, u64 block_addr, u32 block_count);
 
 #endif  /* __USBHSFS_SCSI_H__ */

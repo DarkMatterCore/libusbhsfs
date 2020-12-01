@@ -499,7 +499,7 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx
     return (block_count == 0);
 }
 
-bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count)
+bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, const void *buf, u64 block_addr, u32 block_count)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
