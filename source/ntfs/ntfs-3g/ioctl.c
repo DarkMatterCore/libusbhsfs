@@ -380,7 +380,7 @@ int ntfs_ioctl(ntfs_inode *ni, int cmd, void *arg __attribute__((unused)),
 		}
 		break;
 #else
-// TODO: Investigate this or remove warning (because -Werror)
+// TODO: Investigate adding support for fstrim or remove the warning (because -Werror)
 //#warning Trimming not supported : FITRIM or BLKDISCARD not defined
 #endif
 	default :
