@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
+ * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -11,6 +12,7 @@
 #include "usbhsfs_mount.h"
 #include "usbhsfs_scsi.h"
 #include "fatfs/ff_dev.h"
+#include "ntfs/ntfs_dev.h"
 
 #define MOUNT_NAME_PREFIX      "ums"
 
@@ -186,6 +188,9 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, 
 
 static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type);
 static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
+static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
+static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
@@ -294,22 +299,14 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
     switch(fs_ctx->fs_type)
     {
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
-            /* Update FatFs volume slot. */
-            g_fatFsVolumeTable[fs_ctx->fatfs->pdrv] = false;
-            
-            /* Prepare mount name. */
-            sprintf(name, "%u:", fs_ctx->fatfs->pdrv);
-            
-            /* Unmount FAT volume. */
-            ff_unmount(name);
-            
-            /* Free FATFS object. */
-            free(fs_ctx->fatfs);
-            fs_ctx->fatfs = NULL;
-            
+            usbHsFsMountDestroyFatVolume(name, fs_ctx);
             break;
         
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
+            usbHsFsMountDestroyNtfsVolume(name, fs_ctx);        
+            break;
         
+
         /* TO DO: populate this after adding support for additional filesystems. */
         
         
@@ -675,7 +672,11 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
             ret = usbHsFsMountRegisterFatVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
             break;
         
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
+            ret = usbHsFsMountRegisterNtfsVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
+            break;
         
+
         /* TO DO: populate this after adding support for additional filesystems. */
         
         
@@ -774,6 +775,33 @@ end:
     }
     
     return ret;
+}
+
+static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+{
+    /* Update FatFs volume slot. */
+    g_fatFsVolumeTable[fs_ctx->fatfs->pdrv] = false;
+    
+    /* Prepare mount name. */
+    sprintf(name, "%u:", fs_ctx->fatfs->pdrv);
+    
+    /* Unmount FAT volume. */
+    ff_unmount(name);
+    
+    /* Free FATFS object. */
+    free(fs_ctx->fatfs);
+    fs_ctx->fatfs = NULL;
+}
+
+static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
+{
+    // TODO: NTFS volume init...
+    return false;
+}
+
+static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+{
+    // TODO: NTFS volume destory...
 }
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)

@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
+ * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -883,6 +884,10 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
     {
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
             device->fs_type = fs_ctx->fatfs->fs_type;   /* FatFs type values correlate with our UsbHsFsDeviceFileSystemType enum. */
+            break;
+        
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
+            device->fs_type = fs_ctx->fs_type;
             break;
         
         /* TO DO: populate this after adding support for additional filesystems. */
