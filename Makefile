@@ -32,7 +32,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:=	-g $(ARCH)
 
-ifneq ($(MAKECMDGOALS),clean)
+ifeq ($(filter $(MAKECMDGOALS),clean dist-src),)
     # Check BUILD_TYPE flag
     ifneq ($(origin BUILD_TYPE),undefined)
         ifeq (${BUILD_TYPE},ISC)
@@ -96,7 +96,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 			-I$(CURDIR)/$(BUILD)
 
-.PHONY: clean all
+.PHONY: clean all release release-dir debug debug-dir lib-dir
 
 #---------------------------------------------------------------------------------
 LIB_BRANCH := $(shell git symbolic-ref --short HEAD)
@@ -107,16 +107,33 @@ ifneq (, $(strip $(shell git status --porcelain 2>/dev/null)))
     LIB_REV := $(LIB_REV)-dirty
 endif
 
+$(eval LIB_VERSION_MAJOR = $(shell grep 'define LIBUSBHSFS_VERSION_MAJOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+$(eval LIB_VERSION_MINOR = $(shell grep 'define LIBUSBHSFS_VERSION_MINOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+$(eval LIB_VERSION_MICRO = $(shell grep 'define LIBUSBHSFS_VERSION_MICRO\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
+$(eval LIB_VERSION = $(LIB_VERSION_MAJOR).$(LIB_VERSION_MINOR).$(LIB_VERSION_MICRO)-$(LIB_REV))
+
+ifeq (${BUILD_TYPE},ISC)
+    LIB_LICENSE	:=	ISC
+else
+    LIB_LICENSE	:=	GPLv2
+endif
+
 all: release debug
 
 release: lib/lib$(TARGET).a
 
+release-dir:
+	@mkdir -p release
+
 debug: lib/lib$(TARGET)d.a
 
-dirs:
-	@mkdir -p release debug lib
+debug-dir:
+	@mkdir -p debug
 
-lib/lib$(TARGET).a : dirs $(SOURCES) $(INCLUDES)
+lib-dir:
+	@mkdir -p lib
+
+lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
@@ -124,7 +141,7 @@ lib/lib$(TARGET).a : dirs $(SOURCES) $(INCLUDES)
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile
 
-lib/lib$(TARGET)d.a : dirs $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET)d.a : debug-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo debug
 	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DDEBUG=1 -Og" \
@@ -133,14 +150,11 @@ lib/lib$(TARGET)d.a : dirs $(SOURCES) $(INCLUDES)
 	-f $(CURDIR)/Makefile
 
 dist-bin: all
-	$(eval LIB_VERSION_MAJOR = $(shell grep 'define LIBUSBHSFS_VERSION_MAJOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
-	$(eval LIB_VERSION_MINOR = $(shell grep 'define LIBUSBHSFS_VERSION_MINOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
-	$(eval LIB_VERSION_MICRO = $(shell grep 'define LIBUSBHSFS_VERSION_MICRO\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
-	$(eval LIB_VERSION = $(LIB_VERSION_MAJOR).$(LIB_VERSION_MINOR).$(LIB_VERSION_MICRO)-$(LIB_REV))
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION).tar.bz2 include lib LICENSE.md README.md
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md
 
 dist-src:
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 include source Makefile LICENSE.md README.md
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.xz' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
+	example include libntfs-3g source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
 
 dist: dist-src dist-bin
 
