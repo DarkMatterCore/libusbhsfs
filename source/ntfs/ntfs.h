@@ -68,4 +68,9 @@ typedef struct _ntfs_vd {
 
 typedef ntfs_vd NTFS;
 
+#ifdef DEBUG
+int ntfs_log_handler_usbhsfs(const char *function, const char *file,
+	int line, u32 level, void *data, const char *format, va_list args);
+#endif /* DEBUG */
+
 #endif /* __NTFS_H__ */

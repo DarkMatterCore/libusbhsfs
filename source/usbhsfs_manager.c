@@ -14,6 +14,11 @@
 #include "usbhsfs_mount.h"
 #include "sxos/usbfs_dev.h"
 
+#ifdef DEBUG
+#include "ntfs/ntfs-3g/logging.h"
+#include "ntfs/ntfs.h"
+#endif 
+
 #define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06
 #define USB_PROTOCOL_BULK_ONLY_TRANSPORT        0x50
 
@@ -72,6 +77,7 @@ Result usbHsFsInitialize(u8 event_idx)
     /* Start new log session. */
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+    ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
 #endif
     
     /* Check if the deprecated fsp-usb service is running. */
