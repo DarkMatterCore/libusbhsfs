@@ -55,8 +55,11 @@ Limitations
 * Bulk-Only Transport (BOT) driver:
     * Up to 32 different USB Mass Storage Class interfaces can be used at the same time. Increasing this limit isn't harmful, but makes the library take up additional heap memory.
     * Only a single SCSI operation can be performed at any given time per UMS device, regardless of their number of logical units. This is an official limitation of the BOT protocol. Mutexes are used to avoid multiple SCSI operations from taking place at the same time on the same UMS device.
-* FatFs library:
-    * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but the FatFs library was slightly modified to allow for more volumes to be mounted simultaneously.
+* Filesystem libraries:
+    * FatFs:
+        * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but the FatFs was slightly modified to allow for more volumes to be mounted simultaneously.
+    * NTFS-3G:
+        * Support for crypto operations isn't provided.
 * Stack and/or heap memory consumption:
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
