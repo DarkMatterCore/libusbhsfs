@@ -40,6 +40,7 @@ Main features
         * FAT16 (via FatFs).
         * FAT32 (via FatFs).
         * exFAT (via FatFs).
+        * NTFS (via NTFS-3G).
         * Completely possible to add support for additional filesystems, as long as their libraries are ported over to Switch.
     * Uses devoptab virtual device interface to provide a way to use standard I/O calls from libc (e.g. `fopen()`, `opendir()`, etc.) on mounted filesystems from the available logical units.
 * Easy to use library interface:
@@ -65,6 +66,32 @@ Limitations
     * Relative paths aren't supported.
     * `chdir()`, `rename()`, `dirreset()` and `utimes()` aren't supported.
     * There are probably other limitations we don't even know about, due to the closed-source nature of this CFW.
+
+Licensing
+--------------
+
+Dual licensing is provided for this project depending on the way it is built:
+
+* If the library is built using the `BUILD_TYPE=ISC` parameter with `make`, it is distributed under the terms of the ISC License. You can find a copy of this license in the [LICENSE_ISC.md file](https://github.com/DarkMatterCore/libusbhsfs/blob/main/LICENSE_ISC.md).
+    * ISC licensed builds only provide support for FAT filesystems via FatFs, which is licensed under the [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license).
+* If the library is built using the `BUILD_TYPE=GPL` parameter with `make`, it is distributed under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version. You can find a copy of this license in the [LICENSE_GPLv2.md file](https://github.com/DarkMatterCore/libusbhsfs/blob/main/LICENSE_GPLv2.md). GPLv2+ licensed builds provide support for:
+    * FAT filesystems via FatFs, which is licensed under the [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license).
+    * NTFS via NTFS-3G, which is licensed under the [GPLv2+ license](https://sourceforge.net/p/ntfs-3g/ntfs-3g/ci/edge/tree/COPYING).
+
+How to build
+--------------
+
+This section assumes you've already installed both devkitA64 and libnx. If not, please follow the steps from the [devkitPro wiki](https://devkitpro.org/wiki/Getting_Started).
+
+* **ISC licensed build**: just run `make BUILD_TYPE=ISC [all/release/debug]` on the project directory.
+
+* **GPLv2+ licensed build**:
+    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G and install it to the `portlibs` directory from devkitPro.
+        * If you're using Windows, you must use `msys2` for this step. You can either install it on your own or use the one provided by devkitPro.
+    2. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
+
+A `lib` directory will be generated, which holds the built static library.
+
 
 How to use
 --------------
@@ -99,11 +126,6 @@ The SD card will be set as the new default devoptab device under two different c
 
 For an example, please check the provided test application in `/example`.
 
-License
---------------
-
-This project is licensed under the ISC License.
-
 Credits
 --------------
 
@@ -115,7 +137,8 @@ Credits
 Thanks to
 --------------
 
-* ChaN, for the [FatFs library](http://elm-chan.org/fsw/ff/00index_e.html) (licensed under [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license)).
+* ChaN, for the [FatFs module](http://elm-chan.org/fsw/ff/00index_e.html).
+* Tuxera and NTFS-3G contributors, for the [NTFS-3G library](https://sourceforge.net/projects/ntfs-3g).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
 * [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
 * [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.
