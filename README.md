@@ -83,10 +83,11 @@ How to build
 
 This section assumes you've already installed both devkitA64 and libnx. If not, please follow the steps from the [devkitPro wiki](https://devkitpro.org/wiki/Getting_Started).
 
-* **ISC licensed build**: just run `make BUILD_TYPE=ISC [all/release/debug]` on the project directory.
+* **ISC licensed build**:
+    1. Run `make BUILD_TYPE=ISC [all/release/debug]` on the root directory from the project.
 
 * **GPLv2+ licensed build**:
-    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G and install it to the `portlibs` directory from devkitPro.
+    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
         * If you're using Windows, you must use `msys2` for this step. You can either install it on your own or use the one provided by devkitPro.
     2. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
 
