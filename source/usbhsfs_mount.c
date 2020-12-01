@@ -81,7 +81,7 @@ typedef struct {
     u16 boot_sig;               ///< Matches BOOT_SIGNATURE for FAT32, exFAT and NTFS. Serves a different purpose under other FAT filesystems.
 } VolumeBootRecord;
 
-/// Master Boot Record (MBR) partition types. All these types support logical block addresses. Types with CHS addressing only have been excluded.
+/// Master Boot Record (MBR) partition types. All these types support logical block addresses. CHS addressing only and hidden types have been excluded.
 typedef enum {
     MasterBootRecordPartitionType_Empty                                 = 0x00,
     MasterBootRecordPartitionType_FAT12                                 = 0x01,
@@ -93,26 +93,8 @@ typedef enum {
     MasterBootRecordPartitionType_FAT32_LBA                             = 0x0C,
     MasterBootRecordPartitionType_FAT16B_LBA                            = 0x0E,
     MasterBootRecordPartitionType_ExtendedBootRecord_LBA                = 0x0F,
-    MasterBootRecordPartitionType_FAT12_Hidden                          = 0x11, ///< Corresponds to MasterBootRecordPartitionType_FAT12.
-    MasterBootRecordPartitionType_FAT16_Hidden                          = 0x14, ///< Corresponds to MasterBootRecordPartitionType_FAT16.
-    MasterBootRecordPartitionType_ExtendedBootRecord_CHS_Hidden         = 0x15, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
-    MasterBootRecordPartitionType_FAT16B_Hidden                         = 0x16, ///< Corresponds to MasterBootRecordPartitionType_FAT16B.
-    MasterBootRecordPartitionType_NTFS_exFAT_Hidden                     = 0x17, ///< Corresponds to MasterBootRecordPartitionType_NTFS_exFAT.
-    MasterBootRecordPartitionType_FAT32_CHS_Hidden                      = 0x1B, ///< Corresponds to MasterBootRecordPartitionType_FAT32_CHS.
-    MasterBootRecordPartitionType_FAT32_LBA_Hidden                      = 0x1C, ///< Corresponds to MasterBootRecordPartitionType_FAT32_LBA.
-    MasterBootRecordPartitionType_FAT16B_LBA_Hidden                     = 0x1E, ///< Corresponds to MasterBootRecordPartitionType_FAT16B_LBA.
-    MasterBootRecordPartitionType_ExtendedBootRecord_LBA_Hidden         = 0x1F, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_LBA.
     MasterBootRecordPartitionType_LinuxFileSystem                       = 0x83,
     MasterBootRecordPartitionType_ExtendedBootRecord_Linux              = 0x85, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
-    MasterBootRecordPartitionType_FAT12_FreeDOS_Hidden                  = 0x8D, ///< Corresponds to MasterBootRecordPartitionType_FAT12.
-    MasterBootRecordPartitionType_FAT16_FreeDOS_Hidden                  = 0x90, ///< Corresponds to MasterBootRecordPartitionType_FAT16.
-    MasterBootRecordPartitionType_ExtendedBootRecord_CHS_FreeDOS_Hidden = 0x91, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_CHS.
-    MasterBootRecordPartitionType_FAT16B_FreeDOS_Hidden                 = 0x92, ///< Corresponds to MasterBootRecordPartitionType_FAT16B.
-    MasterBootRecordPartitionType_LinuxFileSystem_Hidden                = 0x93, ///< Corresponds to MasterBootRecordPartitionType_LinuxFileSystem.
-    MasterBootRecordPartitionType_FAT32_CHS_FreeDOS_Hidden              = 0x97, ///< Corresponds to MasterBootRecordPartitionType_FAT32_CHS.
-    MasterBootRecordPartitionType_FAT32_LBA_FreeDOS_Hidden              = 0x98, ///< Corresponds to MasterBootRecordPartitionType_FAT32_LBA.
-    MasterBootRecordPartitionType_FAT16B_LBA_FreeDOS_Hidden             = 0x9A, ///< Corresponds to MasterBootRecordPartitionType_FAT16B_LBA.
-    MasterBootRecordPartitionType_ExtendedBootRecord_LBA_FreeDOS_Hidden = 0x9B, ///< Corresponds to MasterBootRecordPartitionType_ExtendedBootRecord_LBA.
     MasterBootRecordPartitionType_GPT_Protective_MBR                    = 0xEE
 } MasterBootRecordPartitionType;
 
@@ -433,19 +415,6 @@ static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext 
         case MasterBootRecordPartitionType_FAT32_CHS:
         case MasterBootRecordPartitionType_FAT32_LBA:
         case MasterBootRecordPartitionType_FAT16B_LBA:
-        case MasterBootRecordPartitionType_FAT12_Hidden:
-        case MasterBootRecordPartitionType_FAT16_Hidden:
-        case MasterBootRecordPartitionType_FAT16B_Hidden:
-        case MasterBootRecordPartitionType_NTFS_exFAT_Hidden:
-        case MasterBootRecordPartitionType_FAT32_CHS_Hidden:
-        case MasterBootRecordPartitionType_FAT32_LBA_Hidden:
-        case MasterBootRecordPartitionType_FAT16B_LBA_Hidden:
-        case MasterBootRecordPartitionType_FAT12_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_FAT16_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_FAT16B_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_FAT32_CHS_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_FAT32_LBA_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_FAT16B_LBA_FreeDOS_Hidden:
             USBHSFS_LOG("Found FAT/NTFS partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
             
             /* Inspect VBR. Register the volume if we detect a supported VBR. */
@@ -457,16 +426,11 @@ static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext 
             
             break;
         case MasterBootRecordPartitionType_LinuxFileSystem:
-        case MasterBootRecordPartitionType_LinuxFileSystem_Hidden:
             USBHSFS_LOG("Found Linux partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
             break;
         case MasterBootRecordPartitionType_ExtendedBootRecord_CHS:
         case MasterBootRecordPartitionType_ExtendedBootRecord_LBA:
-        case MasterBootRecordPartitionType_ExtendedBootRecord_CHS_Hidden:
-        case MasterBootRecordPartitionType_ExtendedBootRecord_LBA_Hidden:
         case MasterBootRecordPartitionType_ExtendedBootRecord_Linux:
-        case MasterBootRecordPartitionType_ExtendedBootRecord_CHS_FreeDOS_Hidden:
-        case MasterBootRecordPartitionType_ExtendedBootRecord_LBA_FreeDOS_Hidden:
             USBHSFS_LOG("Found EBR partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
             
             /* Parse EBR. */
@@ -478,6 +442,7 @@ static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext 
             
             /* Parse GPT. */
             if (parse_ebr_gpt) usbHsFsMountParseGuidPartitionTable(drive_ctx, lun_ctx_idx, block, lba);
+            
             break;
         default:
             USBHSFS_LOG("Found unsupported partition entry with type 0x%02X (interface %d, LUN %u). Skipping.", type, lun_ctx->usb_if_id, lun_ctx->lun);
@@ -703,7 +668,7 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     /* Mount and register filesystem. */
     switch(fs_type)
     {
-        case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
+        case UsbHsFsDriveLogicalUnitFileSystemType_FAT:     /* FAT12/FAT16/FAT32/exFAT. */
             ret = usbHsFsMountRegisterFatVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
             break;
         
