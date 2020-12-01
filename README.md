@@ -93,7 +93,6 @@ This section assumes you've already installed both devkitA64 and libnx. If not, 
 
 A `lib` directory will be generated, which holds the built static library.
 
-
 How to use
 --------------
 
