@@ -8,7 +8,7 @@
 /*-----------------------------------------------------------------------*/
 
 #include "ff.h"			/* Obtains integer types */
-#include "diskio.h"		/* Declarations of disk functions */
+#include "ff_disk_io.h"	/* Declarations of disk functions */
 
 #include "../usbhsfs_utils.h"
 #include "../usbhsfs_manager.h"

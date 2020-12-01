@@ -20,7 +20,7 @@
 
 
 #include "ff.h"			/* Declarations of FatFs API */
-#include "diskio.h"		/* Declarations of device I/O functions */
+#include "ff_disk_io.h"	/* Declarations of device I/O functions */
 
 
 /*--------------------------------------------------------------------------
