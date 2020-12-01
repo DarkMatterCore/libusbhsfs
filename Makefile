@@ -32,6 +32,26 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:=	-g $(ARCH)
 
+ifneq ($(MAKECMDGOALS),clean)
+    # Check BUILD_TYPE flag
+    ifneq ($(origin BUILD_TYPE),undefined)
+        ifeq (${BUILD_TYPE},ISC)
+            # Do nothing
+        else
+            ifeq (${BUILD_TYPE},GPL)
+                # Update sources, set GPL_BUILD definition
+                # We'll just assume the user has already installed the necessary libraries
+                SOURCES	+=	source/ntfs-3g
+                CFLAGS	+=	-DGPL_BUILD
+            else
+                $(error Invalid value for BUILD_TYPE flag. Expected ISC or GPL)
+            endif
+        endif
+    else
+        $(error BUILD_TYPE flag not set)
+    endif
+endif
+
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib

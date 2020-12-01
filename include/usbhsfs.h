@@ -20,7 +20,7 @@ extern "C" {
 
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    0
-#define LIBUSBHSFS_VERSION_MICRO    3
+#define LIBUSBHSFS_VERSION_MICRO    4
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
@@ -28,7 +28,8 @@ typedef enum {
     UsbHsFsDeviceFileSystemType_FAT12   = 1,
     UsbHsFsDeviceFileSystemType_FAT16   = 2,
     UsbHsFsDeviceFileSystemType_FAT32   = 3,
-    UsbHsFsDeviceFileSystemType_exFAT   = 4
+    UsbHsFsDeviceFileSystemType_exFAT   = 4,
+    UsbHsFsDeviceFileSystemType_NTFS    = 5     ///< Only returned by the GPL build of the library.
 } UsbHsFsDeviceFileSystemType;
 
 /// Struct used to list mounted filesystems as devoptab devices.
