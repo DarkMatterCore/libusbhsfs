@@ -99,8 +99,10 @@ A `lib` directory will be generated, which holds the built static library.
 How to use
 --------------
 
-* Build this library and update the `Makefile` from your homebrew application to reference it.
-    * Two different builds are generated: a normal build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
+* Build libusbhsfs by following the steps from the previous section.
+* Update the `Makefile` from your homebrew application to reference the library.
+    * Two different builds are generated: a release build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
+    * If you're using a GPLv2+ licensed build, you'll also need to link your application against NTFS-3G: `-lusbhsfd -lntfs-3g`.
     * In case you need to report any bugs, please make sure you're using the debug build and provide its logfile.
 * Include the `usbhsfs.h` header file somewhere in your code.
 * Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.
