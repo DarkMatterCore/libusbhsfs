@@ -11,4 +11,4 @@
 /libntfs-3g/*.tgz
 /libntfs-3g/src
 /libntfs-3g/pkg
-/libntfs-3g/*.tar.xz
+/libntfs-3g/*.tar.*
