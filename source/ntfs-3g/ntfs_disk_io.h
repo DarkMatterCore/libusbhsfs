@@ -16,6 +16,8 @@
 
 #include <ntfs-3g/config.h>
 #include <ntfs-3g/types.h>
+#include <ntfs-3g/bootsect.h>
+#include <ntfs-3g/layout.h>
 
 #include "../usbhsfs_utils.h"
 #include "../usbhsfs_drive.h"
@@ -24,7 +26,8 @@
 
 /* USBHS device descriptor for ntfs-3g */
 typedef struct _usbhs_dd {
-    UsbHsFsDriveContext* ctx;            /* USBHS drive context */
+    UsbHsFsDriveContext *drv_ctx;        /* USBHS drive context */
+    NTFS_BOOT_SECTOR vbr;                /* Volume Boot Record (VBR) data, the first sector of the filesystem */
     u64 sectorStart;                     /* LBA of partition start */
     u64 sectorOffset;                    /* LBA offset to true partition start (as described by boot sector) */
     u16 sectorSize;                      /* Device sector size (in bytes) */

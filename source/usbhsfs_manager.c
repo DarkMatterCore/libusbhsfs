@@ -16,7 +16,7 @@
 
 #if defined(DEBUG) && defined(GPL_BUILD)
 #include <ntfs-3g/logging.h>
-#include "ntfs/ntfs.h"
+#include "ntfs-3g/ntfs.h"
 #endif 
 
 #define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06

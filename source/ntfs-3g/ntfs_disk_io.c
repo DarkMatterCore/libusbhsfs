@@ -20,7 +20,6 @@
 
 #include "ntfs.h"
 #include "ntfs_disk_io.h"
-#include "ntfs_malloc.h"
 
 #include "../usbhsfs_utils.h"
 #include "../usbhsfs_manager.h"
@@ -49,35 +48,20 @@ int ntfs_device_open(struct ntfs_device *dev, int flags)
         return -1;
     }
 
-    // Check that there is a valid NTFS boot sector at the start of the device
-    NTFS_BOOT_SECTOR *boot = (NTFS_BOOT_SECTOR *) ntfs_alloc(MAX_SECTOR_SIZE);
-    if(boot == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    if (!ntfs_device_readsectors(dev, dd->sectorStart, 1, boot)) {
-        ntfs_log_perror("read failure @ sector %lu\n", dd->sectorStart);
-        errno = EIO;
-        ntfs_free(boot);
-        return -1;
-    }
-
-    if (!ntfs_boot_sector_is_ntfs(boot)) {
-        ntfs_log_perror("invalid ntfs partition @ sector %lu\n", dd->sectorStart);
+    // Check that the boot sector is valid
+    if (!ntfs_boot_sector_is_ntfs(&dd->vbr)) {
+        ntfs_log_perror("invalid ntfs partition\n");
         errno = EINVALPART;
-        ntfs_free(boot);
         return -1;
     }
 
-    // Parse the partition info
-    dd->sectorOffset = le32_to_cpu(boot->bpb.hidden_sectors);
-    dd->sectorSize = le16_to_cpu(boot->bpb.bytes_per_sector);
-    dd->sectorCount = sle64_to_cpu(boot->number_of_sectors);
+    // Parse the partition info from the boot sector
+    dd->sectorOffset = le32_to_cpu(dd->vbr.bpb.hidden_sectors);
+    dd->sectorSize = le16_to_cpu(dd->vbr.bpb.bytes_per_sector);
+    dd->sectorCount = sle64_to_cpu(dd->vbr.number_of_sectors);
     dd->pos = 0;
     dd->len = (dd->sectorSize * dd->sectorCount);
-    dd->ino = le64_to_cpu(boot->volume_serial_number);
-    ntfs_free(boot);
+    dd->ino = le64_to_cpu(dd->vbr.volume_serial_number);
 
     // Mark the device as read-only (if requested)
     if (flags & O_RDONLY) {
@@ -113,10 +97,6 @@ int ntfs_device_close(struct ntfs_device *dev)
         ntfs_log_debug("device is dirty, will now sync\n");
         ntfs_device_sync(dev);
     }
-
-    // Free the device's private context
-    ntfs_free(dev->d_private);
-    dev->d_private = NULL;
 
     return 0;
 }
@@ -233,7 +213,7 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
     else
 	{
         // Allocate a buffer to hold the read data
-        buffer = (u8*)ntfs_alloc(sec_count * dd->sectorSize);
+        buffer = (u8*) malloc(sec_count * dd->sectorSize);
         if (!buffer) {
             errno = ENOMEM;
             return -1;
@@ -243,14 +223,14 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
         ntfs_log_trace("buffered read from sector %li (%li sector(s) long)\n", sec_start, sec_count);
         if (!ntfs_device_readsectors(dev, sec_start, sec_count, buffer)) {
             ntfs_log_perror("buffered read failure @ sector %li (%li sector(s) long)\n", sec_start, sec_count);
-            ntfs_free(buffer);
+            free(buffer);
             errno = EIO;
             return -1;
         }
 
         // Copy what was requested to the destination buffer
         memcpy(buf, buffer + buffer_offset, count);
-        ntfs_free(buffer);
+        free(buffer);
 
     }
 
@@ -318,7 +298,7 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     else
     {
         // Allocate a buffer to hold the write data
-        buffer = (u8 *) ntfs_alloc(sec_count * dd->sectorSize);
+        buffer = (u8 *) malloc(sec_count * dd->sectorSize);
         if (!buffer) {
             errno = ENOMEM;
             return -1;
@@ -331,7 +311,7 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
         {
             if (!ntfs_device_readsectors(dev, sec_start, 1, buffer)) {
                 ntfs_log_perror("read failure @ sector %li\n", sec_start);
-                ntfs_free(buffer);
+                free(buffer);
                 errno = EIO;
                 return -1;
             }
@@ -340,7 +320,7 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
         {
             if (!ntfs_device_readsectors(dev, sec_start + sec_count - 1, 1, buffer + ((sec_count-1) * dd->sectorSize))) {
                 ntfs_log_perror("read failure @ sector %li\n", sec_start + sec_count - 1);
-                ntfs_free(buffer);
+                free(buffer);
                 errno = EIO;
                 return -1;
             }
@@ -353,13 +333,13 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
         ntfs_log_trace("buffered write to sector %li (%li sector(s) long)\n", sec_start, sec_count);
         if (!ntfs_device_writesectors(dev, sec_start, sec_count, buffer)) {
             ntfs_log_perror("buffered write failure @ sector %li\n", sec_start);
-            ntfs_free(buffer);
+            free(buffer);
             errno = EIO;
             return -1;
         }
 
         // Free the buffer
-        ntfs_free(buffer);
+        free(buffer);
     }
 
     // Write was a success, mark the device as dirty
@@ -380,7 +360,7 @@ bool ntfs_device_readsectors(struct ntfs_device *dev, u64 start, u32 count, void
     }
 
     // Read sectors from the device
-    return usbHsFsScsiReadLogicalUnitBlocks(dd->ctx, dd->ctx->lun_ctx->lun, buf, start, count);
+    return usbHsFsScsiReadLogicalUnitBlocks(dd->drv_ctx, dd->drv_ctx->lun_ctx->lun, buf, start, count);
 }
 
 /**
@@ -396,7 +376,7 @@ bool ntfs_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, con
     }
 
     // Write sectors from the device
-    return usbHsFsScsiWriteLogicalUnitBlocks(dd->ctx, dd->ctx->lun_ctx->lun, buf, start, count);
+    return usbHsFsScsiWriteLogicalUnitBlocks(dd->drv_ctx, dd->drv_ctx->lun_ctx->lun, buf, start, count);
 }
 
 /**
@@ -448,10 +428,10 @@ int ntfs_device_stat(struct ntfs_device *dev, struct stat *buf)
     memset(buf, 0, sizeof(struct stat));
 
     // Build the device stats
-    buf->st_dev = dd->ctx->usb_if_id;
+    buf->st_dev = dd->drv_ctx->usb_if_id;
     buf->st_ino = dd->ino;
     buf->st_mode = mode;
-    buf->st_rdev = dd->ctx->usb_if_id;
+    buf->st_rdev = dd->drv_ctx->usb_if_id;
     buf->st_size = (dd->sectorSize * dd->sectorCount);
     buf->st_blksize = dd->sectorSize;
     buf->st_blocks = dd->sectorCount;

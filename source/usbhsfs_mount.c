@@ -14,7 +14,9 @@
 #include "fatfs/ff_dev.h"
 
 #ifdef GPL_BUILD
-#include "ntfs/ntfs_dev.h"
+#include "ntfs-3g/ntfs.h"
+#include "ntfs-3g/ntfs_disk_io.h"
+#include "ntfs-3g/ntfs_dev.h"
 #endif
 
 #define MOUNT_NAME_PREFIX      "ums"
@@ -182,19 +184,19 @@ static const u8 g_linuxFilesystemDataGuid[0x10] = { 0xAF, 0x3D, 0xC6, 0x0F, 0x83
 
 /* Function prototypes. */
 
-static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block);
-static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt);
+static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u32 flags);
+static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt, u32 flags);
 
 static u8 usbHsFsMountInspectVolumeBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 block_addr);
-static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba);
-static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba);
+static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba, u32 flags);
+static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba, u32 flags);
 
-static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type);
-static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
+static bool usbHsFsMountRegisterVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type, u32 flags);
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags);
 static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 
 #ifdef GPL_BUILD
-static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
+static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags);
 static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 #endif
 
@@ -203,7 +205,7 @@ static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
 
 static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id);
 
-bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
+bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u32 flags)
 {
     if (!usbHsFsDriveIsValidContext(drive_ctx))
     {
@@ -230,12 +232,12 @@ bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveContext *dr
     if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported)
     {
         /* Mount volume at LBA 0 right away. */
-        ret = usbHsFsMountRegisterVolume(lun_ctx, block, 0, fs_type);
+        ret = usbHsFsMountRegisterVolume(drive_ctx, lun_ctx, block, 0, fs_type, flags);
     } else
     if (fs_type == UsbHsFsDriveLogicalUnitFileSystemType_Unsupported)
     {
         /* Parse MBR. */
-        ret = usbHsFsMountParseMasterBootRecord(drive_ctx, lun_ctx_idx, block);
+        ret = usbHsFsMountParseMasterBootRecord(drive_ctx, lun_ctx_idx, block, flags);
     } else {
         USBHSFS_LOG("Unable to locate a valid boot sector! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
     }
@@ -383,7 +385,7 @@ end:
     return ret;
 }
 
-static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block)
+static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u32 flags)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     MasterBootRecord mbr = {0};
@@ -395,7 +397,7 @@ static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8
     for(u8 i = 0; i < MBR_PARTITION_COUNT; i++)
     {
         MasterBootRecordPartitionEntry *partition = &(mbr.partitions[i]);
-        usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, partition->type, partition->lba, true);
+        usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, partition->type, partition->lba, true, flags);
     }
     
     /* Update return value. */
@@ -404,7 +406,7 @@ static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8
     return ret;
 }
 
-static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt)
+static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u8 type, u64 lba, bool parse_ebr_gpt, u32 flags)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     u8 fs_type = 0;
@@ -425,7 +427,7 @@ static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext 
             
             /* Inspect VBR. Register the volume if we detect a supported VBR. */
             fs_type = usbHsFsMountInspectVolumeBootRecord(drive_ctx, lun_ctx_idx, block, lba);
-            if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(lun_ctx, block, lba, fs_type))
+            if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(drive_ctx, lun_ctx, block, lba, fs_type, flags))
             {
                 USBHSFS_LOG("Successfully registered %s volume at LBA 0x%lX (interface %d, LUN %u).", FS_TYPE_STR(fs_type), lba, lun_ctx->usb_if_id, lun_ctx->lun);
             }
@@ -440,14 +442,14 @@ static void usbHsFsMountParseMasterBootRecordPartitionEntry(UsbHsFsDriveContext 
             USBHSFS_LOG("Found EBR partition entry with type 0x%02X at LBA 0x%lX (interface %d, LUN %u).", type, lba, lun_ctx->usb_if_id, lun_ctx->lun);
             
             /* Parse EBR. */
-            if (parse_ebr_gpt) usbHsFsMountParseExtendedBootRecord(drive_ctx, lun_ctx_idx, block, lba);
+            if (parse_ebr_gpt) usbHsFsMountParseExtendedBootRecord(drive_ctx, lun_ctx_idx, block, lba, flags);
             
             break;
         case MasterBootRecordPartitionType_GPT_Protective_MBR:
             USBHSFS_LOG("Found GPT partition entry at LBA 0x%lX (interface %d, LUN %u).", lba, lun_ctx->usb_if_id, lun_ctx->lun);
             
             /* Parse GPT. */
-            if (parse_ebr_gpt) usbHsFsMountParseGuidPartitionTable(drive_ctx, lun_ctx_idx, block, lba);
+            if (parse_ebr_gpt) usbHsFsMountParseGuidPartitionTable(drive_ctx, lun_ctx_idx, block, lba, flags);
             
             break;
         default:
@@ -523,7 +525,7 @@ end:
     return ret;
 }
 
-static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba)
+static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 ebr_lba, u32 flags)
 {
     ExtendedBootRecord ebr = {0};
     u64 next_ebr_lba = 0, part_lba = 0;
@@ -547,7 +549,7 @@ static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, 
             next_ebr_lba = ebr.next_ebr.lba;
             
             /* Parse partition entry. */
-            usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, ebr.partition.type, part_lba, false);
+            usbHsFsMountParseMasterBootRecordPartitionEntry(drive_ctx, lun_ctx_idx, block, ebr.partition.type, part_lba, false, flags);
         } else {
             /* Reset LBA from next EBR. */
             next_ebr_lba = 0;
@@ -555,7 +557,7 @@ static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, 
     } while(next_ebr_lba);
 }
 
-static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba)
+static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba, u32 flags)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
     GuidPartitionTableHeader gpt_header = {0};
@@ -631,7 +633,7 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, 
                 
                 /* Inspect VBR. Register the volume if we detect a supported VBR. */
                 fs_type = usbHsFsMountInspectVolumeBootRecord(drive_ctx, lun_ctx_idx, block, entry_lba);
-                if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(lun_ctx, block, entry_lba, fs_type))
+                if (fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && usbHsFsMountRegisterVolume(drive_ctx, lun_ctx, block, entry_lba, fs_type, flags))
                 {
                     USBHSFS_LOG("Successfully registered %s volume at LBA 0x%lX (interface %d, LUN %u).", FS_TYPE_STR(fs_type), entry_lba, lun_ctx->usb_if_id, lun_ctx->lun);
                 }
@@ -645,7 +647,7 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, 
     }
 }
 
-static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type)
+static bool usbHsFsMountRegisterVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type, u32 flags)
 {
     UsbHsFsDriveLogicalUnitFileSystemContext *tmp_fs_ctx = NULL;
     bool ret = false;
@@ -675,13 +677,13 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     switch(fs_type)
     {
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
-            ret = usbHsFsMountRegisterFatVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
+            ret = usbHsFsMountRegisterFatVolume(drive_ctx, lun_ctx, tmp_fs_ctx, block, block_addr, flags);
             break;
         
 #ifdef GPL_BUILD
 
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
-            ret = usbHsFsMountRegisterNtfsVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
+            ret = usbHsFsMountRegisterNtfsVolume(drive_ctx, lun_ctx, tmp_fs_ctx, block, block_addr, flags);
             break;
         
 #endif
@@ -716,7 +718,7 @@ end:
     return ret;
 }
 
-static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags)
 {
     u8 pdrv = 0;
     char name[USB_MOUNT_NAME_LENGTH] = {0};
@@ -736,17 +738,17 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ct
     
     if (pdrv == FF_VOLUMES)
     {
-        USBHSFS_LOG("Failed to locate a free FatFs volume slot! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        USBHSFS_LOG("Failed to locate a free FatFs volume slot! (interface %d, LUN %u, FS %u, flags %i).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
         goto end;
     }
     
-    USBHSFS_LOG("Located free FatFs volume slot: %u (interface %d, LUN %u, FS %u).", pdrv, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+    USBHSFS_LOG("Located free FatFs volume slot: %u (interface %d, LUN %u, FS %u, flags %i).", pdrv, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
     
     /* Allocate memory for the FatFs object. */
     fs_ctx->fatfs = calloc(1, sizeof(FATFS));
     if (!fs_ctx->fatfs)
     {
-        USBHSFS_LOG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        USBHSFS_LOG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u, flags %i).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
         goto end;
     }
     
@@ -758,7 +760,7 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ct
     ff_res = ff_mount(fs_ctx->fatfs, name, 1);
     if (ff_res != FR_OK)
     {
-        USBHSFS_LOG("Failed to mount FAT volume! (%u) (interface %d, LUN %u, FS %u).", ff_res, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        USBHSFS_LOG("Failed to mount FAT volume! (%u) (interface %d, LUN %u, FS %u, flags %i).", ff_res, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
         goto end;
     }
     
@@ -801,15 +803,119 @@ static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFile
 
 #ifdef GPL_BUILD
 
-static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
+static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags)
 {
-    // TODO: NTFS volume init...
-    return false;
+    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    bool ret = false;
+
+    /* Allocate memory for the NTFS volume descriptor. */
+    fs_ctx->ntfs = calloc(1, sizeof(NTFS));
+    if (!fs_ctx->ntfs)
+    {
+        USBHSFS_LOG("Failed to allocate memory for NTFS volume descriptor object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        goto end;
+    }
+    
+    /* Allocate memory for the NTFS device descriptor. */
+    fs_ctx->ntfs->dd = calloc(1, sizeof(usbhs_dd));
+    if (!fs_ctx->ntfs->dd) {
+        USBHSFS_LOG("Failed to allocate memory for NTFS device descriptor object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        goto end;
+    }
+
+    /* Allocate memory for the NTFS device. */
+    sprintf(name, MOUNT_NAME_PREFIX "%u", usbHsFsMountGetAvailableDevoptabDeviceId());
+    fs_ctx->ntfs->dev = ntfs_device_alloc(name, 0, &ntfs_device_usbhs_io_ops, fs_ctx->ntfs->dd);
+    if (!fs_ctx->ntfs->dev) {
+        USBHSFS_LOG("Failed to allocate memory for NTFS device object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        goto end;
+    }
+
+    /* Copy VBR data. */
+    memcpy(&fs_ctx->ntfs->dd->vbr, block, sizeof(NTFS_BOOT_SECTOR));
+    
+    /* Configure the NTFS device descriptor. */
+    fs_ctx->ntfs->dd->drv_ctx = drive_ctx;
+    fs_ctx->ntfs->dd->sectorStart = block_addr;
+
+    /* Configure the NTFS volume descriptor. */
+    fs_ctx->ntfs->id = fs_ctx->device_id;
+    fs_ctx->ntfs->atime = ((flags & USB_MOUNT_UPDATE_ACCESS_TIMES) ? ATIME_ENABLED : ATIME_DISABLED);
+    fs_ctx->ntfs->showHiddenFiles = (flags & USB_MOUNT_SHOW_HIDDEN_FILES);
+    fs_ctx->ntfs->showSystemFiles = (flags & USB_MOUNT_SHOW_SYSTEM_FILES);
+
+    if (flags & USB_MOUNT_READ_ONLY || lun_ctx->write_protect)
+    {
+    	fs_ctx->ntfs->flags |= NTFS_MNT_RDONLY;
+    }
+    if (flags & USB_MOUNT_RECOVER)
+    {
+        fs_ctx->ntfs->flags |= NTFS_MNT_RECOVER;
+    }
+    if (flags & USB_MOUNT_IGNORE_HIBERNATION)
+    {
+        fs_ctx->ntfs->flags |= NTFS_MNT_IGNORE_HIBERFILE;
+    }
+
+    /* Try to mount NTFS volume. */
+    fs_ctx->ntfs->vol = ntfs_device_mount(fs_ctx->ntfs->dev, fs_ctx->ntfs->flags);
+    if (!fs_ctx->ntfs->vol) {    
+        USBHSFS_LOG("Failed to mount NTFS volume! (%u) (interface %d, LUN %u, FS %u, flags %i).", ntfs_volume_error(errno), lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+        goto end;
+    }
+
+	if (flags & USB_MOUNT_IGNORE_CASE)
+    {
+		ntfs_set_ignore_case(fs_ctx->ntfs->vol);
+    }
+
+    /* Register devoptab device. */
+    if (!usbHsFsMountRegisterDevoptabDevice(lun_ctx, fs_ctx)) goto end;
+    
+    /* Update return value. */
+    ret = true;
+    
+end:
+
+    /* Free stuff if something went wrong. */
+    if (!ret && fs_ctx->ntfs)
+    {
+        if (fs_ctx->ntfs->vol)
+        {
+            ntfs_umount(fs_ctx->ntfs->vol, true);
+            fs_ctx->ntfs->vol = NULL;
+            fs_ctx->ntfs->dev = NULL; /* ntfs_unmount() calls ntfs_device_free() for us. */
+        }
+        if (fs_ctx->ntfs->dev)
+        {
+            ntfs_device_free(fs_ctx->ntfs->dev);
+            fs_ctx->ntfs->dev = NULL;
+        }
+        if (fs_ctx->ntfs->dd)
+        {
+            free(fs_ctx->ntfs->dd);
+            fs_ctx->ntfs->dd = NULL;
+        }
+        if (fs_ctx->ntfs)
+        {
+            free(fs_ctx->ntfs);
+            fs_ctx->ntfs = NULL;
+        }
+    }
+    
+    return ret;
 }
 
 static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    // TODO: NTFS volume destory...
+    /* Unmount NTFS volume. */
+    ntfs_umount(fs_ctx->ntfs->vol, true);
+    
+    /* Free NTFS objects. */
+    //ntfs_device_free(fs_ctx->ntfs->dev); /* ntfs_unmount() calls this for us. */
+    free(fs_ctx->ntfs->dd);
+    free(fs_ctx->ntfs);
+    fs_ctx->ntfs = NULL;
 }
 
 #endif
@@ -861,10 +967,14 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *l
             fs_device = ffdev_get_devoptab();
             break;
         
-        
-        /* TO DO: populate this after adding support for additional filesystems. */
-        
-        
+#ifdef GPL_BUILD
+
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS */
+            fs_device = ntfsdev_get_devoptab();
+            break;
+
+#endif
+
         default:
             USBHSFS_LOG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_ctx->fs_type, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
             break;

@@ -121,7 +121,8 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         }
         
         /* Initialize filesystem contexts for this LUN. */
-        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(drive_ctx, drive_ctx->lun_count - 1))
+        u32 flags = USB_MOUNT_DEFAULT; /* TODO: The user should be able to specify these somehow */
+        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(drive_ctx, drive_ctx->lun_count - 1, flags))
         {
             USBHSFS_LOG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
             usbHsFsDriveDestroyLogicalUnitContext(drive_ctx, --(drive_ctx->lun_count), true);   /* Decrease LUN context count and destroy LUN context. */

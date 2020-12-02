@@ -17,7 +17,7 @@
 #include "fatfs/ff.h"
 
 #ifdef GPL_BUILD
-#include "ntfs/ntfs.h"
+#include "ntfs-3g/ntfs.h"
 #endif
 
 #define USB_BOT_MAX_LUN         16                  /* Max returned value is actually a zero-based index to the highest LUN. */

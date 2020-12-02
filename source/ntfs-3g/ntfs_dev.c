@@ -9,6 +9,7 @@
  * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
 
+#include "ntfs.h"
 #include "ntfs_dev.h"
 
 static int       ntfsdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode);

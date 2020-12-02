@@ -22,15 +22,14 @@
 #include <ntfs-3g/device.h>
 #include <ntfs-3g/volume.h>
 #include <ntfs-3g/inode.h>
-#include "ntfs.h"
 
 /**
  * ntfs_file_state - File state
  */
 typedef struct _ntfs_file_state {
-    ntfs_vd *vd;                            /* Volume this file belongs to */
-    ntfs_inode *ni;                         /* File descriptor */
-    ntfs_attr *data_na;                     /* File data descriptor */
+    struct ntfs_vd *vd;                     /* Volume this file belongs to */
+    struct ntfs_inode *ni;                  /* File node descriptor */
+    struct ntfs_attr *data;                 /* File data descriptor */
     int flags;                              /* Opening flags */
     bool read;                              /* True if allowed to read from file */
     bool write;                             /* True if allowed to write to file */
@@ -54,10 +53,10 @@ typedef struct _ntfs_dir_entry {
  * ntfs_dir_state - Directory state
  */
 typedef struct _ntfs_dir_state {
-    ntfs_vd *vd;                            /* Volume this directory belongs to */
-    ntfs_inode *ni;                         /* Directory descriptor */
-    ntfs_dir_entry *first;                  /* The first entry in the directory */
-    ntfs_dir_entry *current;                /* The current entry in the directory */
+    struct ntfs_vd *vd;                     /* Volume this directory belongs to */
+    struct ntfs_inode *ni;                  /* Directory node descriptor */
+    struct ntfs_dir_entry *first;           /* The first entry in the directory */
+    struct ntfs_dir_entry *current;         /* The current entry in the directory */
 } ntfs_dir_state;
 
 const devoptab_t *ntfsdev_get_devoptab();

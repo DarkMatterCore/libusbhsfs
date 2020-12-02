@@ -9,6 +9,8 @@
  * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
 
+#include "ntfs.h"
+
 #ifdef DEBUG
 #include "../usbhsfs_utils.h"
 
