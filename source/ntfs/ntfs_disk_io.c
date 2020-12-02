@@ -12,11 +12,11 @@
 #include <math.h>
 #include <fcntl.h>
 
-#include "ntfs-3g/config.h"
-#include "ntfs-3g/types.h"
-#include "ntfs-3g/logging.h"
-#include "ntfs-3g/device.h"
-#include "ntfs-3g/bootsect.h"
+#include <ntfs-3g/config.h>
+#include <ntfs-3g/types.h>
+#include <ntfs-3g/logging.h>
+#include <ntfs-3g/device.h>
+#include <ntfs-3g/bootsect.h>
 
 #include "ntfs.h"
 #include "ntfs_disk_io.h"
@@ -26,7 +26,7 @@
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_scsi.h"
 
-#define DEV_DD(dev) ((usbhs_dd *)dev->d_private)
+#define USB_DD(dev) ((usbhs_dd *)dev->d_private)
 
 /**
  *
@@ -36,7 +36,7 @@ int ntfs_device_open(struct ntfs_device *dev, int flags)
     ntfs_log_trace("dev %p, flags %i\n", dev, flags);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -129,7 +129,7 @@ s64 ntfs_device_seek(struct ntfs_device *dev, s64 offset, int whence)
     ntfs_log_trace("dev %p, offset %li, whence %i\n", dev, offset, whence);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -150,7 +150,7 @@ s64 ntfs_device_seek(struct ntfs_device *dev, s64 offset, int whence)
  */
 s64 ntfs_device_read(struct ntfs_device *dev, void *buf, s64 count)
 {
-    return ntfs_device_readbytes(dev, DEV_DD(dev)->pos, count, buf);
+    return ntfs_device_readbytes(dev, USB_DD(dev)->pos, count, buf);
 }
 
 /**
@@ -158,7 +158,7 @@ s64 ntfs_device_read(struct ntfs_device *dev, void *buf, s64 count)
  */
 s64 ntfs_device_write(struct ntfs_device *dev, const void *buf, s64 count)
 {
-    return ntfs_device_writebytes(dev, DEV_DD(dev)->pos, count, buf);
+    return ntfs_device_writebytes(dev, USB_DD(dev)->pos, count, buf);
 }
 
 /**
@@ -185,7 +185,7 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
     ntfs_log_trace("dev %p, offset %li, count %li\n", dev, offset, count);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -265,7 +265,7 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     ntfs_log_trace("dev %p, offset %li, count %li\n", dev, offset, count);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -373,7 +373,7 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
 bool ntfs_device_readsectors(struct ntfs_device *dev, u64 start, u32 count, void* buf)
 {
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -389,7 +389,7 @@ bool ntfs_device_readsectors(struct ntfs_device *dev, u64 start, u32 count, void
 bool ntfs_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, const void* buf)
 {
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -428,7 +428,7 @@ int ntfs_device_stat(struct ntfs_device *dev, struct stat *buf)
     ntfs_log_trace("dev %p, buf %p\n", dev, buf);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;
@@ -467,7 +467,7 @@ int ntfs_device_ioctl(struct ntfs_device *dev, int request, void *argp)
     ntfs_log_trace("dev %p, request %i, argp %p\n", dev, request, argp);
 
     // Get the device descriptor
-    usbhs_dd *dd = DEV_DD(dev);
+    usbhs_dd *dd = USB_DD(dev);
     if (!dd) {
         errno = EBADF;
         return -1;

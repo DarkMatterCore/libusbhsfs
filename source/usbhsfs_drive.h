@@ -15,7 +15,10 @@
 
 #include <sys/iosupport.h>
 #include "fatfs/ff.h"
+
+#ifdef GPL_BUILD
 #include "ntfs/ntfs.h"
+#endif
 
 #define USB_BOT_MAX_LUN         16                  /* Max returned value is actually a zero-based index to the highest LUN. */
 
@@ -37,7 +40,10 @@ typedef struct {
     u32 fs_idx;         ///< Filesystem index within the fs_ctx array from the LUN context.
     u8 fs_type;         ///< UsbHsFsDriveLogicalUnitFileSystemType.
     FATFS *fatfs;       ///< Pointer to a dynamically allocated FatFs object. Only used if fs_type == UsbHsFsFileSystemType_FAT.
+
+#ifdef GPL_BUILD
     NTFS *ntfs;         ///< Pointer to a dynamically allocated NTFS object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
+#endif
 
     /// TO DO: add more FS objects here after implemententing support for other filesystems.
     
@@ -107,9 +113,14 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
     bool fsValid = false;
     switch (fs_ctx->fs_type)
     {
-        // TO DO: update this after adding support for more filesystems.
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT: fsValid = fs_ctx->fatfs; break;
+
+#ifdef GPL_BUILD
+
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: fsValid = fs_ctx->ntfs; break;
+
+#endif
+
     }
     
     return (ctxValid && fsValid);

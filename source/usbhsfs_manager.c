@@ -14,8 +14,8 @@
 #include "usbhsfs_mount.h"
 #include "sxos/usbfs_dev.h"
 
-#ifdef DEBUG
-#include "ntfs/ntfs-3g/logging.h"
+#if defined(DEBUG) && defined(GPL_BUILD)
+#include <ntfs-3g/logging.h>
 #include "ntfs/ntfs.h"
 #endif 
 
@@ -77,8 +77,10 @@ Result usbHsFsInitialize(u8 event_idx)
     /* Start new log session. */
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+#ifdef GPL_BUILD
     ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
-#endif
+#endif /* GPL_BUILD */
+#endif /* DEBUG */
     
     /* Check if the deprecated fsp-usb service is running. */
     /* This custom mitm service offers system-wide UMS support - we definitely don't want to run alongside it to avoid undesired results. */
@@ -892,10 +894,14 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
             device->fs_type = fs_ctx->fatfs->fs_type;   /* FatFs type values correlate with our UsbHsFsDeviceFileSystemType enum. */
             break;
         
+#ifdef GPL_BUILD
+
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
             device->fs_type = fs_ctx->fs_type;
             break;
         
+#endif
+
         /* TO DO: populate this after adding support for additional filesystems. */
         
         default:

@@ -14,8 +14,8 @@
 #ifndef __NTFS_DISK_IO_H__
 #define __NTFS_DISK_IO_H__
 
-#include "ntfs-3g/config.h"
-#include "ntfs-3g/types.h"
+#include <ntfs-3g/config.h>
+#include <ntfs-3g/types.h>
 
 #include "../usbhsfs_utils.h"
 #include "../usbhsfs_drive.h"

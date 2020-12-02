@@ -12,7 +12,10 @@
 #include "usbhsfs_mount.h"
 #include "usbhsfs_scsi.h"
 #include "fatfs/ff_dev.h"
+
+#ifdef GPL_BUILD
 #include "ntfs/ntfs_dev.h"
+#endif
 
 #define MOUNT_NAME_PREFIX      "ums"
 
@@ -189,8 +192,11 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, 
 static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type);
 static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
 static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+
+#ifdef GPL_BUILD
 static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
 static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+#endif
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
@@ -302,14 +308,14 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
             usbHsFsMountDestroyFatVolume(name, fs_ctx);
             break;
         
+#ifdef GPL_BUILD
+
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
             usbHsFsMountDestroyNtfsVolume(name, fs_ctx);        
             break;
         
+#endif
 
-        /* TO DO: populate this after adding support for additional filesystems. */
-        
-        
         default:
             break;
     }
@@ -668,17 +674,17 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     /* Mount and register filesystem. */
     switch(fs_type)
     {
-        case UsbHsFsDriveLogicalUnitFileSystemType_FAT:     /* FAT12/FAT16/FAT32/exFAT. */
+        case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
             ret = usbHsFsMountRegisterFatVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
             break;
         
+#ifdef GPL_BUILD
+
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
             ret = usbHsFsMountRegisterNtfsVolume(lun_ctx, tmp_fs_ctx, block, block_addr);
             break;
         
-
-        /* TO DO: populate this after adding support for additional filesystems. */
-        
+#endif
         
         default:
             USBHSFS_LOG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_type, lun_ctx->usb_if_id, lun_ctx->lun, tmp_fs_ctx->fs_idx);
@@ -793,6 +799,8 @@ static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFile
     fs_ctx->fatfs = NULL;
 }
 
+#ifdef GPL_BUILD
+
 static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
 {
     // TODO: NTFS volume init...
@@ -803,6 +811,8 @@ static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFil
 {
     // TODO: NTFS volume destory...
 }
+
+#endif
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {

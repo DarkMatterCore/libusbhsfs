@@ -17,11 +17,11 @@
 #include <sys/iosupport.h>
 #include <sys/reent.h>
 
-#include "ntfs-3g/config.h"
-#include "ntfs-3g/types.h"
-#include "ntfs-3g/device.h"
-#include "ntfs-3g/volume.h"
-#include "ntfs-3g/inode.h"
+#include <ntfs-3g/config.h>
+#include <ntfs-3g/types.h>
+#include <ntfs-3g/device.h>
+#include <ntfs-3g/volume.h>
+#include <ntfs-3g/inode.h>
 #include "ntfs.h"
 
 /**
