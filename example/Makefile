@@ -43,7 +43,7 @@ VERSION_MINOR := 0
 VERSION_MICRO := 1
 
 APP_TITLE	:=	libusbhsfs-example
-APP_AUTHOR	:=	DarkMatterCore, XorTroll
+APP_AUTHOR	:=	DarkMatterCore, XorTroll, Rhys Koedijk
 APP_VERSION	:=  ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
 
 TARGET		:=	${APP_TITLE}
@@ -69,7 +69,7 @@ ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 # Use -lusbhsfsd instead of -lusbhsfs to use the library build with debug logging enabled
-LIBS	:=  -lusbhsfs -lnx
+LIBS	:=  -lusbhsfs -lntfs-3g -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
