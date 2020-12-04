@@ -317,12 +317,22 @@ int usbMscThreadFunc(void *arg)
 
 int main(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
+    
     Result rc = 0;
     int ret = 0;
     thrd_t thread = {0};
+    PadState pad = {0};
     
     /* Initialize console output. */
     consoleInit(NULL);
+    
+    /* Configure our supported input layout: a single player with full controller styles. */
+    padConfigureInput(1, HidNpadStyleSet_NpadFullCtrl);
+    
+    /* Initialize the default gamepad (which reads handheld mode inputs as well as the first connected controller. */
+    padInitializeDefault(&pad);
     
     printf(APP_TITLE ". Built on " __DATE__ " - " __TIME__ ".\nLibrary version: %u.%u.%u.\nPress + to exit.\n\n", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
     consoleUpdate(NULL);
@@ -347,10 +357,10 @@ int main(int argc, char **argv)
     
     while(appletMainLoop())
     {
-        hidScanInput();
+        padUpdate(&pad);
         
-        u64 keys_down = hidKeysDown(CONTROLLER_P1_AUTO);
-        if (keys_down & KEY_PLUS)
+        u64 keys_down = padGetButtonsDown(&pad);
+        if (keys_down & HidNpadButton_Plus)
         {
             /* Signal background thread. */
             ueventSignal(&g_exitEvent);
