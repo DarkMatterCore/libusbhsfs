@@ -24,6 +24,8 @@ DSTATUS ff_disk_status (
 	BYTE pdrv		/* Physical drive nmuber to identify the drive */
 )
 {
+    (void)pdrv;
+    
     /* We take care of this. */
     return RES_OK;
 }
@@ -38,6 +40,8 @@ DSTATUS ff_disk_initialize (
 	BYTE pdrv				/* Physical drive nmuber to identify the drive */
 )
 {
+    (void)pdrv;
+    
     /* We take care of this. */
     return RES_OK;
 }

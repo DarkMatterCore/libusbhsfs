@@ -35,7 +35,7 @@ void usbHsFsUtilsFlushLogFile(void);
 void usbHsFsUtilsCloseLogFile(void);
 void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const void *src, size_t src_size);
 #else
-#define USBHSFS_LOG(fmt, ...)
+#define USBHSFS_LOG(fmt, ...)   ({})
 #endif
 
 /// Returns true if the we're running under SX OS.

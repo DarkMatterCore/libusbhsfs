@@ -2018,7 +2018,7 @@ static void gen_numname (
 		ns[i--] = c;
 		seq /= 16;
 	} while (seq);
-	if (i >= 0) ns[i] = '~';
+	ns[i] = '~';
 
 	/* Append the number to the SFN body */
 	for (j = 0; j < i && dst[j] != ' '; j++) {

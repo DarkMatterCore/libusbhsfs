@@ -294,6 +294,8 @@ static int ffdev_translate_error(FRESULT res)
 
 static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
 {
+    (void)mode;
+    
     FIL *file = (FIL*)fileStruct;
     BYTE ffdev_flags = 0;
     FRESULT res = FR_OK;
@@ -563,6 +565,9 @@ end:
 
 static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
 {
+    (void)fd;
+    (void)st;
+    
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
     return -1;
@@ -608,6 +613,9 @@ end:
 
 static int ffdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
+    (void)existing;
+    (void)newLink;
+    
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
     return -1;
@@ -740,6 +748,8 @@ end:
 
 static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
 {
+    (void)mode;
+    
     FRESULT res = FR_OK;
     int ret = -1;
     
@@ -924,6 +934,8 @@ end:
 
 static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
+    (void)path;
+    
     char name[USB_MOUNT_NAME_LENGTH] = {0};
     DWORD free_clusters = 0;
     FRESULT res = FR_OK;
@@ -1052,6 +1064,9 @@ end:
 
 static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
 {
+    (void)path;
+    (void)mode;
+    
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
     return -1;
@@ -1059,6 +1074,9 @@ static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
 
 static int ffdev_fchmod(struct _reent *r, void *fd, mode_t mode)
 {
+    (void)fd;
+    (void)mode;
+    
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
     return -1;
