@@ -27,9 +27,9 @@
  * ntfs_file_state - File state
  */
 typedef struct _ntfs_file_state {
-    struct ntfs_vd *vd;                     /* Volume this file belongs to */
-    struct ntfs_inode *ni;                  /* File node descriptor */
-    struct ntfs_attr *data;                 /* File data descriptor */
+    ntfs_vd *vd;                            /* File volume descriptor */
+    ntfs_inode *ni;                         /* File node descriptor */
+    ntfs_attr *data;                        /* File data attribute descriptor */
     int flags;                              /* Opening flags */
     bool read;                              /* True if allowed to read from file */
     bool write;                             /* True if allowed to write to file */
@@ -53,10 +53,10 @@ typedef struct _ntfs_dir_entry {
  * ntfs_dir_state - Directory state
  */
 typedef struct _ntfs_dir_state {
-    struct ntfs_vd *vd;                     /* Volume this directory belongs to */
-    struct ntfs_inode *ni;                  /* Directory node descriptor */
-    struct ntfs_dir_entry *first;           /* The first entry in the directory */
-    struct ntfs_dir_entry *current;         /* The current entry in the directory */
+    ntfs_vd *vd;                            /* Directory volume descriptor */
+    ntfs_inode *ni;                         /* Directory node descriptor */
+    ntfs_dir_entry *first;                  /* The first entry in the directory */
+    ntfs_dir_entry *current;                /* The current entry in the directory */
 } ntfs_dir_state;
 
 const devoptab_t *ntfsdev_get_devoptab();

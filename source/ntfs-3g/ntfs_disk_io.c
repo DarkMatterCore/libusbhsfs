@@ -27,29 +27,29 @@
 
 #define USB_DD(dev) ((usbhs_dd *)dev->d_private)
 
-/**
- *
- */
 int ntfs_device_open(struct ntfs_device *dev, int flags)
 {
     ntfs_log_trace("dev %p, flags %i\n", dev, flags);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
 
     // Check that the device isn't already open (i.e. used by another mount)
-    if (NDevOpen(dev)) {
+    if (NDevOpen(dev))
+    {
         ntfs_log_perror("device is busy (already open)\n");
         errno = EBUSY;
         return -1;
     }
 
     // Check that the boot sector is valid
-    if (!ntfs_boot_sector_is_ntfs(&dd->vbr)) {
+    if (!ntfs_boot_sector_is_ntfs(&dd->vbr))
+    {
         ntfs_log_perror("invalid ntfs partition\n");
         errno = EINVALPART;
         return -1;
@@ -64,7 +64,8 @@ int ntfs_device_open(struct ntfs_device *dev, int flags)
     dd->ino = le64_to_cpu(dd->vbr.volume_serial_number);
 
     // Mark the device as read-only (if requested)
-    if (flags & O_RDONLY) {
+    if (flags & O_RDONLY)
+    {
         NDevSetReadOnly(dev);
     }
 
@@ -74,15 +75,13 @@ int ntfs_device_open(struct ntfs_device *dev, int flags)
     return 0;
 }
 
-/**
- *
- */
 int ntfs_device_close(struct ntfs_device *dev)
 {
     ntfs_log_trace("dev %p\n", dev);
 
     // Check that the device is actually open
-    if (!NDevOpen(dev)) {
+    if (!NDevOpen(dev))
+    {
         ntfs_log_perror("device is not open\n");
         errno = EIO;
         return -1;
@@ -93,7 +92,8 @@ int ntfs_device_close(struct ntfs_device *dev)
     NDevClearBlock(dev);
 
     // Flush the device (if dirty and not read-only)
-    if (NDevDirty(dev) && !NDevReadOnly(dev)) {
+    if (NDevDirty(dev) && !NDevReadOnly(dev))
+    {
         ntfs_log_debug("device is dirty, will now sync\n");
         ntfs_device_sync(dev);
     }
@@ -101,22 +101,21 @@ int ntfs_device_close(struct ntfs_device *dev)
     return 0;
 }
 
-/**
- *
- */
 s64 ntfs_device_seek(struct ntfs_device *dev, s64 offset, int whence)
 {
     ntfs_log_trace("dev %p, offset %li, whence %i\n", dev, offset, whence);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
 
     // Set the current position on the device (in bytes)
-    switch(whence) {
+    switch(whence)
+    {
         case SEEK_SET: dd->pos = MIN(MAX(offset, 0), dd->len); break;
         case SEEK_CUR: dd->pos = MIN(MAX(dd->pos + offset, 0), dd->len); break;
         case SEEK_END: dd->pos = MIN(MAX(dd->len + offset, 0), dd->len); break;
@@ -125,48 +124,34 @@ s64 ntfs_device_seek(struct ntfs_device *dev, s64 offset, int whence)
     return 0;
 }
 
-/**
- *
- */
 s64 ntfs_device_read(struct ntfs_device *dev, void *buf, s64 count)
 {
     return ntfs_device_readbytes(dev, USB_DD(dev)->pos, count, buf);
 }
 
-/**
- *
- */
 s64 ntfs_device_write(struct ntfs_device *dev, const void *buf, s64 count)
 {
     return ntfs_device_writebytes(dev, USB_DD(dev)->pos, count, buf);
 }
 
-/**
- *
- */
 s64 ntfs_device_pread(struct ntfs_device *dev, void *buf, s64 count, s64 offset)
 {
     return ntfs_device_readbytes(dev, offset, count, buf);
 }
 
-/**
- *
- */
 s64 ntfs_device_pwrite(struct ntfs_device *dev, const void *buf, s64 count, s64 offset)
 {
     return ntfs_device_writebytes(dev, offset, count, buf);
 }
 
-/**
- *
- */
 s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *buf)
 {
     ntfs_log_trace("dev %p, offset %li, count %li\n", dev, offset, count);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
@@ -179,7 +164,8 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
     }
 
     // Short circuit
-    if (!count) {
+    if (!count)
+    {
         return 0;
     }
 
@@ -189,19 +175,23 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
     u8 *buffer = NULL;
 
     // Determine the range of sectors required for this read
-    if (offset > 0) {
+    if (offset > 0)
+    {
         sec_start += (u64) floor((double) offset / (double) dd->sectorSize);
     }
-    if (buffer_offset+count > dd->sectorSize) {
+    if (buffer_offset+count > dd->sectorSize)
+    {
         sec_count = (u64) ceil((double) (buffer_offset+count) / (double) dd->sectorSize);
     }
 
     // If this read happens to be on the sector boundaries then do the read straight into the destination buffer
-    if((buffer_offset == 0) && (count % dd->sectorSize == 0)) {
+    if((buffer_offset == 0) && (count % dd->sectorSize == 0))
+    {
 
         // Read from the device
         ntfs_log_trace("direct read from sector %li (%li sector(s) long)\n", sec_start, sec_count);
-        if (!ntfs_device_readsectors(dev, sec_start, sec_count, buf)) {
+        if (!ntfs_device_readsectors(dev, sec_start, sec_count, buf))
+        {
             ntfs_log_perror("direct read failure @ sector %li (%li sector(s) long)\n", sec_start, sec_count);
             errno = EIO;
             return -1;
@@ -214,14 +204,16 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
 	{
         // Allocate a buffer to hold the read data
         buffer = (u8*) malloc(sec_count * dd->sectorSize);
-        if (!buffer) {
+        if (!buffer)
+        {
             errno = ENOMEM;
             return -1;
         }
 
         // Read from the device
         ntfs_log_trace("buffered read from sector %li (%li sector(s) long)\n", sec_start, sec_count);
-        if (!ntfs_device_readsectors(dev, sec_start, sec_count, buffer)) {
+        if (!ntfs_device_readsectors(dev, sec_start, sec_count, buffer))
+        {
             ntfs_log_perror("buffered read failure @ sector %li (%li sector(s) long)\n", sec_start, sec_count);
             free(buffer);
             errno = EIO;
@@ -237,34 +229,35 @@ s64 ntfs_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *
     return count;
 }
 
-/**
- *
- */
 s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const void *buf)
 {
     ntfs_log_trace("dev %p, offset %li, count %li\n", dev, offset, count);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
 
     // Check that the device can be written to
-    if (NDevReadOnly(dev)) {
+    if (NDevReadOnly(dev))
+    {
         errno = EROFS;
         return -1;
     }
 
     // Short circuit
-    if (count < 0 || offset < 0) {
+    if (count < 0 || offset < 0)
+    {
         errno = EROFS;
         return -1;
     }
 
     // Short circuit
-    if (count == 0) {
+    if (count == 0)
+    {
         return 0;
     }
 
@@ -274,10 +267,12 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     u8 *buffer = NULL;
 
     // Determine the range of sectors required for this write
-    if (offset > 0) {
+    if (offset > 0)
+    {
         sec_start += (u64) floor((double) offset / (double) dd->sectorSize);
     }
-    if ((buffer_offset+count) > dd->sectorSize) {
+    if ((buffer_offset+count) > dd->sectorSize)
+    {
         sec_count = (u64) ceil((double) (buffer_offset+count) / (double) dd->sectorSize);
     }
 
@@ -286,7 +281,8 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     {
         // Write to the device
         ntfs_log_trace("direct write to sector %li (%li sector(s) long)\n", sec_start, sec_count);
-        if (!ntfs_device_writesectors(dev, sec_start, sec_count, buf)) {
+        if (!ntfs_device_writesectors(dev, sec_start, sec_count, buf))
+        {
             ntfs_log_perror("direct write failure @ sector %li (%li sector(s) long)\n", sec_start, sec_count);
             errno = EIO;
             return -1;
@@ -299,7 +295,8 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     {
         // Allocate a buffer to hold the write data
         buffer = (u8 *) malloc(sec_count * dd->sectorSize);
-        if (!buffer) {
+        if (!buffer)
+        {
             errno = ENOMEM;
             return -1;
         }
@@ -309,7 +306,8 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
         //       we just read in the buffer edges where the data overlaps with the rest of the disc
         if(buffer_offset != 0)
         {
-            if (!ntfs_device_readsectors(dev, sec_start, 1, buffer)) {
+            if (!ntfs_device_readsectors(dev, sec_start, 1, buffer))
+            {
                 ntfs_log_perror("read failure @ sector %li\n", sec_start);
                 free(buffer);
                 errno = EIO;
@@ -318,7 +316,8 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
         }
         if((buffer_offset+count) % dd->sectorSize != 0)
         {
-            if (!ntfs_device_readsectors(dev, sec_start + sec_count - 1, 1, buffer + ((sec_count-1) * dd->sectorSize))) {
+            if (!ntfs_device_readsectors(dev, sec_start + sec_count - 1, 1, buffer + ((sec_count-1) * dd->sectorSize)))
+            {
                 ntfs_log_perror("read failure @ sector %li\n", sec_start + sec_count - 1);
                 free(buffer);
                 errno = EIO;
@@ -331,7 +330,8 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
 
         // Write to the device
         ntfs_log_trace("buffered write to sector %li (%li sector(s) long)\n", sec_start, sec_count);
-        if (!ntfs_device_writesectors(dev, sec_start, sec_count, buffer)) {
+        if (!ntfs_device_writesectors(dev, sec_start, sec_count, buffer))
+        {
             ntfs_log_perror("buffered write failure @ sector %li\n", sec_start);
             free(buffer);
             errno = EIO;
@@ -347,14 +347,12 @@ s64 ntfs_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const
     return count;
 }
 
-/**
- *
- */
 bool ntfs_device_readsectors(struct ntfs_device *dev, u64 start, u32 count, void* buf)
 {
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
@@ -363,14 +361,12 @@ bool ntfs_device_readsectors(struct ntfs_device *dev, u64 start, u32 count, void
     return usbHsFsScsiReadLogicalUnitBlocks(dd->drv_ctx, dd->drv_ctx->lun_ctx->lun, buf, start, count);
 }
 
-/**
- *
- */
 bool ntfs_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, const void* buf)
 {
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
@@ -379,15 +375,13 @@ bool ntfs_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, con
     return usbHsFsScsiWriteLogicalUnitBlocks(dd->drv_ctx, dd->drv_ctx->lun_ctx->lun, buf, start, count);
 }
 
-/**
- *
- */
 int ntfs_device_sync(struct ntfs_device *dev)
 {
     ntfs_log_trace("dev %p\n", dev);
 
     // Check that the device can be written to
-    if (NDevReadOnly(dev)) {
+    if (NDevReadOnly(dev))
+    {
         errno = EROFS;
         return -1;
     }
@@ -400,22 +394,21 @@ int ntfs_device_sync(struct ntfs_device *dev)
     return 0;
 }
 
-/**
- *
- */
 int ntfs_device_stat(struct ntfs_device *dev, struct stat *buf)
 {
     ntfs_log_trace("dev %p, buf %p\n", dev, buf);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
 
     // Short circuit
-    if (!buf) {
+    if (!buf)
+    {
         return 0;
     }
 
@@ -439,22 +432,21 @@ int ntfs_device_stat(struct ntfs_device *dev, struct stat *buf)
     return 0;
 }
 
-/**
- *
- */
 int ntfs_device_ioctl(struct ntfs_device *dev, int request, void *argp)
 {
     ntfs_log_trace("dev %p, request %i, argp %p\n", dev, request, argp);
 
     // Get the device descriptor
     usbhs_dd *dd = USB_DD(dev);
-    if (!dd) {
+    if (!dd)
+    {
         errno = EBADF;
         return -1;
     }
 
     // Figure out which control was requested
-    switch (request) {
+    switch (request)
+    {
 
         // Get block device size (bytes)
         // TODO: Consider defining this

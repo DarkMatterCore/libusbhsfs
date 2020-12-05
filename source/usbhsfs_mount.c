@@ -818,7 +818,8 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
     
     /* Allocate memory for the NTFS device descriptor. */
     fs_ctx->ntfs->dd = calloc(1, sizeof(usbhs_dd));
-    if (!fs_ctx->ntfs->dd) {
+    if (!fs_ctx->ntfs->dd)
+    {
         USBHSFS_LOG("Failed to allocate memory for NTFS device descriptor object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
@@ -826,7 +827,8 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
     /* Allocate memory for the NTFS device. */
     sprintf(name, MOUNT_NAME_PREFIX "%u", usbHsFsMountGetAvailableDevoptabDeviceId());
     fs_ctx->ntfs->dev = ntfs_device_alloc(name, 0, &ntfs_device_usbhs_io_ops, fs_ctx->ntfs->dd);
-    if (!fs_ctx->ntfs->dev) {
+    if (!fs_ctx->ntfs->dev)
+    {
         USBHSFS_LOG("Failed to allocate memory for NTFS device object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
@@ -859,7 +861,8 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
 
     /* Try to mount NTFS volume. */
     fs_ctx->ntfs->vol = ntfs_device_mount(fs_ctx->ntfs->dev, fs_ctx->ntfs->flags);
-    if (!fs_ctx->ntfs->vol) {    
+    if (!fs_ctx->ntfs->vol)
+    {    
         USBHSFS_LOG("Failed to mount NTFS volume! (%u) (interface %d, LUN %u, FS %u, flags %i).", ntfs_volume_error(errno), lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
         goto end;
     }
