@@ -518,7 +518,7 @@ int ntfs_device_ioctl(struct ntfs_device *dev, int request, void *argp)
 /**
  * Device operations using usbhsfs
  */
-struct ntfs_device_operations ntfs_device_ops = {
+struct ntfs_device_operations ntfs_device_usbhs_io_ops = {
     .open       = ntfs_device_open,
     .close      = ntfs_device_close,
     .seek       = ntfs_device_seek,
