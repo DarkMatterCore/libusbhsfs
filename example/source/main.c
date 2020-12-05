@@ -8,7 +8,7 @@
 #include <usbhsfs.h>
 
 #define FS_TYPE(x)  ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \
-                    ((x) == UsbHsFsDeviceFileSystemType_exFAT ? "exFAT" : "Invalid"))))
+                    ((x) == UsbHsFsDeviceFileSystemType_exFAT ? "exFAT" : ((x) == UsbHsFsDeviceFileSystemType_NTFS ? "NTFS" : "Invalid")))))
 
 static UEvent *g_statusChangeEvent = NULL, g_exitEvent = {0};
 

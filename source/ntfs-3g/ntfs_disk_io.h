@@ -38,19 +38,19 @@ typedef struct _usbhs_dd {
 } usbhs_dd;
 
 /* USBHS device operations for ntfs-3g */
-int ntfs_device_open (struct ntfs_device *dev, int flags);
-int ntfs_device_close (struct ntfs_device *dev);
-s64 ntfs_device_seek (struct ntfs_device *dev, s64 offset, int whence);
-s64 ntfs_device_read (struct ntfs_device *dev, void *buf, s64 count);
-s64 ntfs_device_write (struct ntfs_device *dev, const void *buf, s64 count);
-s64 ntfs_device_pread (struct ntfs_device *dev, void *buf, s64 count, s64 offset);
-s64 ntfs_device_pwrite (struct ntfs_device *dev, const void *buf, s64 count, s64 offset);
-s64 ntfs_device_readbytes (struct ntfs_device *dev, s64 offset, s64 count, void *buf);
-s64 ntfs_device_writebytes (struct ntfs_device *dev, s64 offset, s64 count, const void *buf);
-bool ntfs_device_readsectors (struct ntfs_device *dev, u64 start, u32 count, void* buf);
-bool ntfs_device_writesectors (struct ntfs_device *dev, u64 start, u32 count, const void* buf);
-int ntfs_device_sync (struct ntfs_device *dev);
-int ntfs_device_stat (struct ntfs_device *dev, struct stat *buf);
+int ntfs_io_device_open (struct ntfs_device *dev, int flags);
+int ntfs_io_device_close (struct ntfs_device *dev);
+s64 ntfs_io_device_seek (struct ntfs_device *dev, s64 offset, int whence);
+s64 ntfs_io_device_read (struct ntfs_device *dev, void *buf, s64 count);
+s64 ntfs_io_device_write (struct ntfs_device *dev, const void *buf, s64 count);
+s64 ntfs_io_device_pread (struct ntfs_device *dev, void *buf, s64 count, s64 offset);
+s64 ntfs_io_device_pwrite (struct ntfs_device *dev, const void *buf, s64 count, s64 offset);
+s64 ntfs_io_device_readbytes (struct ntfs_device *dev, s64 offset, s64 count, void *buf);
+s64 ntfs_io_device_writebytes (struct ntfs_device *dev, s64 offset, s64 count, const void *buf);
+bool ntfs_io_device_readsectors (struct ntfs_device *dev, u64 start, u32 count, void* buf);
+bool ntfs_io_device_writesectors (struct ntfs_device *dev, u64 start, u32 count, const void* buf);
+int ntfs_io_device_sync (struct ntfs_device *dev);
+int ntfs_io_device_stat (struct ntfs_device *dev, struct stat *buf);
 
 extern struct ntfs_device_operations ntfs_device_usbhs_io_ops;
 

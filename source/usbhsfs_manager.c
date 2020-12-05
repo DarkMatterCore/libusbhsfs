@@ -77,8 +77,16 @@ Result usbHsFsInitialize(u8 event_idx)
     /* Start new log session. */
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+    USBHSFS_LOG(LIB_TITLE " FatFs support enabled");
 #ifdef GPL_BUILD
+    USBHSFS_LOG(LIB_TITLE " NTFS-3G support enabled");
     ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
+    ntfs_log_set_levels(
+        NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE |
+        NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_WARNING |
+        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL |
+        NTFS_LOG_LEVEL_PROGRESS
+    );
 #endif /* GPL_BUILD */
 #endif /* DEBUG */
     
@@ -897,7 +905,7 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
 #ifdef GPL_BUILD
 
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
-            device->fs_type = fs_ctx->fs_type;
+            device->fs_type = UsbHsFsDeviceFileSystemType_NTFS;
             break;
         
 #endif

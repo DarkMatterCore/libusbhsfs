@@ -126,7 +126,7 @@ static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUn
 int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
     int ret = 0;
-    ntfs_log_trace("fileStruct %p, path %s, flags %i, mode %i\n", (void *) fd, path, flags, mode);
+    ntfs_log_trace("fileStruct %p, path \"%s\", flags %i, mode %i", (void *) fd, path, flags, mode);
     ntfs_declare_vol_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
@@ -157,8 +157,6 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
             ntfs_error_with_code(EINVAL);
     }
 
-    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X.", path, path, flags);
-    
     /* Set the file volume descriptor. */
     file->vd = vd;
     if (!file->vd)
@@ -264,7 +262,7 @@ end:
 int ntfsdev_close (struct _reent *r, void *fd)
 {
     int ret = 0;
-    ntfs_log_trace("fd %p\n", fd);
+    ntfs_log_trace("fd %p", fd);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -312,7 +310,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     ssize_t ret = 0;
     off_t original_pos = 0;
     bool original_pos_must_be_restored = false;
-    ntfs_log_trace("fd %p, ptr %p, len %lu\n", fd, ptr, len);
+    ntfs_log_trace("fd %p, ptr %p, len %lu", fd, ptr, len);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -381,7 +379,7 @@ end:
 ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
 {
     ssize_t ret = 0;
-    ntfs_log_trace("fd %p, ptr %p, len %lu\n", fd, ptr, len);
+    ntfs_log_trace("fd %p, ptr %p, len %lu", fd, ptr, len);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -430,7 +428,7 @@ end:
 off_t ntfsdev_seek (struct _reent *r, void *fd, off_t pos, int dir)
 {
     off_t ret = 0;
-    ntfs_log_trace("fd %p, pos %li, dir %i\n", fd, pos, dir);
+    ntfs_log_trace("fd %p, pos %li, dir %i", fd, pos, dir);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -454,10 +452,11 @@ end:
     ntfs_unlock_drive_ctx;
     ntfs_return(ret);
 }
+
 int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
 {
     int ret = 0;
-    ntfs_log_trace("fd %p\n", fd);
+    ntfs_log_trace("fd %p", fd);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -482,107 +481,107 @@ end:
 
 int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
 {
-    ntfs_log_trace("path %s, st %p\n", path, st);
+    ntfs_log_trace("path \"%s\", st %p", path, st);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_link (struct _reent *r, const char *existing, const char *newLink)
 {
-    ntfs_log_trace("existing %s, newLink %s\n", existing, newLink);
+    ntfs_log_trace("existing \"%s\", newLink \"%s\"", existing, newLink);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_unlink (struct _reent *r, const char *name)
 {
-    ntfs_log_trace("name %s\n", name);
+    ntfs_log_trace("name \"%s\"", name);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_chdir (struct _reent *r, const char *name)
 {
-    ntfs_log_trace("name %s\n", name);
+    ntfs_log_trace("name \"%s\"", name);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
 {
-    ntfs_log_trace("oldName %s, newName %s\n", oldName, newName);
+    ntfs_log_trace("oldName \"%s\", newName \"%s\"", oldName, newName);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_mkdir (struct _reent *r, const char *path, int mode)
 {
-    ntfs_log_trace("path %s, mode %i\n", path, mode);
+    ntfs_log_trace("path \"%s\", mode %i", path, mode);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 DIR_ITER *ntfsdev_diropen (struct _reent *r, DIR_ITER *dirState, const char *path)
 {
-    ntfs_log_trace("dirState %p, path %s\n", dirState, path);
+    ntfs_log_trace("dirState %p, path \"%s\"", dirState, path);
 
     // TODO: This...
-
-    return dirState;
+    errno = ENOTSUP;
+    return NULL;
 }
 
 int ntfsdev_dirreset (struct _reent *r, DIR_ITER *dirState)
 {
-    ntfs_log_trace("dirState %p\n", dirState);
+    ntfs_log_trace("dirState %p", dirState);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_dirnext (struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
 {
-    ntfs_log_trace("dirState %p, filename %p, filestat %p\n", dirState, filename, filestat);
+    ntfs_log_trace("dirState %p, filename %p, filestat %p", dirState, filename, filestat);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_dirclose (struct _reent *r, DIR_ITER *dirState)
 {
-    ntfs_log_trace("dirState %p\n", dirState);
+    ntfs_log_trace("dirState %p", dirState);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf)
 {
-    ntfs_log_trace("path %s, buf %p\n", path, buf);
+    ntfs_log_trace("path \"%s\", buf %p", path, buf);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
 {
     int ret = 0;
-    ntfs_log_trace("fd %p, len %lu\n", fd, (u64) len);
+    ntfs_log_trace("fd %p, len %lu", fd, (u64) len);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -646,7 +645,7 @@ end:
 int ntfsdev_fsync (struct _reent *r, void *fd)
 {
     int ret = 0;
-    ntfs_log_trace("fd %p\n", fd);
+    ntfs_log_trace("fd %p", fd);
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -668,17 +667,17 @@ end:
 
 int ntfsdev_chmod (struct _reent *r, const char *path, mode_t mode)
 {
-    ntfs_log_trace("path %s, mode %i\n", path, mode);
+    ntfs_log_trace("path \"%s\", mode %i", path, mode);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
 {
     int ret = 0;
-    ntfs_log_trace("fd %p, mode %i\n", fd, mode);
+    ntfs_log_trace("fd %p, mode %i", fd, mode);
     ntfs_lock_drive_ctx;
 
     // TODO: Consider implementing this...
@@ -686,6 +685,7 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
     SECURITY_CONTEXT sxc;
     ntfs_set_mode(&scx, file->ni, mode);
     */
+   ntfs_error_with_code(ENOTSUP);
 
 end:
 
@@ -695,18 +695,18 @@ end:
 
 int ntfsdev_rmdir (struct _reent *r, const char *name)
 {
-    ntfs_log_trace("name %s\n", name);
+    ntfs_log_trace("name \"%s\"", name);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ntfsdev_utimes (struct _reent *r, const char *filename, const struct timeval times[2])
 {
-    ntfs_log_trace("filename %s, time[0] %li, time[1] %li\n", filename, times[0].tv_sec, times[1].tv_sec);
+    ntfs_log_trace("filename \"%s\", time[0] %li, time[1] %li", filename, times[0].tv_sec, times[1].tv_sec);
 
     // TODO: This...
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }

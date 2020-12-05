@@ -972,7 +972,7 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *l
         
 #ifdef GPL_BUILD
 
-        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS */
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
             fs_device = ntfsdev_get_devoptab();
             break;
 

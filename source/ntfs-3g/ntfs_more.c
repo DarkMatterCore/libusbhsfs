@@ -34,18 +34,20 @@ const char *ntfs_true_pathname (const char *path)
 
     /* Move the path pointer to the start of the actual path */
     /* e.g. "ums0:/dir/file.txt" => "/dir/file.txt" */
-    if (strchr(path, ':') != NULL)
+    const char *true_path = path;
+    if (strchr(true_path, ':') != NULL)
     {
-        path = strchr(path, ':') + 1;
+        true_path = strchr(true_path, ':') + 1;
     }
 
     /* There shouldn't be anymore colons at this point */
-    if (strchr(path, ':') != NULL)
+    if (strchr(true_path, ':') != NULL)
     {
         errno = EINVAL;
     }
 
-    return path;
+    ntfs_log_trace("Resolved \"%s\" => \"%s\".", path, true_path);    
+    return true_path;
 }
 
 ntfs_inode *ntfs_inode_open_pathname (ntfs_vd *vd, const char *path)
@@ -118,8 +120,13 @@ end:
     /* If the file failed to open, clean-up */
     if (errno && ni)
     {
+        ntfs_log_error("inode at \"%s\" cannot be opened (errno %i)", path, errno);
         ntfs_inode_close(ni);
         ni = NULL;
+    }
+    else if (ni)
+    {
+        ntfs_log_trace("inode at \"%s\" opened (mtf_no %li)", path, ni->mft_no);
     }
 
     return ni;

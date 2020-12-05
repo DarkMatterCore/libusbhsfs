@@ -14,11 +14,17 @@
 #ifdef DEBUG
 #include "../usbhsfs_utils.h"
 
-inline int ntfs_log_handler_usbhsfs(const char *function, const char *file,
+int ntfs_log_handler_usbhsfs(const char *function, const char *file,
 	int line, u32 level, void *data, const char *format, va_list args)
 {
-	usbHsFsUtilsWriteMessageToLogFile(function, format, args);
-    return 0;
+	char logbuf[1024];
+	int ret = vsnprintf(logbuf, 1024, format, args);
+	if (ret)
+	{
+		usbHsFsUtilsWriteMessageToLogFile(function, logbuf);
+	}
+	
+	return ret;
 }
 
 #endif /* DEBUG */
