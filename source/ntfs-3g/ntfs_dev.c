@@ -167,10 +167,9 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     }
 
     /* Set the file node descriptor and ensure that it is actually a file. */
-    file->ni = ntfs_entry_open(file->vd, path);
+    file->ni = ntfs_inode_open_pathname(file->vd, path);
     if (file->ni && (file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
     {
-        ntfs_entry_close(file->vd, file->ni);
         ntfs_error_with_code(EISDIR);
     }
 
@@ -186,10 +185,10 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         /* Create the file if it doesn't exist yet */
         else if (!file->ni)
         {
-            file->ni = ntfs_create(file->vd, path, S_IFREG, NULL);
+            file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
             if (!file->ni)
             {
-                ntfs_end;
+                ntfs_error_with_code(errno);
             }
         }  
     }
@@ -204,8 +203,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     file->data = ntfs_attr_open(file->ni, AT_DATA, AT_UNNAMED, 0);
     if(!file->data)
     {
-        ntfs_entry_close(file->vd, file->ni);
-        ntfs_end;
+        ntfs_error_with_code(errno);
     }
 
     /* Determine if this files data is compressed and/or encrypted. */
@@ -215,16 +213,12 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* We cannot read/write encrypted files. */
     if (file->encrypted)
     {
-        ntfs_attr_close(file->data);
-        ntfs_entry_close(file->vd, file->ni);
         ntfs_error_with_code(EACCES);
     }
 
     /* Make sure we aren't trying to write to a read-only file. */
     if ((file->ni->flags & FILE_ATTR_READONLY) && file->write)
     {
-        ntfs_attr_close(file->data);
-        ntfs_entry_close(file->vd, file->ni);
         ntfs_error_with_code(EROFS);
     }
 
@@ -233,8 +227,6 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     {
         if (ntfs_attr_truncate(file->data, 0))
         {
-            ntfs_attr_close(file->data);
-            ntfs_entry_close(file->vd, file->ni);
             ntfs_error_with_code(errno);
         }
     }
@@ -250,6 +242,21 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
 
 end:
 
+    /* If the file failed to open, clean-up */
+    if (r->_errno)
+    {
+        if (file && file->data)
+        {
+            ntfs_attr_close(file->data);
+            file->data = NULL;
+        }
+        if (file && file->ni)
+        {
+            ntfs_inode_close(file->ni);
+            file->ni = NULL;
+        }
+    }
+    
     ntfs_unlock_drive_ctx;
     ntfs_return(ret);
 }
@@ -261,10 +268,10 @@ int ntfsdev_close (struct _reent *r, void *fd)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
-    /* Sync the file (and attributes) to disc. */
-    if(file->write)
+    /* If the file is dirty, sync it (and attributes). */
+    if(NInoDirty(file->ni))
     {
-        ntfs_sync(file->vd, file->ni);
+        ntfs_inode_sync(file->ni);
     }
 
     /* Special case clean-ups compressed and/or encrypted files. */
@@ -288,7 +295,7 @@ int ntfsdev_close (struct _reent *r, void *fd)
     /* Close the file node. */
     if (file->ni)
     {
-        ntfs_entry_close(file->vd, file->ni);
+        ntfs_inode_close(file->ni);
     }
 
     /* Reset the file state. */
@@ -354,6 +361,9 @@ end:
     /* Did we end up writing anything? */
     if (file && ret > 0)
     {
+        /* Mark the file as dirty. */
+        NInoSetDirty(file->ni);
+
         /* Mark the file for archiving. */
         file->ni->flags |= FILE_ATTR_ARCHIVE;
         
@@ -391,7 +401,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     if (file->pos + len > file->len)
     {
         //ntfs_error_with_code(EOVERFLOW);
-        ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length");
+        ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length and continuing");
         r->_errno = EOVERFLOW;
         memset(ptr, 0, len);
         len = file->len - file->pos;
@@ -616,6 +626,9 @@ end:
     /* Did the file size actually change? */
     if (file && file->len != file->data->data_size)
     {
+        /* Mark the file as dirty. */
+        NInoSetDirty(file->ni);
+
         /* Mark the file for archiving. */
         file->ni->flags |= FILE_ATTR_ARCHIVE;
         
@@ -637,12 +650,15 @@ int ntfsdev_fsync (struct _reent *r, void *fd)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
-    /* Sync the file (and attributes) to disc */
-    ret = ntfs_sync(file->vd, file->ni);
+    /* Sync the file (and attributes). */
+    ret = ntfs_inode_sync(file->ni);
     if (ret)
     {
         ntfs_error_with_code(errno);
     }
+
+    /* Mark the file as no longer dirty. */
+    NInoClearDirty(file->ni);
 
 end:
 

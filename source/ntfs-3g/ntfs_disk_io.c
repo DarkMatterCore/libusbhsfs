@@ -124,12 +124,12 @@ s64 ntfs_device_seek(struct ntfs_device *dev, s64 offset, int whence)
 
 s64 ntfs_device_read(struct ntfs_device *dev, void *buf, s64 count)
 {
-    return ntfs_device_readbytes(dev, (usbhs_dd *) dev->d_private->pos, count, buf);
+    return ntfs_device_readbytes(dev, ((usbhs_dd *) dev->d_private)->pos, count, buf);
 }
 
 s64 ntfs_device_write(struct ntfs_device *dev, const void *buf, s64 count)
 {
-    return ntfs_device_writebytes(dev, (usbhs_dd *) dev->d_private->pos, count, buf);
+    return ntfs_device_writebytes(dev, ((usbhs_dd *) dev->d_private)->pos, count, buf);
 }
 
 s64 ntfs_device_pread(struct ntfs_device *dev, void *buf, s64 count, s64 offset)

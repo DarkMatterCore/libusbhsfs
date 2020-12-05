@@ -22,6 +22,7 @@
 #include <ntfs-3g/device.h>
 #include <ntfs-3g/volume.h>
 #include <ntfs-3g/inode.h>
+#include <ntfs-3g/attrib.h>
 
 /**
  * ntfs_file_state - File state
