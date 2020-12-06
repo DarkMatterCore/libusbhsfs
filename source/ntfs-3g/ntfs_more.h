@@ -22,7 +22,19 @@
 
 #define NTFS_MAX_SYMLINK_DEPTH              10 /* Maximum search depth when resolving symbolic links */
 
-const char *ntfs_true_pathname (const char *path);
+/*
+ * ntfs_path - NTFS path
+ */
+typedef struct _ntfs_path {
+    char buf[FS_MAX_PATH];                  /* Internal buffer containing the path name */
+    ntfs_volume *vol;                       /* NTFS volume handle */
+    ntfs_inode *parent;                     /* NTFS parent node handle */
+    const char *path;                       /* The volume path only (e.g. 'foo/bar/file.txt') */ 
+    const char *dir;                        /* The directory path only (e.g. '/foo/bar') */
+    const char *name;                       /* The file name only (e.g. 'something.txt') */
+} ntfs_path;
+
+ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path);
 
 ntfs_inode *ntfs_inode_open_pathname (ntfs_vd *vd, const char *path);
 ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int reparse_depth);

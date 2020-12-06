@@ -24,30 +24,69 @@
 #include <ntfs-3g/dir.h>
 #include <ntfs-3g/reparse.h>
 
-const char *ntfs_true_pathname (const char *path)
+ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
 {
+    ntfs_path ret;
+    ret.buf[0] = '\0';
+    ret.vol = vd->vol;
+    ret.parent = NULL;
+    ret.path = path;
+    ret.dir = NULL;
+    ret.name = NULL;
+
     /* Sanity check. */
-    if (!path)
-    {
-        return NULL;
-    }
-
-    /* Move the path pointer to the start of the actual path */
-    /* e.g. "ums0:/dir/file.txt" => "/dir/file.txt" */
-    const char *true_path = path;
-    if (strchr(true_path, ':') != NULL)
-    {
-        true_path = strchr(true_path, ':') + 1;
-    }
-
-    /* There shouldn't be anymore colons at this point */
-    if (strchr(true_path, ':') != NULL)
+    if (!ret.vol || !ret.path)
     {
         errno = EINVAL;
+        return ret;
     }
 
-    ntfs_log_trace("Resolved \"%s\" => \"%s\".", path, true_path);    
-    return true_path;
+    /* Sanity check. */
+    if (strlen(ret.path) > FS_MAX_PATH)
+    {
+        errno = ERANGE;
+        return ret;
+    }
+
+    /* Remove the mount prefix (e.g. "ums0:/dir/file.txt" => "/dir/file.txt"). */
+    if (strchr(ret.path, ':') != NULL)
+    {
+        ret.path = strchr(ret.path, ':') + 1;
+    }
+
+    /* Is this a relative path? (i.e. doesn't start with a '/') */
+    if (ret.path[0] != PATH_SEP)
+    {
+        /* Use the volumes current directory as our parent node */
+        ret.parent = vd->cwd;
+    }
+  
+    /* Copy the path to internal buffer that we can modify it. */
+    strcpy(ret.buf, ret.path);
+    if (!ret.buf)
+    {
+        errno = ENOMEM;
+        return ret;
+    }
+
+    /* Split the path in to seperate directory and file name parts. */
+    /* e.g. "/dir/file.txt" => dir: "/dir", name: "file.txt" */
+    char *path_sep = strrchr(ret.path, PATH_SEP);
+    if (path_sep)
+    {
+        /* There is a path seperator present, split the two values */
+        *(path_sep) = '\0'; /* Null terminate the string to seperate the 'dir' and 'name' components. */
+        ret.dir = ret.path; /* The directory is the first part of the path. */
+        ret.name = (path_sep + 1); /* The name is the second part of the path.  */
+    }
+    else
+    {
+        /* There is no path seperator present, only a file name */
+        ret.dir = "."; /* Use the current directory alias */
+        ret.name = ret.path; /* The name is the entire 'path' */
+    }
+
+    return ret;
 }
 
 ntfs_inode *ntfs_inode_open_pathname (ntfs_vd *vd, const char *path)
@@ -59,28 +98,35 @@ ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int
 {
     ntfs_inode *ni = NULL;
 
-    /* Get the true path of the entry. */
-    path = ntfs_true_pathname(path);
-    if (!path) 
-    {
-        errno = EINVAL;
-        goto end;
-    } 
-    else if (path[0] == '\0') 
-    {
+    /* Resolve the path name of the entry. */
+    if (strchr(path, ':') != NULL) {
+        path = strchr(path, ':') + 1;
+    }
+    if (strchr(path, ':') != NULL) {
         path = ".";
     }
-
-    /* Find the entry within the volume. */
-    if (path[0] == PATH_SEP)
+    if (path[0] == '\0') {
+        path = ".";
+    }
+    if (path[0] == PATH_SEP && path[1] == '\0')
     {
-        /* Absolute path from volume root */
-        ni = ntfs_pathname_to_inode(vd->vol, NULL, path);
+        ni = ntfs_pathname_to_inode(vd->vol, NULL, ".");
+        ntfs_log_trace("OPEN %p \"%s\"", ni, ".");
+    }
+    else if (path[0] != PATH_SEP)
+    {
+        ni = ntfs_pathname_to_inode(vd->vol, vd->cwd, path++);
+        ntfs_log_trace("OPEN %p \"%s\"", ni, path);
     }
     else
     {
-        /* Relative path from current directory */
-        ni = ntfs_pathname_to_inode(vd->vol, vd->cwd, path++);
+        ni = ntfs_pathname_to_inode(vd->vol, NULL, path);
+        ntfs_log_trace("OPEN %p \"%s\"", ni, path);
+    }
+
+    if (!ni) 
+    {
+        goto end;
     }
 
     /* If the entry was found and it has reparse data then resolve the true entry. */
@@ -126,13 +172,12 @@ end:
 
 ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const char *target)
 {
+    ntfs_path full_path, target_path;
     ntfs_inode *dir_ni = NULL, *ni = NULL;
-    char *dir = NULL;
-    char *name = NULL;
     ntfschar *uname = NULL, *utarget = NULL;
     int uname_len, utarget_len;
 
-    /* You cannot link between devices */
+    /* You cannot link entries across devices */
     if (path && target)
     {
         /* TODO: Check that both paths belong to the same device.
@@ -144,78 +189,58 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         */
     }
 
-    /* Get the true paths of the entry. */
-    path = ntfs_true_pathname(path);
-    target = ntfs_true_pathname(target);
-    if (!path)
+    /* Resolve the entry path */
+    full_path = ntfs_resolve_path(vd, path);
+    if (!full_path.dir || !full_path.name)
     {
-        errno = EINVAL;
         goto end;
     }
-
-    /* Get the unicode name for the entry and find its parent directory. */
-    /* TODO: This looks horrible, clean it up. */
-    dir = strdup(path);
-    if (!dir)
-    {
-        errno = EINVAL;
-        goto end;
-    }
-    name = strrchr(dir, '/');
-    if (name)
-    {
-        name++;
-    }
-    else
-    {
-        name = dir;
-    }
-    uname_len = ntfs_local_to_unicode(name, &uname);
+    
+    /* Convert the entry name to unicode. */
+    uname_len = ntfs_local_to_unicode(full_path.name, &uname);
     if (uname_len < 0)
     {
         errno = EINVAL;
         goto end;
     }
-    name = strrchr(dir, '/');
-    if(name)
-    {
-        name++;
-        name[0] = 0;
-    }
 
-    /* Open the entries parent directory. */
-    dir_ni = ntfs_inode_open_pathname(vd, dir);
+    /* Open the parent directory this entry will be created in. */
+    dir_ni = ntfs_inode_open_pathname(vd, full_path.dir);
     if (!dir_ni)
     {
         goto end;
     }
 
-    /* Create the entry. */
+    /* Create the new entry. */
     switch (type)
     {
-        /* Symbolic link. */
-        case S_IFLNK:
-        {
-            if (!target)
-            {
-                errno = EINVAL;
-                goto end;
-            }
-            utarget_len = ntfs_local_to_unicode(target, &utarget);
-            if (utarget_len < 0)
-            {
-                errno = EINVAL;
-                goto end;
-            }
-            ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
-            break;
-        }
-
         /* Directory or file. */
         case S_IFDIR:
         case S_IFREG:
         {
             ni = ntfs_create(dir_ni, 0, uname, uname_len, type);
+            break;
+        }
+
+        /* Symbolic link. */
+        case S_IFLNK:
+        {
+            /* Resolve the link target path */
+            target_path = ntfs_resolve_path(vd, path);
+            if (!target_path.dir || !target_path.name)
+            {
+                goto end;
+            }
+            
+            /* Convert the link target path to unicode. */
+            utarget_len = ntfs_local_to_unicode(target_path.path, &utarget);
+            if (utarget_len < 0)
+            {
+                errno = EINVAL;
+                goto end;
+            }
+
+            ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
             break;
         }
 
@@ -227,20 +252,24 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         }
     }
 
-    /* If the entry was created. */
-    if (ni)
+    /* If the new entry was created. */
+    if (ni && dir_ni)
     {
-        /* Update parent directories last modify time. */
+        /* Update the entries last modify time. */
+        ntfs_update_times(vd, ni, NTFS_UPDATE_MCTIME);
         ntfs_update_times(vd, dir_ni, NTFS_UPDATE_MCTIME);
 
-        /* Mark the entry as dirty. */
+        /* Mark the entries as dirty. */
         NInoSetDirty(ni);
+        NInoSetDirty(dir_ni);
 
-        /* Mark the entry for archiving. */
+        /* Mark the entries for archiving. */
         ni->flags |= FILE_ATTR_ARCHIVE;
+        dir_ni->flags |= FILE_ATTR_ARCHIVE;
         
-        /* Sync the entry (and attributes). */
+        /* Sync the entries (and attributes). */
         ntfs_inode_sync(ni);
+        ntfs_inode_sync(dir_ni);
     }
 
 end:
@@ -257,13 +286,7 @@ end:
 
     if (dir_ni)
     {
-        ntfs_inode_sync(dir_ni);
         ntfs_inode_close(dir_ni);
-    }
-
-    if (dir)
-    {
-        free(dir);
     }
 
     return ni;
@@ -299,7 +322,6 @@ int ntfs_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
             ntfs_attr_close(na);
             na = NULL;
         }
-
     }
 
     /* Else it must be a file. */

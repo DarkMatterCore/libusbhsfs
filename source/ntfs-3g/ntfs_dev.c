@@ -82,8 +82,10 @@ const devoptab_t *ntfsdev_get_devoptab()
 }
 
 #define ntfs_end                        goto end;
-#define ntfs_error_with_code(x)         r->_errno = x; ntfs_end;
+#define ntfs_error(x)                   r->_errno = _errno = x; ntfs_end;
+#define ntfs_ended_with_error           (_errno == 0)
 
+#define ntfs_declare_error_state        int _errno = 0; 
 #define ntfs_declare_vol_state          ntfs_vd *vd = ((UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData)->ntfs;
 #define ntfs_declare_file_state         ntfs_file_state *file = ((ntfs_file_state*) fd);
 #define ntfs_declare_dir_state          ntfs_file_state *dir = ((ntfs_dir_state*) dirState);
@@ -92,12 +94,12 @@ const devoptab_t *ntfsdev_get_devoptab()
                                         UsbHsFsDriveContext *drive_ctx = ntfsdev_get_drive_ctx_and_lock(&fs_ctx); \
                                         if (!drive_ctx) \
                                         { \
-                                            ntfs_error_with_code(ENODEV); \
+                                            ntfs_error(ENODEV); \
                                         }
 
 #define ntfs_unlock_drive_ctx           if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
 
-#define ntfs_return(x)                  return (r->_errno == 0) ? x : -1
+#define ntfs_return(x)                  return (ntfs_ended_with_error) ? x : -1
 
 static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
 {
@@ -127,6 +129,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
 {
     int ret = 0;
     ntfs_log_trace("fileStruct %p, path \"%s\", flags %i, mode %i", (void *) fd, path, flags, mode);
+    ntfs_declare_error_state;
     ntfs_declare_vol_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
@@ -139,7 +142,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         {
             if (flags & O_APPEND)
             {
-                ntfs_error_with_code(EINVAL);
+                ntfs_error(EINVAL);
             }
             file->read = true;
             file->write = false;
@@ -168,7 +171,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         /* Invalid option. */
         default:
         {
-            ntfs_error_with_code(EINVAL);
+            ntfs_error(EINVAL);
         }
     }
 
@@ -176,14 +179,14 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     file->vd = vd;
     if (!file->vd)
     {
-        ntfs_error_with_code(ENODEV);
+        ntfs_error(ENODEV);
     }
 
     /* Set the file node descriptor and ensure that it is actually a file. */
     file->ni = ntfs_inode_open_pathname(file->vd, path);
     if (file->ni && (file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
     {
-        ntfs_error_with_code(EISDIR);
+        ntfs_error(EISDIR);
     }
 
     /* Are we creating this file? */
@@ -192,7 +195,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         /* Create + exclusive when the file already exists is not allowed */
         if ((flags & O_EXCL) && file->ni)
         {
-            ntfs_error_with_code(EEXIST)
+            ntfs_error(EEXIST)
         }
         
         /* Create the file if it doesn't exist yet */
@@ -201,7 +204,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
             file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
             if (!file->ni)
             {
-                ntfs_error_with_code(errno);
+                ntfs_error(errno);
             }
         }  
     }
@@ -209,14 +212,14 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* Sanity check, the file should be open by now. */
     if (!file->ni)
     {
-        ntfs_error_with_code(ENOENT);
+        ntfs_error(ENOENT);
     }
 
     /* Open the files data attribute. */
     file->data = ntfs_attr_open(file->ni, AT_DATA, AT_UNNAMED, 0);
     if(!file->data)
     {
-        ntfs_error_with_code(errno);
+        ntfs_error(errno);
     }
 
     /* Determine if this files data is compressed and/or encrypted. */
@@ -226,13 +229,13 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* We cannot read/write encrypted files. */
     if (file->encrypted)
     {
-        ntfs_error_with_code(EACCES);
+        ntfs_error(EACCES);
     }
 
     /* Make sure we aren't trying to write to a read-only file. */
     if ((file->ni->flags & FILE_ATTR_READONLY) && file->write)
     {
-        ntfs_error_with_code(EROFS);
+        ntfs_error(EROFS);
     }
 
     /* Truncate the file if requested. */
@@ -240,7 +243,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     {
         if (ntfs_attr_truncate(file->data, 0))
         {
-            ntfs_error_with_code(errno);
+            ntfs_error(errno);
         }
     }
 
@@ -256,7 +259,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
 end:
 
     /* If the file failed to open, clean-up */
-    if (r->_errno)
+    if (ntfs_ended_with_error)
     {
         if (file && file->data)
         {
@@ -276,8 +279,8 @@ end:
 
 int ntfsdev_close (struct _reent *r, void *fd)
 {
-    int ret = 0;
     ntfs_log_trace("fd %p", fd);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -317,7 +320,7 @@ int ntfsdev_close (struct _reent *r, void *fd)
 end:
 
     ntfs_unlock_drive_ctx;
-    ntfs_return(ret);
+    ntfs_return(0);
 }
 
 ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
@@ -326,6 +329,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     off_t original_pos = 0;
     bool original_pos_must_be_restored = false;
     ntfs_log_trace("fd %p, ptr %p, len %lu", fd, ptr, len);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -338,7 +342,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     /* Check that we are allowed to write to this file. */
     if (!file->write)
     {
-        ntfs_error_with_code(EACCES);
+        ntfs_error(EACCES);
     }
 
     /* If we are in append mode, backup the current position and move to the end of the file. */
@@ -355,7 +359,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
         ssize_t written = ntfs_attr_pwrite(file->data, file->pos, len, ptr);
         if (written <= 0 || written > len)
         {
-            ntfs_error_with_code(errno);
+            ntfs_error(errno);
         }
         ret += written;
         ptr += written;
@@ -395,6 +399,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
 {
     ssize_t ret = 0;
     ntfs_log_trace("fd %p, ptr %p, len %lu", fd, ptr, len);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -407,13 +412,13 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     /* Check that we are allowed to read from this file. */
     if (!file->read)
     {
-        ntfs_error_with_code(EACCES);
+        ntfs_error(EACCES);
     }
 
     /* Don't read past the end of file. */
     if (file->pos + len > file->len)
     {
-        //ntfs_error_with_code(EOVERFLOW);
+        //ntfs_error(EOVERFLOW);
         ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length and continuing (filepos %li, filelen %li)", file->pos, file->len);
         r->_errno = EOVERFLOW;
         memset(ptr, 0, len);
@@ -426,7 +431,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
         ssize_t read = ntfs_attr_pread(file->data, file->pos, len, ptr);
         if (read <= 0 || read > len)
         {
-            ntfs_error_with_code(errno);
+            ntfs_error(errno);
         }
         ret += read;
         ptr += read;
@@ -444,6 +449,7 @@ off_t ntfsdev_seek (struct _reent *r, void *fd, off_t pos, int dir)
 {
     off_t ret = 0;
     ntfs_log_trace("fd %p, pos %li, dir %i", fd, pos, dir);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -457,7 +463,7 @@ off_t ntfsdev_seek (struct _reent *r, void *fd, off_t pos, int dir)
         /* Set position relative to EOF. */
         case SEEK_END: file->pos = MIN(MAX(file->len + pos, 0), file->len); break;
         /* Invalid option. */
-        default: ntfs_error_with_code(EINVAL);
+        default: ntfs_error(EINVAL);
     }
 
     ret = file->pos;
@@ -472,6 +478,7 @@ int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
 {
     int ret = 0;
     ntfs_log_trace("fd %p", fd);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -485,7 +492,7 @@ int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
     ret = ntfs_stat(file->vd, file->ni, st);
     if (ret)
     {
-        ntfs_error_with_code(errno);
+        ntfs_error(errno);
     }
 
 end:
@@ -499,6 +506,7 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
     int ret = 0;
     ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", st %p", path, st);
+    ntfs_declare_error_state;
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
 
@@ -519,14 +527,14 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
     /* Get the entry. */
     ni = ntfs_inode_open_pathname(vd, path);
     if (!ni) {
-        ntfs_error_with_code(errno);
+        ntfs_error(errno);
     }
 
     /* Get the entry stats. */
     ret = ntfs_stat(vd, ni, st);
     if (ret)
     {
-        ntfs_error_with_code(errno);
+        ntfs_error(errno);
     }
 
 end:
@@ -635,25 +643,26 @@ int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
 {
     int ret = 0;
     ntfs_log_trace("fd %p, len %lu", fd, (u64) len);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
     /* Make sure length is non-negative. */
     if (len < 0)
     {
-        ntfs_error_with_code(EINVAL);
+        ntfs_error(EINVAL);
     }
     
     /* Check that we are allowed to write to this file. */
     if (!file->write)
     {
-        ntfs_error_with_code(EACCES);
+        ntfs_error(EACCES);
     }
 
     /* For compressed files, only deleting and expanding contents are implemented. */
     if (file->compressed && len > 0 && len < file->data->initialized_size) 
     {
-        ntfs_error_with_code(EOPNOTSUPP);
+        ntfs_error(EOPNOTSUPP);
     }
 
     /* Resize the files data attribute, either by expanding or truncating. */
@@ -662,14 +671,14 @@ int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
         char zero = 0;
         if (ntfs_attr_pwrite(file->data, len - 1, 1, &zero) <= 0)
         {
-            ntfs_error_with_code(errno);
+            ntfs_error(errno);
         }
     } 
     else 
     {
         if (ntfs_attr_truncate(file->data, len))
         {
-            ntfs_error_with_code(errno);
+            ntfs_error(errno);
         }
     }
 
@@ -699,6 +708,7 @@ int ntfsdev_fsync (struct _reent *r, void *fd)
 {
     int ret = 0;
     ntfs_log_trace("fd %p", fd);
+    ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
@@ -706,7 +716,7 @@ int ntfsdev_fsync (struct _reent *r, void *fd)
     ret = ntfs_inode_sync(file->ni);
     if (ret)
     {
-        ntfs_error_with_code(errno);
+        ntfs_error(errno);
     }
 
     /* Mark the file as no longer dirty. */
@@ -731,6 +741,7 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
 {
     int ret = 0;
     ntfs_log_trace("fd %p, mode %i", fd, mode);
+    ntfs_declare_error_state;
     ntfs_lock_drive_ctx;
 
     // TODO: Consider implementing this...
@@ -738,7 +749,7 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
     SECURITY_CONTEXT sxc;
     ntfs_set_mode(&scx, file->ni, mode);
     */
-   ntfs_error_with_code(ENOTSUP);
+   ntfs_error(ENOTSUP);
 
 end:
 
