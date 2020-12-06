@@ -83,7 +83,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 
 #define ntfs_end                        goto end;
 #define ntfs_error(x)                   r->_errno = _errno = x; ntfs_end;
-#define ntfs_ended_with_error           (_errno == 0)
+#define ntfs_ended_with_error           (_errno != 0)
 
 #define ntfs_declare_error_state        int _errno = 0; 
 #define ntfs_declare_vol_state          ntfs_vd *vd = ((UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData)->ntfs;
@@ -99,7 +99,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 
 #define ntfs_unlock_drive_ctx           if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
 
-#define ntfs_return(x)                  return (ntfs_ended_with_error) ? x : -1
+#define ntfs_return(x)                  return (ntfs_ended_with_error) ? -1 : x
 
 static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
 {
@@ -203,6 +203,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         /* Create the file if it doesn't exist yet */
         else if (!file->ni)
         {
+            ntfs_log_debug("node \"%s\" does not exist, will create it now", path);
             file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
             if (!file->ni)
             {

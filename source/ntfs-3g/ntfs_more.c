@@ -44,6 +44,7 @@ ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
     /* Sanity check. */
     if (strlen(ret.path) > FS_MAX_PATH)
     {
+        ntfs_log_error("path \"%s\" is too long", path);
         errno = ERANGE;
         return ret;
     }
@@ -89,6 +90,7 @@ ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
     /* Sanity check. */
     if (ret.name && strlen(ret.name) > NTFS_MAX_NAME_LEN)
     {
+        ntfs_log_error("file name \"%s\" is too long", ret.name);
         errno = ERANGE;
         return ret;
     }
@@ -113,19 +115,23 @@ ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, in
         path = strchr(path, ':') + 1;
     }
 
-    /* If the path is empty or '/', resolve to the top-most directory (root) */
+    /* If the path is empty or exactly '/', resolve to the top-most directory (root). */
     if ((path[0] == '\0') ||
         (path[0] == PATH_SEP && path[1] == '\0'))
     {
         path = ".";
     }
 
-    /* Otherwise, resolve from the volumes current directory. */
-    else if (path[0] != PATH_SEP)
+    /* If the path starts with '/', resolve as an absolute path from the top-most directory (root). */
+    else if (path[0] == PATH_SEP)
+    {
+        path++; /* Skip over the first '/' character. */
+    }
+
+    /* Otherwise, resolve as a relative path from the volumes current directory (cwd). */
+    else
     {
         parent = vd->cwd;
-        path++; /* Skip over the '/' character. */
-        ni = ntfs_pathname_to_inode(vd->vol, vd->cwd, path++);
     }
 
     /* Resolve the path name of the entry. */
@@ -135,6 +141,10 @@ ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, in
     {
         ntfs_log_debug("failed to open inode from path \"%s\" (errno %i)", path, errno);
         goto end;
+    }
+    else 
+    {
+        ntfs_log_debug("successfully opened inode from path \"%s\" (mft_no %lu)", path, ni->mft_no);
     }
 
     /* If the entry was found and it has reparse data then resolve the true entry. */
