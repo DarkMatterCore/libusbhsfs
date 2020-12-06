@@ -644,7 +644,7 @@ int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
 
-    /* You cannot link entries across devices */
+    /* You cannot link entries across devices. */
     if (oldName && newName)
     {
         /* TODO: Check that both paths belong to the same device.

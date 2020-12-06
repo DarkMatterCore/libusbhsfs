@@ -104,33 +104,32 @@ ntfs_inode *ntfs_inode_open_from_path (ntfs_vd *vd, const char *path)
 ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, int reparse_depth)
 {
     ntfs_inode *ni = NULL;
+    ntfs_inode *parent = NULL;
 
-    /* Resolve the path name of the entry. */
-    if (strchr(path, ':') != NULL) {
+    /* Remove the mount prefix (e.g. "ums0:/dir/file.txt" => "/dir/file.txt"). */
+    if (strchr(path, ':') != NULL) 
+    {
         path = strchr(path, ':') + 1;
     }
-    if (strchr(path, ':') != NULL) {
-        path = ".";
-    }
-    if (path[0] == '\0') {
-        path = ".";
-    }
-    if (path[0] == PATH_SEP && path[1] == '\0')
+
+    /* If the path is empty or '/', resolve to the top-most directory (root) */
+    if ((path[0] == '\0') ||
+        (path[0] == PATH_SEP && path[1] == '\0'))
     {
-        ni = ntfs_pathname_to_inode(vd->vol, NULL, ".");
-        ntfs_log_trace("OPEN %p \"%s\"", ni, ".");
+        path = ".";
     }
+
+    /* Otherwise, resolve from the volumes current directory. */
     else if (path[0] != PATH_SEP)
     {
+        parent = vd->cwd;
+        path++; /* Skip over the '/' character. */
         ni = ntfs_pathname_to_inode(vd->vol, vd->cwd, path++);
         ntfs_log_trace("OPEN %p \"%s\"", ni, path);
     }
-    else
-    {
-        ni = ntfs_pathname_to_inode(vd->vol, NULL, path);
-        ntfs_log_trace("OPEN %p \"%s\"", ni, path);
-    }
 
+    /* Resolve the path name of the entry. */
+    ni = ntfs_pathname_to_inode(vd->vol, parent, path);
     if (!ni) 
     {
         goto end;
@@ -184,7 +183,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     ntfschar *uname = NULL, *utarget = NULL;
     int uname_len, utarget_len;
 
-    /* You cannot link entries across devices */
+    /* You cannot link entries across devices. */
     if (path && target)
     {
         /* TODO: Check that both paths belong to the same device.
@@ -200,6 +199,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     full_path = ntfs_resolve_path(vd, path);
     if (!full_path.dir || !full_path.name)
     {
+        errno = EINVAL;
         goto end;
     }
     
@@ -234,8 +234,9 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         {
             /* Resolve the link target path */
             target_path = ntfs_resolve_path(vd, path);
-            if (!target_path.dir || !target_path.name)
+            if (!target_path.path)
             {
+                errno = EINVAL;
                 goto end;
             }
             
@@ -299,10 +300,195 @@ end:
     return ni;
 }
 
+int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
+{
+    ntfs_path full_old_path, full_new_path;
+    ntfs_inode *dir_ni = NULL, *ni = NULL;
+    ntfschar *uname = NULL;
+    int uname_len;
+    int ret = -1;
+
+    /* You cannot link entries across devices. */
+    if (old_path && new_path)
+    {
+        /* TODO: Check that both paths belong to the same device.
+        if (vd != ntfs_volume_from_pathname(new_path))
+        {
+            errno = EXDEV;
+            goto end;
+        }
+        */
+    }
+    
+    /* Resolve the entry paths */
+    full_old_path = ntfs_resolve_path(vd, old_path);
+    full_new_path = ntfs_resolve_path(vd, new_path);
+    if (!full_old_path.path || !full_new_path.name)
+    {
+        errno = EINVAL;
+        goto end;
+    }
+    
+    /* Convert the entry name to unicode. */
+    uname_len = ntfs_local_to_unicode(full_new_path.name, &uname);
+    if (uname_len < 0)
+    {
+        errno = EINVAL;
+        goto end;
+    }
+
+    /* Open the entry. */
+    ni = ntfs_inode_open_from_path(vd, full_old_path.path);
+    if (!dir_ni)
+    {
+        goto end;
+    }
+
+    /* Open the entries new parent directory. */
+    dir_ni = ntfs_inode_open_from_path(vd, full_new_path.dir);
+    if (!dir_ni)
+    {
+        goto end;
+    }
+
+    /* Link the entry to its new parent directory. */
+    if (ntfs_link(ni, dir_ni, uname, uname_len))
+    {
+        goto end;
+    }
+
+    /* If the new entry was created. */
+    if (ni && dir_ni)
+    {
+        /* Update the entries last modify time. */
+        ntfs_inode_update_times_filtered(vd, ni, NTFS_UPDATE_MCTIME);
+        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
+
+        /* Mark the entries as dirty. */
+        NInoSetDirty(ni);
+        NInoSetDirty(dir_ni);
+
+        /* Mark the entries for archiving. */
+        ni->flags |= FILE_ATTR_ARCHIVE;
+        dir_ni->flags |= FILE_ATTR_ARCHIVE;
+        
+        /* Sync the entries (and attributes). */
+        ntfs_inode_sync(ni);
+        ntfs_inode_sync(dir_ni);
+    }
+
+    ret = 0;
+
+end:
+
+    if (uname)
+    {
+        free(uname);
+    }
+
+    if (ni)
+    {
+        ntfs_inode_close(ni);
+    }
+
+    if (dir_ni)
+    {
+        ntfs_inode_close(dir_ni);
+    }
+
+    return ret;
+}
+
+int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
+{
+    ntfs_path full_path;
+    ntfs_inode *dir_ni = NULL, *ni = NULL;
+    ntfschar *uname = NULL;
+    int uname_len;
+    int ret = -1;
+
+    /* Resolve the entry path */
+    full_path = ntfs_resolve_path(vd, path);
+    if (!full_path.path || !full_path.dir || !full_path.name)
+    {
+        errno = EINVAL;
+        goto end;
+    }
+    
+    /* Convert the entry name to unicode. */
+    uname_len = ntfs_local_to_unicode(full_path.name, &uname);
+    if (uname_len < 0)
+    {
+        errno = EINVAL;
+        goto end;
+    }
+
+    /* Open the entry. */
+    ni = ntfs_inode_open_from_path(vd, full_path.path);
+    if (!dir_ni)
+    {
+        goto end;
+    }
+
+    /* Open the entries parent directory. */
+    dir_ni = ntfs_inode_open_from_path(vd, full_path.dir);
+    if (!dir_ni)
+    {
+        goto end;
+    }
+
+    /* Unlink the entry from its parent. */
+    /* NOTE: 'ni' is always closed after the call to this function (even if it failed) */
+    if (ntfs_delete(vd->vol, full_path.path, ni, dir_ni, uname, uname_len))
+    {
+        ni = NULL;
+        goto end;
+    }
+    else
+    {
+        ni = NULL;
+    }
+
+    /* If the entry was deleted. */
+    if (dir_ni)
+    {
+        /* Update the entries last modify time. */
+        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
+
+        /* Mark the entries as dirty. */
+        NInoSetDirty(dir_ni);
+
+        /* Mark the entries for archiving. */
+        dir_ni->flags |= FILE_ATTR_ARCHIVE;
+        
+        /* Sync the entries (and attributes). */
+        ntfs_inode_sync(dir_ni);
+    }
+
+    ret = 0;
+
+end:
+
+    if (uname)
+    {
+        free(uname);
+    }
+
+    if (ni)
+    {
+        ntfs_inode_close(ni);
+    }
+
+    if (dir_ni)
+    {
+        ntfs_inode_close(dir_ni);
+    }
+
+    return ret;
+}
+
 int ntfs_inode_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
 {
-    int ret = 0;
-
     /* Zero out the stat buffer. */
     memset(st, 0, sizeof(struct stat));
 
@@ -340,7 +526,7 @@ int ntfs_inode_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
         st->st_blocks = (ni->allocated_size + 511) >> 9;
     }
 
-    return ret;
+    return 0;
 }
 
 void ntfs_inode_update_times_filtered (ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask)

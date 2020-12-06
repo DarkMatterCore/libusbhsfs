@@ -29,9 +29,9 @@ typedef struct _ntfs_path {
     char buf[FS_MAX_PATH];                  /* Internal buffer containing the path name */
     ntfs_volume *vol;                       /* NTFS volume handle */
     ntfs_inode *parent;                     /* NTFS parent node handle */
-    const char *path;                       /* The volume path only (e.g. 'foo/bar/file.txt') */ 
+    const char *path;                       /* The volume path only (e.g. '/foo/bar/file.txt') */ 
     const char *dir;                        /* The directory path only (e.g. '/foo/bar') */
-    const char *name;                       /* The file name only (e.g. 'something.txt') */
+    const char *name;                       /* The file name only (e.g. 'file.txt') */
 } ntfs_path;
 
 ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path);
