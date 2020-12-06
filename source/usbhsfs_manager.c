@@ -35,7 +35,6 @@ static const size_t g_usbInterfacesMaxSize = (MAX_USB_INTERFACES * sizeof(UsbHsI
 
 static Thread g_usbDriveManagerThread = {0};
 static UEvent g_usbDriveManagerThreadExitEvent = {0};
-static CondVar g_usbDriveManagerThreadCondVar = 0;
 
 static UsbHsFsDriveContext *g_driveContexts = NULL;
 static u32 g_driveCount = 0;
@@ -425,9 +424,6 @@ static Result usbHsFsCreateDriveManagerThread(void)
     /* Clear thread. */
     memset(&g_usbDriveManagerThread, 0, sizeof(Thread));
     
-    /* Initialize condvar. */
-    condvarInit(&g_usbDriveManagerThreadCondVar);
-    
     /* Get process core mask. */
     rc = svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0);
     if (R_FAILED(rc))
@@ -473,11 +469,6 @@ static Result usbHsFsCloseDriveManagerThread(void)
     /* Signal user-mode drive manager thread exit event. */
     ueventSignal(&g_usbDriveManagerThreadExitEvent);
     
-    /* Wait until the drive manager thread wakes us up. */
-    /* Public functions and the background thread share the same mutex. */
-    /* Without using a condvar here, we'll deadlock ourselves by waiting for the background thread to exit, which will also lock the same mutex we have already locked. */
-    condvarWait(&g_usbDriveManagerThreadCondVar, &g_managerMutex);
-    
     /* Wait for the drive manager thread to exit. */
     rc = threadWaitForExit(&g_usbDriveManagerThread);
     if (R_FAILED(rc))
@@ -509,10 +500,10 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
         /* Check if the thread exit event has been triggered (1s timeout). */
         rc = waitSingle(thread_exit_waiter, (u64)1000000000);
         
-        mutexLock(&g_managerMutex);
-        
         /* Exit event triggered. */
         if (R_SUCCEEDED(rc)) break;
+        
+        mutexLock(&g_managerMutex);
         
         /* Get UMS mount status. */
         rc = usbFsGetMountStatus(&cur_status);
@@ -557,10 +548,6 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
     /* Update device available flag. */
     g_sxOSDeviceAvailable = false;
     
-    /* Wake up usbHsFsCloseDriveManagerThread(). */
-    mutexUnlock(&g_managerMutex);
-    condvarWakeAll(&g_usbDriveManagerThreadCondVar);
-    
     /* Exit thread. */
     threadExit();
 }
@@ -583,8 +570,6 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
         rc = waitMulti(&idx, -1, usb_if_available_waiter, usb_if_state_change_waiter, thread_exit_waiter);
         if (R_FAILED(rc)) continue;
         
-        mutexLock(&g_managerMutex);
-        
 #ifdef DEBUG
         switch(idx)
         {
@@ -604,6 +589,8 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
         
         /* Exit event triggered. */
         if (idx == 2) break;
+        
+        mutexLock(&g_managerMutex);
         
         /* Update drive contexts. */
         ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
@@ -644,10 +631,6 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
     
     /* Reset drive count. */
     g_driveCount = 0;
-    
-    /* Wake up usbHsFsCloseDriveManagerThread(). */
-    mutexUnlock(&g_managerMutex);
-    condvarWakeAll(&g_usbDriveManagerThreadCondVar);
     
     /* Exit thread. */
     threadExit();
