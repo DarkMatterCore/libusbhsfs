@@ -517,18 +517,15 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
                 /* Check if the filesystem from the UMS device is truly mounted and if we can register a devoptab interface for it. */
                 g_sxOSDeviceAvailable = (cur_status == USBFS_MOUNTED && usbfsdev_register());
                 
-                if (g_sxOSDeviceAvailable)
-                {
-                    /* Signal user-mode event. */
-                    USBHSFS_LOG("Signaling status change event.");
-                    ueventSignal(&g_usbStatusChangeEvent);
-                } else {
-                    /* Unregister devoptab device. */
-                    usbfsdev_unregister();
-                }
+                /* Unregister devoptab device, if needed. */
+                if (!g_sxOSDeviceAvailable) usbfsdev_unregister();
                 
                 /* Update previous status. */
                 prev_status = cur_status;
+                
+                /* Signal user-mode event. */
+                USBHSFS_LOG("Signaling status change event.");
+                ueventSignal(&g_usbStatusChangeEvent);
             }
         } else {
             USBHSFS_LOG("usbFsGetMountStatus failed! (0x%08X).", rc);
