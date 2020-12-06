@@ -24,79 +24,78 @@
 #include <ntfs-3g/dir.h>
 #include <ntfs-3g/reparse.h>
 
-ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
+int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
 {
-    ntfs_path ret;
-    ret.buf[0] = '\0';
-    ret.vol = vd->vol;
-    ret.parent = NULL;
-    ret.path = path;
-    ret.dir = NULL;
-    ret.name = NULL;
+    p->buf[0] = '\0';
+    p->vol = vd->vol;
+    p->parent = NULL;
+    p->path = path;
+    p->dir = NULL;
+    p->name = NULL;
 
     /* Sanity check. */
-    if (!ret.vol || !ret.path)
+    if (!p->vol || !path)
     {
         errno = EINVAL;
-        return ret;
+        return -1;
     }
 
     /* Sanity check. */
-    if (strlen(ret.path) > FS_MAX_PATH)
+    if (strlen(path) > FS_MAX_PATH)
     {
         ntfs_log_error("path \"%s\" is too long", path);
         errno = ERANGE;
-        return ret;
+        return -1;
     }
 
     /* Remove the mount prefix (e.g. "ums0:/dir/file.txt" => "/dir/file.txt"). */
-    if (strchr(ret.path, ':') != NULL)
+    if (strchr(path, ':') != NULL)
     {
-        ret.path = strchr(ret.path, ':') + 1;
+        path = strchr(path, ':') + 1;
     }
 
     /* Is this a relative path? (i.e. doesn't start with a '/') */
-    if (ret.path[0] != PATH_SEP)
+    if (path[0] != PATH_SEP)
     {
         /* Use the volumes current directory as our parent node */
-        ret.parent = vd->cwd;
+        p->parent = vd->cwd;
     }
   
     /* Copy the path to internal buffer that we can modify it. */
-    strcpy(ret.buf, ret.path);
-    if (!ret.buf)
+    strcpy(p->buf, p->path);
+    if (!p->buf)
     {
         errno = ENOMEM;
-        return ret;
+        return -1;
     }
 
     /* Split the path in to seperate directory and file name parts. */
     /* e.g. "/dir/file.txt" => dir: "/dir", name: "file.txt" */
-    char *path_sep = strrchr(ret.path, PATH_SEP);
-    if (path_sep)
+    char *buf_sep = strrchr(p->buf, PATH_SEP);
+    if (buf_sep)
     {
         /* There is a path seperator present, split the two values */
-        *(path_sep) = '\0'; /* Null terminate the string to seperate the 'dir' and 'name' components. */
-        ret.dir = ret.path; /* The directory is the first part of the path. */
-        ret.name = (path_sep + 1); /* The name is the second part of the path.  */
+        *(buf_sep) = '\0'; /* Null terminate the string to seperate the 'dir' and 'name' components. */
+        p->dir = p->buf; /* The directory is the first part of the path. */
+        p->name = (buf_sep + 1); /* The name is the second part of the path.  */
     }
     else
     {
         /* There is no path seperator present, only a file name */
-        ret.dir = "."; /* Use the current directory alias */
-        ret.name = ret.path; /* The name is the entire 'path' */
+        p->dir = "."; /* Use the current directory alias */
+        p->name = p->buf; /* The name is the entire 'path' */
     }
 
     /* Sanity check. */
-    if (ret.name && strlen(ret.name) > NTFS_MAX_NAME_LEN)
+    if (p->name && strlen(p->name) > NTFS_MAX_NAME_LEN)
     {
-        ntfs_log_error("file name \"%s\" is too long", ret.name);
+        ntfs_log_error("file name \"%s\" is too long", p->name);
         errno = ERANGE;
-        return ret;
+        return -1;
     }
     
-    ntfs_log_debug("\"%s\" -> path: \"%s\", dir: \"%s\", name: \"%s\"", path, ret.path, ret.dir, ret.name);
-    return ret;
+    ntfs_log_debug("\"%s\" -> path: \"%s\", dir: \"%s\", name: \"%s\"", path, p->path, p->dir, p->name);
+    return 0;
 }
 
 ntfs_inode *ntfs_inode_open_from_path (ntfs_vd *vd, const char *path)
@@ -208,8 +207,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     }
 
     /* Resolve the entry path */
-    full_path = ntfs_resolve_path(vd, path);
-    if (!full_path.dir || !full_path.name)
+    if (ntfs_resolve_path(vd, path, &full_path) || !full_path.dir || !full_path.name)
     {
         errno = EINVAL;
         goto end;
@@ -246,8 +244,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         case S_IFLNK:
         {
             /* Resolve the link target path */
-            target_path = ntfs_resolve_path(vd, target);
-            if (!target_path.path)
+            if (ntfs_resolve_path(vd, target, &target_path) || !target_path.path)
             {
                 errno = EINVAL;
                 goto end;
@@ -335,9 +332,8 @@ int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
     }
     
     /* Resolve the entry paths */
-    full_old_path = ntfs_resolve_path(vd, old_path);
-    full_new_path = ntfs_resolve_path(vd, new_path);
-    if (!full_old_path.path || !full_new_path.name)
+    if (ntfs_resolve_path(vd, old_path, &full_old_path) || !full_old_path.path ||
+        ntfs_resolve_path(vd, new_path, &full_new_path) || !full_new_path.dir || !full_new_path.name)
     {
         errno = EINVAL;
         goto end;
@@ -353,7 +349,7 @@ int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
 
     /* Open the entry. */
     ni = ntfs_inode_open_from_path(vd, full_old_path.path);
-    if (!dir_ni)
+    if (!ni)
     {
         goto end;
     }
@@ -366,7 +362,7 @@ int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
     }
 
     /* Link the entry to its new parent directory. */
-    ntfs_log_debug("linking inode \"%s\" to \"%s\"", full_old_path.path, full_new_path.dir);
+    ntfs_log_debug("linking inode \"%s\" to \"%s\" as \"%s\"", full_old_path.path, full_new_path.dir, full_new_path.name);
     if (ntfs_link(ni, dir_ni, uname, uname_len))
     {
         goto end;
@@ -423,8 +419,7 @@ int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
     int ret = -1;
 
     /* Resolve the entry path */
-    full_path = ntfs_resolve_path(vd, path);
-    if (!full_path.path || !full_path.dir || !full_path.name)
+    if (ntfs_resolve_path(vd, path, &full_path) || !full_path.path || !full_path.dir || !full_path.name)
     {
         errno = EINVAL;
         goto end;
@@ -437,10 +432,9 @@ int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
         errno = EINVAL;
         goto end;
     }
-
     /* Open the entry. */
     ni = ntfs_inode_open_from_path(vd, full_path.path);
-    if (!dir_ni)
+    if (!ni)
     {
         goto end;
     }

@@ -34,7 +34,7 @@ typedef struct _ntfs_path {
     const char *name;                       /* The file name only (e.g. 'file.txt') */
 } ntfs_path;
 
-ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path);
+int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p);
 
 ntfs_inode *ntfs_inode_open_from_path (ntfs_vd *vd, const char *path);
 ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, int reparse_depth);
