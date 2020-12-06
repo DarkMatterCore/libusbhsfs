@@ -187,10 +187,10 @@ s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, voi
     {
 
         // Read from the device
-        ntfs_log_trace("direct read from sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+        ntfs_log_debug("direct read from sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
         if (!ntfs_io_device_readsectors(dev, sec_start, sec_count, buf))
         {
-            ntfs_log_perror("direct read failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+            ntfs_log_error("direct read failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
             errno = EIO;
             return -1;
         }
@@ -209,10 +209,10 @@ s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, voi
         }
 
         // Read from the device
-        ntfs_log_trace("buffered read from sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+        ntfs_log_debug("buffered read from sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
         if (!ntfs_io_device_readsectors(dev, sec_start, sec_count, buffer))
         {
-            ntfs_log_perror("buffered read failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+            ntfs_log_error("buffered read failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
             free(buffer);
             errno = EIO;
             return -1;
@@ -277,10 +277,10 @@ s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, co
     if((buffer_offset == 0) && (count % dd->sectorSize == 0))
     {
         // Write to the device
-        ntfs_log_trace("direct write to sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+        ntfs_log_debug("direct write to sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
         if (!ntfs_io_device_writesectors(dev, sec_start, sec_count, buf))
         {
-            ntfs_log_perror("direct write failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+            ntfs_log_error("direct write failure @ sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
             errno = EIO;
             return -1;
         }
@@ -305,7 +305,7 @@ s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, co
         {
             if (!ntfs_io_device_readsectors(dev, sec_start, 1, buffer))
             {
-                ntfs_log_perror("read failure @ sector %li", sec_start);
+                ntfs_log_error("read failure @ sector %li", sec_start);
                 free(buffer);
                 errno = EIO;
                 return -1;
@@ -315,7 +315,7 @@ s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, co
         {
             if (!ntfs_io_device_readsectors(dev, sec_start + sec_count - 1, 1, buffer + ((sec_count-1) * dd->sectorSize)))
             {
-                ntfs_log_perror("read failure @ sector %li", sec_start + sec_count - 1);
+                ntfs_log_error("read failure @ sector %li", sec_start + sec_count - 1);
                 free(buffer);
                 errno = EIO;
                 return -1;
@@ -326,7 +326,7 @@ s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, co
         memcpy(buffer + buffer_offset, buf, count);
 
         // Write to the device
-        ntfs_log_trace("buffered write to sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
+        ntfs_log_debug("buffered write to sector %li to %li (%li)", sec_start, sec_start + sec_count, sec_count);
         if (!ntfs_io_device_writesectors(dev, sec_start, sec_count, buffer))
         {
             ntfs_log_perror("buffered write failure @ sector %li", sec_start);
@@ -500,7 +500,7 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         case BLKDISCARD: 
         {
             // TODO: Zero out the sectors
-            ntfs_log_perror("Bulk discard is not supported", request);
+            ntfs_log_error("Bulk discard is not supported", request);
             errno = EOPNOTSUPP;
             return -1;
         }
@@ -509,7 +509,7 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Unimplemented control
         default: 
         {
-            ntfs_log_perror("Unsupported ioctrl %i was requested", request);
+            ntfs_log_error("Unsupported ioctrl %i was requested", request);
             errno = EOPNOTSUPP;
             return -1;
         }

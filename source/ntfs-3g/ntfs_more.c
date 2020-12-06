@@ -92,7 +92,8 @@ ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
         errno = ERANGE;
         return ret;
     }
-
+    
+    ntfs_log_debug("\"%s\" -> path: \"%s\", dir: \"%s\", name: \"%s\"", path, ret.path, ret.dir, ret.name);
     return ret;
 }
 
@@ -125,13 +126,14 @@ ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, in
         parent = vd->cwd;
         path++; /* Skip over the '/' character. */
         ni = ntfs_pathname_to_inode(vd->vol, vd->cwd, path++);
-        ntfs_log_trace("OPEN %p \"%s\"", ni, path);
     }
 
     /* Resolve the path name of the entry. */
+    ntfs_log_debug("opening inode from path \"%s\" (parent %p)", path, parent);
     ni = ntfs_pathname_to_inode(vd->vol, parent, path);
     if (!ni) 
     {
+        ntfs_log_debug("failed to open inode from path \"%s\" (errno %i)", path, errno);
         goto end;
     }
 
@@ -163,7 +165,7 @@ ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, in
             ntfs_inode_close(ni);
 
             /* Open the target entry. */
-            ntfs_log_trace("following symlink for inode at \"%s\" => \"%s\"", path, target);
+            ntfs_log_debug("following inode symlink \"%s\" -> \"%s\"", path, target);
             ni = ntfs_inode_open_from_path_reparse(vd, target, reparse_depth++);
 
             /* Clean up. */
@@ -225,6 +227,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         case S_IFDIR:
         case S_IFREG:
         {
+            ntfs_log_debug("creating inode in directory \"%s\" named \"%s\"", full_path.dir, full_path.name);
             ni = ntfs_create(dir_ni, 0, uname, uname_len, type);
             break;
         }
@@ -233,7 +236,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         case S_IFLNK:
         {
             /* Resolve the link target path */
-            target_path = ntfs_resolve_path(vd, path);
+            target_path = ntfs_resolve_path(vd, target);
             if (!target_path.path)
             {
                 errno = EINVAL;
@@ -248,6 +251,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
                 goto end;
             }
 
+            ntfs_log_debug("creating symlink in directory \"%s\" named \"%s\" targetting \"%s\"", full_path.dir, full_path.name, target_path.path);
             ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
             break;
         }
@@ -352,6 +356,7 @@ int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
     }
 
     /* Link the entry to its new parent directory. */
+    ntfs_log_debug("linking inode \"%s\" to \"%s\"", full_old_path.path, full_new_path.dir);
     if (ntfs_link(ni, dir_ni, uname, uname_len))
     {
         goto end;
@@ -439,6 +444,7 @@ int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
 
     /* Unlink the entry from its parent. */
     /* NOTE: 'ni' is always closed after the call to this function (even if it failed) */
+    ntfs_log_debug("unlinking inode \"%s\" from \"%s\"", full_path.path, full_path.dir);
     if (ntfs_delete(vd->vol, full_path.path, ni, dir_ni, uname, uname_len))
     {
         ni = NULL;

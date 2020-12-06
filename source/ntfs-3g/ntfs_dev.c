@@ -182,6 +182,8 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         ntfs_error(ENODEV);
     }
 
+    USBHSFS_LOG("Opening file \"%s\" with flags 0x%X.", path, flags);
+    
     /* Set the file node descriptor and ensure that it is actually a file. */
     file->ni = ntfs_inode_open_from_path(file->vd, path);
     if (file->ni && (file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
@@ -302,6 +304,8 @@ int ntfsdev_close (struct _reent *r, void *fd)
     }
 #endif
 
+    USBHSFS_LOG("Closing file %lu.", file->ni->mft_no);
+    
     /* Close the file data attribute. */
     if (file->data)
     {
@@ -356,6 +360,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     /* Write to the files data atrribute length is satisfied. */
     while (len)
     {
+        USBHSFS_LOG("Writing 0x%lX byte(s) to file in %lu at offset 0x%lX.", len, file->ni->mft_no, file->pos);
         ssize_t written = ntfs_attr_pwrite(file->data, file->pos, len, ptr);
         if (written <= 0 || written > len)
         {
@@ -419,7 +424,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     if (file->pos + len > file->len)
     {
         //ntfs_error(EOVERFLOW);
-        ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length and continuing (filepos %li, filelen %li)", file->pos, file->len);
+        ntfs_log_warning("read overflow detected (file_pos %li, file_len %li). Clamping to max file length and continuing", file->pos, file->len);
         r->_errno = EOVERFLOW;
         memset(ptr, 0, len);
         len = file->len - file->pos;
@@ -428,6 +433,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     /* Read from the files data attribute until length is satisfied. */
     while (len)
     {
+        USBHSFS_LOG("Reading 0x%lX byte(s) from file in %lu at offset 0x%lX.", len, file->ni->mft_no, file->pos);
         ssize_t read = ntfs_attr_pread(file->data, file->pos, len, ptr);
         if (read <= 0 || read > len)
         {
@@ -466,6 +472,7 @@ off_t ntfsdev_seek (struct _reent *r, void *fd, off_t pos, int dir)
         default: ntfs_error(EINVAL);
     }
 
+    USBHSFS_LOG("Seeking to offset 0x%lX from file in %lu.", file->pos, file->ni->mft_no);
     ret = file->pos;
 
 end:
@@ -487,6 +494,8 @@ int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
     {
         ntfs_end;
     }
+
+    USBHSFS_LOG("Getting file stats for %lu.", file->ni->mft_no);
 
     /* Get the file stats. */
     ret = ntfs_inode_stat(file->vd, file->ni, st);
@@ -524,6 +533,8 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
         ntfs_end;
     }
 
+    USBHSFS_LOG("Getting stats for \"%s\".", path);
+
     /* Get the entry. */
     ni = ntfs_inode_open_from_path(vd, path);
     if (!ni) {
@@ -558,6 +569,8 @@ int ntfsdev_link (struct _reent *r, const char *existing, const char *newLink)
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
 
+    USBHSFS_LOG("Linking \"%s\" -> \"%s\".", existing, newLink);
+
     /* Create a symbolic link entry joining the two paths */
     ni = ntfs_inode_create(vd, existing, S_IFLNK, newLink);
     if (!ni)
@@ -585,6 +598,8 @@ int ntfsdev_unlink (struct _reent *r, const char *name)
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
 
+    USBHSFS_LOG("Deleting \"%s\".", name);
+
     /* Unlink the entry. */
     if (ntfs_inode_unlink(vd, name))
     {
@@ -605,6 +620,8 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
     ntfs_declare_error_state;
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
+
+    USBHSFS_LOG("Changing current directory to \"%s\".", name);
 
     /* Find the directory entry */
     ni = ntfs_inode_open_from_path(vd, name);
@@ -668,7 +685,8 @@ int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
         ntfs_inode_close(ni);
     }
     
-
+    USBHSFS_LOG("Renaming \"%s\" to \"%s\".", oldName, newName);
+    
     /* Link the old entry with the new one. */
     if (ntfs_inode_link(vd, oldName, newName))
     {
@@ -696,6 +714,8 @@ int ntfsdev_mkdir (struct _reent *r, const char *path, int mode)
     ntfs_declare_vol_state;
     ntfs_lock_drive_ctx;
 
+    USBHSFS_LOG("Creating directory \"%s\".", path);
+    
     /* Create the directory entry */
     ni = ntfs_inode_create(vd, path, S_IFDIR, NULL);
     if (!ni) {
@@ -767,6 +787,8 @@ int ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf)
     /* Zero out the stat buffer. */
     memset(buf, 0, sizeof(struct statvfs));
 
+    USBHSFS_LOG("Getting filesystem stats for \"%s\".", path);
+    
     /* Check available free space. */
     if(ntfs_volume_get_free_space(vd->vol) < 0)
     {
@@ -845,6 +867,8 @@ int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
         ntfs_error(EOPNOTSUPP);
     }
 
+    USBHSFS_LOG("Truncating file in %lu to 0x%lX bytes.", file->ni->mft_no, len);
+    
     /* Resize the files data attribute, either by expanding or truncating. */
     if (len > file->data->initialized_size)
     {
@@ -892,6 +916,8 @@ int ntfsdev_fsync (struct _reent *r, void *fd)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
+    USBHSFS_LOG("Synchronizing data for file in %lu.", file->ni->mft_no);
+    
     /* Sync the file (and attributes). */
     ret = ntfs_inode_sync(file->ni);
     if (ret)
