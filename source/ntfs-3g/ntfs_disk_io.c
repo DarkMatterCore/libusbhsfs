@@ -448,7 +448,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Get block device size (bytes)
         // TODO: Consider defining this
         #if defined(BLKGETSIZE64)
-        case BLKGETSIZE64: {
+        case BLKGETSIZE64: 
+        {
             *(u64*)argp = (dd->sectorCount * dd->sectorSize);
         }
         #endif
@@ -456,7 +457,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Get block device size (sectors)
         // TODO: Consider defining this
         #if defined(BLKGETSIZE)
-        case BLKGETSIZE: {
+        case BLKGETSIZE: 
+        {
             *(u32*)argp = dd->sectorCount;
         }
         #endif
@@ -464,7 +466,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Get hard drive geometry
         // TODO: Consider defining this
         #if defined(HDIO_GETGEO)
-        case HDIO_GETGEO: {
+        case HDIO_GETGEO: 
+        {
             struct hd_geometry *geo = (struct hd_geometry*)argp;
             geo->cylinders = 0;
             geo->heads = 0;
@@ -476,7 +479,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Get block device sector size (bytes)
         // TODO: Consider defining this
         #if defined(BLKSSZGET)
-        case BLKSSZGET: {
+        case BLKSSZGET: 
+        {
             *(int*)argp = dd->sectorSize;
         }
         #endif
@@ -484,7 +488,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Set block device block size (bytes)
         // TODO: Consider defining this
         #if defined(BLKBSZSET)
-        case BLKBSZSET: {
+        case BLKBSZSET: 
+        {
             dd->sectorSize = *(int*)argp;
         }
         #endif
@@ -492,7 +497,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         // Discard device sectors 
         // TODO: Consider defining this
         #if defined(BLKDISCARD)
-        case BLKDISCARD: {
+        case BLKDISCARD: 
+        {
             // TODO: Zero out the sectors
             ntfs_log_perror("Bulk discard is not supported", request);
             errno = EOPNOTSUPP;
@@ -501,7 +507,8 @@ int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
         #endif
 
         // Unimplemented control
-        default: {
+        default: 
+        {
             ntfs_log_perror("Unsupported ioctrl %i was requested", request);
             errno = EOPNOTSUPP;
             return -1;

@@ -134,7 +134,9 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* Check access mode. */
     switch(flags & O_ACCMODE)
     {
-        case O_RDONLY:  /* Read-only. Don't allow append flag. */
+        /* Read-only. Don't allow append flag. */
+        case O_RDONLY:
+        {
             if (flags & O_APPEND)
             {
                 ntfs_error_with_code(EINVAL);
@@ -143,18 +145,31 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
             file->write = false;
             file->append = false;
             break;
-        case O_WRONLY:  /* Write-only. */
+        }
+
+        /* Write-only. */
+        case O_WRONLY:
+        {
             file->read = false;
             file->write = true;
             file->append = (flags & O_APPEND);
             break;
-        case O_RDWR:    /* Read and write. */
+        }
+
+        /* Read and write. */
+        case O_RDWR:
+        {
             file->read = true;
             file->write = true;
             file->append = (flags & O_APPEND);
             break;
-        default:        /* Invalid option. */
+        }
+
+        /* Invalid option. */
+        default:
+        {
             ntfs_error_with_code(EINVAL);
+        }
     }
 
     /* Set the file volume descriptor. */
@@ -399,7 +414,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     if (file->pos + len > file->len)
     {
         //ntfs_error_with_code(EOVERFLOW);
-        ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length and continuing");
+        ntfs_log_trace("EOVERFLOW detected, clamping to maximum available length and continuing (filepos %li, filelen %li)", file->pos, file->len);
         r->_errno = EOVERFLOW;
         memset(ptr, 0, len);
         len = file->len - file->pos;
@@ -481,11 +496,49 @@ end:
 
 int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", st %p", path, st);
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Short circuit. */
+    if (!st)
+    {
+        ntfs_end;
+    }
+
+    /* Special case for current/parent directory alias'. */
+    if(strcmp(path, ".") == 0 || strcmp(path, "..") == 0)
+    {
+        memset(st, 0, sizeof(struct stat));
+        st->st_mode = S_IFDIR;
+        return 0;
+    }
+
+    /* Get the entry. */
+    ni = ntfs_inode_open_pathname(vd, path);
+    if (!ni) {
+        ntfs_error_with_code(errno);
+    }
+
+    /* Get the entry stats. */
+    ret = ntfs_stat(vd, ni, st);
+    if (ret)
+    {
+        ntfs_error_with_code(errno);
+    }
+
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_link (struct _reent *r, const char *existing, const char *newLink)

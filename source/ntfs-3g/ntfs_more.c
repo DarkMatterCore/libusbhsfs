@@ -93,6 +93,9 @@ ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int
             /* Sanity check, give up if we are parsing to deep. */
             if (reparse_depth > NTFS_MAX_SYMLINK_DEPTH)
             {
+                ntfs_log_error("inode symlink depth exceeded, giving up");
+                ntfs_inode_close(ni);
+                ni = NULL;
                 errno = ELOOP;
                 goto end;
             }
@@ -108,6 +111,7 @@ ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int
             ntfs_inode_close(ni);
 
             /* Open the target entry. */
+            ntfs_log_trace("following symlink for inode at \"%s\" => \"%s\"", path, target);
             ni = ntfs_inode_open_pathname_reparse(vd, target, reparse_depth++);
 
             /* Clean up. */
@@ -116,18 +120,6 @@ ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int
     }
 
 end:
-
-    /* If the file failed to open, clean-up */
-    if (errno && ni)
-    {
-        ntfs_log_error("inode at \"%s\" cannot be opened (errno %i)", path, errno);
-        ntfs_inode_close(ni);
-        ni = NULL;
-    }
-    else if (ni)
-    {
-        ntfs_log_trace("inode at \"%s\" opened (mtf_no %li)", path, ni->mft_no);
-    }
 
     return ni;
 }
@@ -203,6 +195,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     {
         /* Symbolic link. */
         case S_IFLNK:
+        {
             if (!target)
             {
                 errno = EINVAL;
@@ -216,17 +209,22 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
             }
             ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
             break;
+        }
 
         /* Directory or file. */
         case S_IFDIR:
         case S_IFREG:
+        {
             ni = ntfs_create(dir_ni, 0, uname, uname_len, type);
             break;
+        }
 
         /* Invalid entry. */
         default:
+        {
             errno = EINVAL;
             goto end;
+        }
     }
 
     /* If the entry was created. */
@@ -257,15 +255,15 @@ end:
         free(uname);
     }
 
-    if (dir)
-    {
-        free(dir);
-    }
-
     if (dir_ni)
     {
         ntfs_inode_sync(dir_ni);
         ntfs_inode_close(dir_ni);
+    }
+
+    if (dir)
+    {
+        free(dir);
     }
 
     return ni;

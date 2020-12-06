@@ -75,7 +75,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     if (!stat(path, &st))
     {
-        printf("OK!\n\t\t\t- Type: %s.\n\t\t\t- Timestamp: %lu.\n", st.st_mode & S_IFREG ? "file" : "dir", st.st_mtime);
+        printf("OK!\n\t\t\t- ID: %i.\n\t\t\t- Type: %s.\n\t\t\t- Size: %lu.\n\t\t\t- Timestamp: %lu.\n", st.st_ino, st.st_mode & S_IFREG ? "file" : "dir", st.st_size, st.st_mtime);
     } else {
         printf("FAILED! (%d).\n", errno);
     }
