@@ -183,7 +183,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     }
 
     /* Set the file node descriptor and ensure that it is actually a file. */
-    file->ni = ntfs_inode_open_pathname(file->vd, path);
+    file->ni = ntfs_inode_open_from_path(file->vd, path);
     if (file->ni && (file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
     {
         ntfs_error(EISDIR);
@@ -252,7 +252,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     file->len = file->data->data_size;
 
     /* Update file last access time. */
-    ntfs_update_times(file->vd, file->ni, NTFS_UPDATE_ATIME);
+    ntfs_inode_update_times_filtered(file->vd, file->ni, NTFS_UPDATE_ATIME);
 
     ret = (file->ni && file->data);
 
@@ -385,7 +385,7 @@ end:
         file->ni->flags |= FILE_ATTR_ARCHIVE;
         
         /* Update file last access and modify times. */
-        ntfs_update_times(file->vd, file->ni, NTFS_UPDATE_AMCTIME);
+        ntfs_inode_update_times_filtered(file->vd, file->ni, NTFS_UPDATE_AMCTIME);
         
         /* Update the files data length. */
         file->len = file->data->data_size;
@@ -489,7 +489,7 @@ int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
     }
 
     /* Get the file stats. */
-    ret = ntfs_stat(file->vd, file->ni, st);
+    ret = ntfs_inode_stat(file->vd, file->ni, st);
     if (ret)
     {
         ntfs_error(errno);
@@ -516,22 +516,22 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
         ntfs_end;
     }
 
-    /* Special case for current/parent directory alias'. */
+    /* Short circuit for current/parent directory alias'. */
     if(strcmp(path, ".") == 0 || strcmp(path, "..") == 0)
     {
         memset(st, 0, sizeof(struct stat));
         st->st_mode = S_IFDIR;
-        return 0;
+        ntfs_end;
     }
 
     /* Get the entry. */
-    ni = ntfs_inode_open_pathname(vd, path);
+    ni = ntfs_inode_open_from_path(vd, path);
     if (!ni) {
         ntfs_error(errno);
     }
 
     /* Get the entry stats. */
-    ret = ntfs_stat(vd, ni, st);
+    ret = ntfs_inode_stat(vd, ni, st);
     if (ret)
     {
         ntfs_error(errno);
@@ -551,47 +551,167 @@ end:
 
 int ntfsdev_link (struct _reent *r, const char *existing, const char *newLink)
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL;
     ntfs_log_trace("existing \"%s\", newLink \"%s\"", existing, newLink);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Create a symbolic link entry joining the two paths */
+    ni = ntfs_inode_create(vd, existing, S_IFLNK, newLink);
+    if (!ni)
+    {
+        ntfs_error(errno);
+    }
+
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_unlink (struct _reent *r, const char *name)
 {
+    int ret = 0;
     ntfs_log_trace("name \"%s\"", name);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Unlink the entry. */
+    if (ntfs_inode_unlink(vd, name))
+    {
+        ntfs_error(errno);
+    }
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_chdir (struct _reent *r, const char *name)
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL, *old_cwd = NULL;
     ntfs_log_trace("name \"%s\"", name);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Find the directory entry */
+    ni = ntfs_inode_open_from_path(vd, name);
+    if (!ni)
+    {
+        ntfs_error(ENOENT);
+    }
+
+    /* Ensure the entry is indeed a directory */
+    if (!(ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+    {
+        ntfs_error(ENOTDIR);
+    }
+
+    /* Swap current directories */
+    old_cwd = vd->cwd;
+    vd->cwd = ni;
+    ni = old_cwd;
+
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
 {
+    int ret = 0;
     ntfs_log_trace("oldName \"%s\", newName \"%s\"", oldName, newName);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* You cannot link entries across devices */
+    if (oldName && newName)
+    {
+        /* TODO: Check that both paths belong to the same device.
+        if (vd != ntfs_volume_from_pathname(newName))
+        {
+            errno = EXDEV;
+            goto end;
+        }
+        */
+    }
+
+    /* Check that there is no entry with the new name already */
+    ntfs_inode *ni = ntfs_inode_open_from_path(vd, newName);
+    if (ni)
+    {
+        ntfs_error(EEXIST);
+    }
+    else
+    {
+        /* Close it immediately, we don't actually need it. */
+        ntfs_inode_close(ni);
+    }
+    
+
+    /* Link the old entry with the new one. */
+    if (ntfs_inode_link(vd, oldName, newName))
+    {
+        ntfs_error(errno);
+    }
+
+    /* Unlink the old entry. */
+    if (ntfs_inode_unlink(vd, oldName))
+    {
+        ntfs_error(errno);
+    }
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_mkdir (struct _reent *r, const char *path, int mode)
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", mode %i", path, mode);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Create the directory entry */
+    ni = ntfs_inode_create(vd, path, S_IFDIR, NULL);
+    if (!ni) {
+        ntfs_error(errno);
+    }
+
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 DIR_ITER *ntfsdev_diropen (struct _reent *r, DIR_ITER *dirState, const char *path)
@@ -632,11 +752,71 @@ int ntfsdev_dirclose (struct _reent *r, DIR_ITER *dirState)
 
 int ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf)
 {
+    int ret = 0;
     ntfs_log_trace("path \"%s\", buf %p", path, buf);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Short circuit. */
+    if (!buf)
+    {
+        ntfs_end;
+    }
+
+    /* Zero out the stat buffer. */
+    memset(buf, 0, sizeof(struct statvfs));
+
+    /* Check available free space. */
+    if(ntfs_volume_get_free_space(vd->vol) < 0)
+    {
+        ntfs_error(ENOSPC);
+    }
+
+    /* File system sector size. */
+    buf->f_bsize = vd->vol->cluster_size;
+
+    /* Fundamental file system sector size. */
+    buf->f_frsize = vd->vol->cluster_size;
+
+    /* Total number of sectors in file system (in units of f_frsize). */
+    buf->f_blocks = vd->vol->nr_clusters;
+
+    /* Free sectors available for all and for non-privileged processes. */
+    s64 size = MAX(vd->vol->free_clusters, 0);
+    buf->f_bfree = buf->f_bavail = size;
+
+    /* Free inodes within the free space. */
+    int delta_bits = vd->vol->cluster_size_bits - vd->vol->mft_record_size_bits;
+    if (delta_bits >= 0)
+    {
+        size <<= delta_bits;
+    }
+    else
+    {
+        size >>= -delta_bits;
+    }
+
+    /* Total number of inodes in file system. */
+    buf->f_files = (vd->vol->mftbmp_na->allocated_size << 3) + size;
+
+    /* Free inodes available for all and for non-privileged processes. */
+    size += vd->vol->free_mft_records;
+    buf->f_ffree = buf->f_favail = MAX(size, 0);
+
+    /* File system id. */
+    buf->f_fsid = vd->id;
+
+    /* Bit mask of f_flag values. */
+    buf->f_flag = (NVolReadOnly(vd->vol) ? ST_RDONLY : 0);
+
+    /* Maximum length of file names. */
+    buf->f_namemax = NTFS_MAX_NAME_LEN;
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
@@ -694,7 +874,7 @@ end:
         file->ni->flags |= FILE_ATTR_ARCHIVE;
         
         /* Update file last access and modify times. */
-        ntfs_update_times(file->vd, file->ni, NTFS_UPDATE_AMCTIME);
+        ntfs_inode_update_times_filtered(file->vd, file->ni, NTFS_UPDATE_AMCTIME);
         
         /* Update the files data length. */
         file->len = file->data->data_size;
@@ -730,11 +910,34 @@ end:
 
 int ntfsdev_chmod (struct _reent *r, const char *path, mode_t mode)
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", mode %i", path, mode);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Get the entry. */
+    ni = ntfs_inode_open_from_path(vd, path);
+    if (!ni) {
+        ntfs_error(errno);
+    }
+
+    // TODO: Implement this...
+    //SECURITY_CONTEXT sxc; /* need to build this using info from 'vd' */
+    //ntfs_set_mode(&scx, ni, mode);
+    ntfs_error(ENOTSUP);
+   
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
@@ -744,12 +947,10 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
     ntfs_declare_error_state;
     ntfs_lock_drive_ctx;
 
-    // TODO: Consider implementing this...
-    /*
-    SECURITY_CONTEXT sxc;
-    ntfs_set_mode(&scx, file->ni, mode);
-    */
-   ntfs_error(ENOTSUP);
+    // TODO: Implement this...
+    //SECURITY_CONTEXT sxc; /* need to build this using info from 'vd' */
+    //ntfs_set_mode(&scx, file->ni, mode);
+    ntfs_error(ENOTSUP);
 
 end:
 
@@ -760,17 +961,37 @@ end:
 int ntfsdev_rmdir (struct _reent *r, const char *name)
 {
     ntfs_log_trace("name \"%s\"", name);
-
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    // TODO: Check that there is nothing extra we need to do when unlinking directories
+    return ntfsdev_unlink(r, name);
 }
 
 int ntfsdev_utimes (struct _reent *r, const char *filename, const struct timeval times[2])
 {
+    int ret = 0;
+    ntfs_inode *ni = NULL;
     ntfs_log_trace("filename \"%s\", time[0] %li, time[1] %li", filename, times[0].tv_sec, times[1].tv_sec);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Get the entry. */
+    ni = ntfs_inode_open_from_path(vd, filename);
+    if (!ni) {
+        ntfs_error(errno);
+    }
+    
+    // TODO: Implement this...
+    //u64 values[2] = times /* how to convert these? */
+    //ntfs_inode_set_times(ni, values, 2, NTFS_UPDATE_ATIME | NTFS_UPDATE_MTIME);
+    ntfs_error(ENOTSUP);
+    
+end:
+
+    /* Clean-up. */
+    if (ni) 
+    {
+        ntfs_inode_close(ni);
+    }
+
+    ntfs_return(ret);
 }

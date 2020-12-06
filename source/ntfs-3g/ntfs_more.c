@@ -86,15 +86,22 @@ ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path)
         ret.name = ret.path; /* The name is the entire 'path' */
     }
 
+    /* Sanity check. */
+    if (ret.name && strlen(ret.name) > NTFS_MAX_NAME_LEN)
+    {
+        errno = ERANGE;
+        return ret;
+    }
+
     return ret;
 }
 
-ntfs_inode *ntfs_inode_open_pathname (ntfs_vd *vd, const char *path)
+ntfs_inode *ntfs_inode_open_from_path (ntfs_vd *vd, const char *path)
 {
-    return ntfs_inode_open_pathname_reparse(vd, path, 1);
+    return ntfs_inode_open_from_path_reparse(vd, path, 1);
 }
 
-ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int reparse_depth)
+ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, int reparse_depth)
 {
     ntfs_inode *ni = NULL;
 
@@ -158,7 +165,7 @@ ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int
 
             /* Open the target entry. */
             ntfs_log_trace("following symlink for inode at \"%s\" => \"%s\"", path, target);
-            ni = ntfs_inode_open_pathname_reparse(vd, target, reparse_depth++);
+            ni = ntfs_inode_open_from_path_reparse(vd, target, reparse_depth++);
 
             /* Clean up. */
             free(target);
@@ -205,7 +212,7 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     }
 
     /* Open the parent directory this entry will be created in. */
-    dir_ni = ntfs_inode_open_pathname(vd, full_path.dir);
+    dir_ni = ntfs_inode_open_from_path(vd, full_path.dir);
     if (!dir_ni)
     {
         goto end;
@@ -256,8 +263,8 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
     if (ni && dir_ni)
     {
         /* Update the entries last modify time. */
-        ntfs_update_times(vd, ni, NTFS_UPDATE_MCTIME);
-        ntfs_update_times(vd, dir_ni, NTFS_UPDATE_MCTIME);
+        ntfs_inode_update_times_filtered(vd, ni, NTFS_UPDATE_MCTIME);
+        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
 
         /* Mark the entries as dirty. */
         NInoSetDirty(ni);
@@ -292,7 +299,7 @@ end:
     return ni;
 }
 
-int ntfs_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
+int ntfs_inode_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
 {
     int ret = 0;
 
@@ -336,7 +343,7 @@ int ntfs_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
     return ret;
 }
 
-void ntfs_update_times (ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask)
+void ntfs_inode_update_times_filtered (ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask)
 {
     /* Run the access time update strategy against the volume settings first. */
     if (vd && vd->atime == ATIME_DISABLED)

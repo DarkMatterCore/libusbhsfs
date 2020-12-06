@@ -36,13 +36,15 @@ typedef struct _ntfs_path {
 
 ntfs_path ntfs_resolve_path (ntfs_vd *vd, const char *path);
 
-ntfs_inode *ntfs_inode_open_pathname (ntfs_vd *vd, const char *path);
-ntfs_inode *ntfs_inode_open_pathname_reparse (ntfs_vd *vd, const char *path, int reparse_depth);
+ntfs_inode *ntfs_inode_open_from_path (ntfs_vd *vd, const char *path);
+ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, int reparse_depth);
 
 ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const char *target);
+int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path);
+int ntfs_inode_unlink (ntfs_vd *vd, const char *path);
 
-int ntfs_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st);
-void ntfs_update_times (ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask);
+int ntfs_inode_stat (ntfs_vd *vd, ntfs_inode *ni, struct stat *st);
+void ntfs_inode_update_times_filtered (ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask);
 
 int ntfs_unicode_to_local (const ntfschar *ins, const int ins_len, char **outs, int outs_len);
 int ntfs_local_to_unicode (const char *ins, ntfschar **outs);
