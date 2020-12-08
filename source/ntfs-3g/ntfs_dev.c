@@ -198,6 +198,35 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     file->ni = ntfs_inode_open_from_path(file->vd, path);
     if (!file->ni)
     {
+        /* File doesn't exist, were we suppose to create it? */
+        if ((flags & O_CREAT))
+        {
+            /* Create + exclusive when the file already exists is not allowed */
+            if ((flags & O_EXCL))
+            {
+                ntfs_error(EEXIST)
+            }
+            else
+            {
+                /* Create the file */
+                ntfs_log_debug("node \"%s\" does not exist, will create it now", path);
+                file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
+                if (!file->ni)
+                {
+                    ntfs_error(errno);
+                }
+            }  
+        }
+        else
+        {
+            /* Can't open file, does not exist. */
+            ntfs_error(ENOENT);
+        }
+    }
+
+    /* Sanity check, the file should be open by now. */
+    if (!file->ni)
+    {
         ntfs_error(ENOENT);
     }
 
@@ -205,33 +234,6 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     if ((file->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
     {
         ntfs_error(EISDIR);
-    }
-
-    /* Are we creating this file? */
-    if ((flags & O_CREAT))
-    {
-        /* Create + exclusive when the file already exists is not allowed */
-        if ((flags & O_EXCL) && file->ni)
-        {
-            ntfs_error(EEXIST)
-        }
-        
-        /* Create the file if it doesn't exist yet */
-        else if (!file->ni)
-        {
-            ntfs_log_debug("node \"%s\" does not exist, will create it now", path);
-            file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
-            if (!file->ni)
-            {
-                ntfs_error(errno);
-            }
-        }  
-    }
-
-    /* Sanity check, the file should be open by now. */
-    if (!file->ni)
-    {
-        ntfs_error(ENOENT);
     }
 
     /* Open the files data attribute. */
@@ -820,7 +822,10 @@ end:
             while (dir->first)
             {
                 ntfs_dir_entry *next = dir->first->next;
-                free(dir->first->name);
+                if (dir->first->name)
+                {
+                    free(dir->first->name);
+                }
                 free(dir->first);
                 dir->first = next;
             }
@@ -985,13 +990,16 @@ int ntfsdev_dirnext (struct _reent *r, DIR_ITER *dirState, char *filename, struc
     ntfs_lock_drive_ctx;
 
     /* Check that there is a entry waiting to be fetched (end of directory). */
-    if (!dir->current)
+    if (!dir->current || !dir->current->name)
     {
         ntfs_error(ENOENT);
     }
 
     // Fetch the current entry
-    strcpy(filename, dir->current->name);
+    if (filename != NULL)
+    {
+        strcpy(filename, dir->current->name);
+    }
     if(filestat != NULL)
     {
         /* Is this entry a self or parent directory alias? */
@@ -1037,19 +1045,16 @@ int ntfsdev_dirclose (struct _reent *r, DIR_ITER *dirState)
     ntfs_declare_dir_state;
     ntfs_lock_drive_ctx;
 
-    /* If the directory is dirty, sync it (and attributes). */
-    if(NInoDirty(dir->ni))
-    {
-        ntfs_inode_sync(dir->ni);
-    }
-
     USBHSFS_LOG("Closing directory %lu.", dir->ni->mft_no);
     
     /* Free the directory entries (if any). */
     while (dir->first)
     {
         ntfs_dir_entry *next = dir->first->next;
-        free(dir->first->name);
+        if (dir->first->name)
+        {
+            free(dir->first->name);
+        }
         free(dir->first);
         dir->first = next;
     }
