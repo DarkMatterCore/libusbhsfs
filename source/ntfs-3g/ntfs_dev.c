@@ -16,34 +16,38 @@
 #include "ntfs_more.h"
 #include "ntfs_dev.h"
 
+#include <ntfs-3g/dir.h>
+
 #include "../usbhsfs_utils.h"
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_drive.h"
 #include "../usbhsfs_mount.h"
 
-static int       ntfsdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode);
-static int       ntfsdev_close(struct _reent *r, void *fd);
-static ssize_t   ntfsdev_write(struct _reent *r, void *fd, const char *ptr, size_t len);
-static ssize_t   ntfsdev_read(struct _reent *r, void *fd, char *ptr, size_t len);
-static off_t     ntfsdev_seek(struct _reent *r, void *fd, off_t pos, int dir);
-static int       ntfsdev_fstat(struct _reent *r, void *fd, struct stat *st);
-static int       ntfsdev_stat(struct _reent *r, const char *file, struct stat *st);
-static int       ntfsdev_link(struct _reent *r, const char *existing, const char *newLink);
-static int       ntfsdev_unlink(struct _reent *r, const char *name);
-static int       ntfsdev_chdir(struct _reent *r, const char *name);
-static int       ntfsdev_rename(struct _reent *r, const char *oldName, const char *newName);
-static int       ntfsdev_mkdir(struct _reent *r, const char *path, int mode);
-static DIR_ITER* ntfsdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path);
-static int       ntfsdev_dirreset(struct _reent *r, DIR_ITER *dirState);
-static int       ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat);
-static int       ntfsdev_dirclose(struct _reent *r, DIR_ITER *dirState);
-static int       ntfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf);
-static int       ntfsdev_ftruncate(struct _reent *r, void *fd, off_t len);
-static int       ntfsdev_fsync(struct _reent *r, void *fd);
-static int       ntfsdev_chmod(struct _reent *r, const char *path, mode_t mode);
-static int       ntfsdev_fchmod(struct _reent *r, void *fd, mode_t mode);
-static int       ntfsdev_rmdir(struct _reent *r, const char *name);
-static int       ntfsdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2]);
+static int       ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int mode);
+static int       ntfsdev_close (struct _reent *r, void *fd);
+static ssize_t   ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len);
+static ssize_t   ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len);
+static off_t     ntfsdev_seek (struct _reent *r, void *fd, off_t pos, int dir);
+static int       ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st);
+static int       ntfsdev_stat (struct _reent *r, const char *file, struct stat *st);
+static int       ntfsdev_link (struct _reent *r, const char *existing, const char *newLink);
+static int       ntfsdev_unlink (struct _reent *r, const char *name);
+static int       ntfsdev_chdir (struct _reent *r, const char *name);
+static int       ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName);
+static int       ntfsdev_mkdir (struct _reent *r, const char *path, int mode);
+static DIR_ITER* ntfsdev_diropen (struct _reent *r, DIR_ITER *dirState, const char *path);
+static int       ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int name_len, const int name_type,
+                                          const s64 pos, const MFT_REF mref, const unsigned dt_type);
+static int       ntfsdev_dirreset (struct _reent *r, DIR_ITER *dirState);
+static int       ntfsdev_dirnext (struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat);
+static int       ntfsdev_dirclose (struct _reent *r, DIR_ITER *dirState);
+static int       ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf);
+static int       ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len);
+static int       ntfsdev_fsync (struct _reent *r, void *fd);
+static int       ntfsdev_chmod (struct _reent *r, const char *path, mode_t mode);
+static int       ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode);
+static int       ntfsdev_rmdir (struct _reent *r, const char *name);
+static int       ntfsdev_utimes (struct _reent *r, const char *filename, const struct timeval times[2]);
 
 static const devoptab_t ntfsdev_devoptab = {
     .name         = NULL,
@@ -81,6 +85,8 @@ const devoptab_t *ntfsdev_get_devoptab()
     return &ntfsdev_devoptab;
 }
 
+/* Helper macros to reduce code duplication and ensure consistency between all devoptab functions */
+
 #define ntfs_end                        goto end;
 #define ntfs_error(x)                   r->_errno = _errno = x; ntfs_end;
 #define ntfs_ended_with_error           (_errno != 0)
@@ -88,7 +94,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 #define ntfs_declare_error_state        int _errno = 0; 
 #define ntfs_declare_vol_state          ntfs_vd *vd = ((UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData)->ntfs;
 #define ntfs_declare_file_state         ntfs_file_state *file = ((ntfs_file_state*) fd);
-#define ntfs_declare_dir_state          ntfs_file_state *dir = ((ntfs_dir_state*) dirState);
+#define ntfs_declare_dir_state          ntfs_dir_state *dir = ((ntfs_dir_state*) dirState);
 
 #define ntfs_lock_drive_ctx             UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData; \
                                         UsbHsFsDriveContext *drive_ctx = ntfsdev_get_drive_ctx_and_lock(&fs_ctx); \
@@ -100,6 +106,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 #define ntfs_unlock_drive_ctx           if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
 
 #define ntfs_return(x)                  return (ntfs_ended_with_error) ? -1 : x
+#define ntfs_return_ptr(x)              return (ntfs_ended_with_error) ? NULL : x
 
 static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
 {
@@ -117,7 +124,10 @@ static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUn
         
         /* Get pointer to the drive context and lock its mutex. */
         drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-        if (drive_ctx) mutexLock(&(drive_ctx->mutex));
+        if (drive_ctx)
+        {
+            mutexLock(&(drive_ctx->mutex));
+        }
     }
     
     /* Unlock drive manager mutex. */
@@ -128,11 +138,18 @@ static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUn
 int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
     int ret = 0;
-    ntfs_log_trace("fileStruct %p, path \"%s\", flags %i, mode %i", (void *) fd, path, flags, mode);
+    ntfs_log_trace("fd %p, path \"%s\", flags %i, mode %i", fd, path, flags, mode);
     ntfs_declare_error_state;
     ntfs_declare_vol_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
+
+    /* Setup the file descriptor. */
+    file->vd = vd;
+    if (!file->vd)
+    {
+        ntfs_error(ENODEV);
+    }
 
     /* Check access mode. */
     switch(flags & O_ACCMODE)
@@ -175,18 +192,17 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         }
     }
 
-    /* Set the file volume descriptor. */
-    file->vd = vd;
-    if (!file->vd)
-    {
-        ntfs_error(ENODEV);
-    }
-
     USBHSFS_LOG("Opening file \"%s\" with flags 0x%X.", path, flags);
     
-    /* Set the file node descriptor and ensure that it is actually a file. */
+    /* Open the file */
     file->ni = ntfs_inode_open_from_path(file->vd, path);
-    if (file->ni && (file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
+    if (!file->ni)
+    {
+        ntfs_error(ENOENT);
+    }
+
+    /* Ensure that this is not a directory */
+    if ((file->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
     {
         ntfs_error(EISDIR);
     }
@@ -238,6 +254,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* Make sure we aren't trying to write to a read-only file. */
     if ((file->ni->flags & FILE_ATTR_READONLY) && file->write)
     {
+        // TODO: Consider making this configurable with a mount flag (i.e. USB_MOUNT_ALLOW_WRITING_TO_READ_ONLY_FILES)
         ntfs_error(EROFS);
     }
 
@@ -526,8 +543,8 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
         ntfs_end;
     }
 
-    /* Short circuit for current/parent directory alias'. */
-    if(strcmp(path, ".") == 0 || strcmp(path, "..") == 0)
+    /* Short circuit for self and parent directory references. */
+    if(strcmp(path, NTFS_ENTRY_NAME_SELF) == 0 || strcmp(path, NTFS_ENTRY_NAME_PARENT) == 0)
     {
         memset(st, 0, sizeof(struct stat));
         st->st_mode = S_IFDIR;
@@ -642,6 +659,16 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
     vd->cwd = ni;
     ni = old_cwd;
 
+    // TODO: Update the fs_ctx cwd path
+    /*
+    cwd_len = strlen(fs_ctx->cwd);
+    if (fs_ctx->cwd[cwd_len - 1] != '/')
+    {
+        fs_ctx->cwd[cwd_len] = '/';
+        fs_ctx->cwd[cwd_len + 1] = '\0';
+    }
+    */
+
 end:
 
     /* Clean-up. */
@@ -695,6 +722,7 @@ int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
     }
 
     /* Unlink the old entry. */
+    // TODO: Is this required?
     if (ntfs_inode_unlink(vd, oldName))
     {
         ntfs_error(errno);
@@ -737,38 +765,308 @@ end:
 
 DIR_ITER *ntfsdev_diropen (struct _reent *r, DIR_ITER *dirState, const char *path)
 {
+    DIR_ITER *ret = NULL;
     ntfs_log_trace("dirState %p, path \"%s\"", dirState, path);
+    ntfs_declare_error_state;
+    ntfs_declare_vol_state;
+    ntfs_declare_dir_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return NULL;
+    /* Setup the directory descriptor. */
+    dir->vd = vd;
+    if (!dir->vd)
+    {
+        ntfs_error(ENODEV);
+    }
+
+    USBHSFS_LOG("Opening directory \"%s\".", path);
+    
+    /* Open the directory. */
+    dir->ni = ntfs_inode_open_from_path(dir->vd, path);
+    if (!dir->ni)
+    {
+        ntfs_error(ENOENT);
+    }
+
+    /* Ensure that this is indeed a directory. */
+    if (!(dir->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+    {
+        ntfs_error(ENOTDIR);
+    }
+
+    /* Read the directory contents. */
+    s64 position = 0;
+    dir->first = dir->current = NULL;
+    if (ntfs_readdir(dir->ni, &position, dirState, (ntfs_filldir_t) ntfsdev_diropen_filldir))
+    {
+        ntfs_error(errno);
+    }
+
+    /* Move to the first entry in the directory. */
+    dir->current = dir->first;
+
+    /* Update directory last access time. */
+    ntfs_inode_update_times_filtered(dir->vd, dir->ni, NTFS_UPDATE_ATIME);
+
+    ret = dirState;
+
+end:
+
+    /* If the directory failed to open, clean-up. */
+    if (ntfs_ended_with_error)
+    {
+        if (dir && dir->first)
+        {
+            while (dir->first)
+            {
+                ntfs_dir_entry *next = dir->first->next;
+                free(dir->first->name);
+                free(dir->first);
+                dir->first = next;
+            }
+        }
+        if (dir && dir->ni)
+        {
+            ntfs_inode_close(dir->ni);
+            dir->ni = NULL;
+        }
+    }
+    
+    ntfs_unlock_drive_ctx;
+    ntfs_return_ptr(ret);
+}
+
+/**
+ * Custom callback for directory walking
+ * NOTE: This function assumes there is an exclusive volume lock in place already
+ */
+int ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int name_len, const int name_type,
+                             const s64 pos, const MFT_REF mref, const unsigned dt_type)
+{
+    int ret = 0;
+    ntfs_inode *ni = NULL;
+    ntfs_dir_entry *entry = NULL;
+    char *entry_name = NULL;
+    ntfs_log_trace("dirState %p, name_len %i, name_type %i, pos %li, mref %lu, dt_type %i", dirState, name_len, name_type, pos, mref, dt_type);
+    ntfs_declare_error_state;
+    ntfs_declare_dir_state;
+
+    /* Ignore DOS file names. */
+    // TODO: Remove this?
+    if (name_type == FILE_NAME_DOS)
+    {
+        /* Skip over this entry */
+        ntfs_end;
+    }
+
+    /* Check that this entry can be enumerated (as described by the volume descriptor). */
+    if (MREF(mref) < FILE_first_user && MREF(mref) != FILE_root && !dir->vd->showSystemFiles)
+    {
+        /* Skip over this entry */
+        ntfs_end;
+    }
+
+    /* Convert the entry name from unicode in to our current local. */
+    if (ntfs_unicode_to_local(name, name_len, &entry_name, 0) < 0)
+    {
+        _errno = errno;
+        ntfs_end;
+    }
+
+    /* You can't navigate higher than the top-most directory (root) */
+    if(dir->first && dir->first->mref == FILE_root && MREF(mref) == FILE_root && strcmp(entry_name, NTFS_ENTRY_NAME_PARENT) == 0)
+    {
+        /* Skip over this entry */
+        ntfs_end;
+    }
+
+    /* If this is not the self or parent directory references. */
+    if ((strcmp(entry_name, NTFS_ENTRY_NAME_SELF) != 0) && (strcmp(entry_name, NTFS_ENTRY_NAME_PARENT) != 0))
+    {
+        /* Open the entry. */
+        ntfs_inode *ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, entry_name);
+        if (!ni)
+        {
+            _errno = errno;
+            ntfs_end;
+        }
+
+        /* Check that this entry can be emuerated (as described by the volume descriptor). */
+        if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->showHiddenFiles) ||
+            ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->showSystemFiles))
+        {
+            /* Skip over this entry */
+            ntfs_end;
+        }
+    }
+
+    ntfs_log_trace("found dir entry mref %li \"%s\"", mref, entry_name);
+
+    /* Allocate a new directory entry. */
+    entry = (ntfs_dir_entry *) malloc(sizeof(ntfs_dir_entry));
+    if (!entry)
+    {
+        _errno = ENOMEM;
+        ntfs_end;
+    }
+
+    /* Setup the directory entry. */
+    entry->mref = MREF(mref);
+    entry->name = entry_name;
+    entry->next = NULL;
+
+    /* Link the entry to the directory entries list. */
+    if (!dir->first)
+    {
+        dir->first = entry;
+    } 
+    else
+    {
+        ntfs_dir_entry *last = dir->first;
+        while (last->next)
+        {
+            last = last->next;
+        }
+        last->next = entry;
+    }
+
+end:
+
+    /* Clean-up. */
+    if (ni)
+    {
+        ntfs_inode_close(ni);
+    }
+
+    /* If we failed to enumerate the entry. */
+    if (ntfs_ended_with_error)
+    {
+        if (entry_name)
+        {
+            free(entry_name);
+        }
+        if (entry)
+        {
+            free(entry);
+        }
+    }
+
+    ntfs_return(ret);
 }
 
 int ntfsdev_dirreset (struct _reent *r, DIR_ITER *dirState)
 {
+    int ret = 0;
     ntfs_log_trace("dirState %p", dirState);
+    ntfs_declare_error_state;
+    ntfs_declare_dir_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    USBHSFS_LOG("Resetting directory state from %lu.", dir->ni->mft_no);
+    
+    /* Move to the first entry in the directory. */
+    dir->current = dir->first;
+
+    /* Update directory last access time. */
+    ntfs_inode_update_times_filtered(dir->vd, dir->ni, NTFS_UPDATE_ATIME);
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_dirnext (struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
 {
+    int ret = 0;
     ntfs_log_trace("dirState %p, filename %p, filestat %p", dirState, filename, filestat);
+    ntfs_declare_error_state;
+    ntfs_declare_dir_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* Check that there is a entry waiting to be fetched (end of directory). */
+    if (!dir->current)
+    {
+        ntfs_error(ENOENT);
+    }
+
+    // Fetch the current entry
+    strcpy(filename, dir->current->name);
+    if(filestat != NULL)
+    {
+        /* Is this entry a self or parent directory alias? */
+        if(strcmp(dir->current->name, NTFS_ENTRY_NAME_SELF) == 0 || strcmp(dir->current->name, NTFS_ENTRY_NAME_PARENT) == 0)
+        {
+            memset(filestat, 0, sizeof(struct stat));
+            filestat->st_mode = S_IFDIR;
+        }
+
+        /* Otherwise, must be a regular node */
+        else
+        {
+            ntfs_inode *ni = ntfs_inode_open_from_path(dir->vd, dir->current->name);
+            if (!ni)
+            {
+                /* Reached end of directory */
+                dir->current = NULL;
+                ntfs_error(errno);
+            }
+
+            ntfs_inode_stat(dir->vd, ni, filestat);
+            ntfs_inode_close(ni);
+        }
+    }
+
+    /* Move to the next entry in the directory. */
+    dir->current = dir->current->next;
+
+    /* Update directory last access time. */
+    ntfs_inode_update_times_filtered(dir->vd, dir->ni, NTFS_UPDATE_ATIME);
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_dirclose (struct _reent *r, DIR_ITER *dirState)
 {
+    int ret = 0;
     ntfs_log_trace("dirState %p", dirState);
+    ntfs_declare_error_state;
+    ntfs_declare_dir_state;
+    ntfs_lock_drive_ctx;
 
-    // TODO: This...
-    errno = ENOTSUP;
-    return -1;
+    /* If the directory is dirty, sync it (and attributes). */
+    if(NInoDirty(dir->ni))
+    {
+        ntfs_inode_sync(dir->ni);
+    }
+
+    USBHSFS_LOG("Closing directory %lu.", dir->ni->mft_no);
+    
+    /* Free the directory entries (if any). */
+    while (dir->first)
+    {
+        ntfs_dir_entry *next = dir->first->next;
+        free(dir->first->name);
+        free(dir->first);
+        dir->first = next;
+    }
+
+    /* Close the directory node. */
+    if (dir->ni)
+    {
+        ntfs_inode_close(dir->ni);
+    }
+
+    /* Reset the directory state. */
+    memset(dir, 0, sizeof(ntfs_dir_state));
+
+end:
+
+    ntfs_unlock_drive_ctx;
+    ntfs_return(ret);
 }
 
 int ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf)

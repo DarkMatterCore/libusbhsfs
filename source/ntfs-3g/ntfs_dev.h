@@ -45,9 +45,9 @@ typedef struct _ntfs_file_state {
  * ntfs_dir_entry - Directory entry
  */
 typedef struct _ntfs_dir_entry {
-    char *name;
-    u64 mref;
-    struct _ntfs_dir_entry *next;
+    u64 mref;                               /* Entry file system record number */
+    char *name;                             /* Entry name */
+    struct _ntfs_dir_entry *next;           /* Next entry in the directory */
 } ntfs_dir_entry;
 
 /**
@@ -60,6 +60,6 @@ typedef struct _ntfs_dir_state {
     ntfs_dir_entry *current;                /* The current entry in the directory */
 } ntfs_dir_state;
 
-const devoptab_t *ntfsdev_get_devoptab();
+const devoptab_t *ntfsdev_get_devoptab ();
 
 #endif  /* __NTFS_DEV_H__ */

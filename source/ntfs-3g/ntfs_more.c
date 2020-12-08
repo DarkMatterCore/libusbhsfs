@@ -57,8 +57,13 @@ int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
     /* Is this a relative path? (i.e. doesn't start with a '/') */
     if (path[0] != PATH_SEP)
     {
-        /* Use the volumes current directory as our parent node */
+        /* Use the volumes current directory as our parent node. */
         p->parent = vd->cwd;
+    }
+    else
+    {
+        /* Use the volumes top-most directory (root) as our parent node. */
+        // TODO: p->parent = MREF(FILE_root)
     }
   
     /* Copy the path to internal buffer that we can modify it. */
@@ -82,7 +87,7 @@ int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
     else
     {
         /* There is no path seperator present, only a file name */
-        p->dir = "."; /* Use the current directory alias */
+        p->dir = NTFS_ENTRY_NAME_SELF; /* Use the self directory reference */
         p->name = p->buf; /* The name is the entire 'path' */
     }
 
@@ -118,7 +123,7 @@ ntfs_inode *ntfs_inode_open_from_path_reparse (ntfs_vd *vd, const char *path, in
     if ((path[0] == '\0') ||
         (path[0] == PATH_SEP && path[1] == '\0'))
     {
-        path = ".";
+        path = NTFS_ENTRY_NAME_SELF;
     }
 
     /* If the path starts with '/', resolve as an absolute path from the top-most directory (root). */
@@ -432,6 +437,7 @@ int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
         errno = EINVAL;
         goto end;
     }
+
     /* Open the entry. */
     ni = ntfs_inode_open_from_path(vd, full_path.path);
     if (!ni)

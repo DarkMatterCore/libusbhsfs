@@ -20,6 +20,9 @@
 
 #include "ntfs.h"
 
+#define NTFS_ENTRY_NAME_SELF                "." /* Current directory */
+#define NTFS_ENTRY_NAME_PARENT              ".." /* Parent directory */
+
 #define NTFS_MAX_SYMLINK_DEPTH              10 /* Maximum search depth when resolving symbolic links */
 
 /*
