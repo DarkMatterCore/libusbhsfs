@@ -196,44 +196,40 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     
     /* Open the file */
     file->ni = ntfs_inode_open_from_path(file->vd, path);
-    if (!file->ni)
+    if (file->ni)
     {
-        /* File doesn't exist, were we suppose to create it? */
+        /* The file already exists, check flags. */
+        /* Create + exclusive when the file already exists should throw "file exists" error */
+        if ((flags & O_CREAT) && (flags & O_EXCL))
+        {
+            ntfs_error(EEXIST)
+        }
+        
+        /* Ensure that this file is not actually a directory */
+        if ((file->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+        {
+            ntfs_error(EISDIR);
+        }
+    }
+    else
+    {
+        /* The file doesn't exist yet, check flags. */
+        /* Were we suppose to create this file? */
         if ((flags & O_CREAT))
         {
-            /* Create + exclusive when the file already exists is not allowed */
-            if ((flags & O_EXCL))
+            /* Create the file */
+            ntfs_log_debug("node \"%s\" does not exist, will create it now", path);
+            file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
+            if (!file->ni)
             {
-                ntfs_error(EEXIST)
+                ntfs_error(errno);
             }
-            else
-            {
-                /* Create the file */
-                ntfs_log_debug("node \"%s\" does not exist, will create it now", path);
-                file->ni = ntfs_inode_create(file->vd, path, S_IFREG, NULL);
-                if (!file->ni)
-                {
-                    ntfs_error(errno);
-                }
-            }  
         }
         else
         {
             /* Can't open file, does not exist. */
             ntfs_error(ENOENT);
         }
-    }
-
-    /* Sanity check, the file should be open by now. */
-    if (!file->ni)
-    {
-        ntfs_error(ENOENT);
-    }
-
-    /* Ensure that this is not a directory */
-    if ((file->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
-    {
-        ntfs_error(EISDIR);
     }
 
     /* Open the files data attribute. */
