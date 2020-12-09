@@ -34,28 +34,28 @@ int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
     p->name = NULL;
 
     /* Sanity check. */
-    if (!p->vol || !path)
+    if (!p->vol || !p->path)
     {
         errno = EINVAL;
         return -1;
     }
 
     /* Sanity check. */
-    if (strlen(path) > FS_MAX_PATH)
+    if (strlen(p->path) > FS_MAX_PATH)
     {
-        ntfs_log_error("path \"%s\" is too long", path);
+        ntfs_log_error("path \"%s\" is too long", p->path);
         errno = ERANGE;
         return -1;
     }
 
     /* Remove the mount prefix (e.g. "ums0:/dir/file.txt" => "/dir/file.txt"). */
-    if (strchr(path, ':') != NULL)
+    if (strchr(p->path, ':') != NULL)
     {
-        path = strchr(path, ':') + 1;
+        p->path = strchr(p->path, ':') + 1;
     }
 
     /* Is this a relative path? (i.e. doesn't start with a '/') */
-    if (path[0] != PATH_SEP)
+    if (p->path[0] != PATH_SEP)
     {
         /* Use the volumes current directory as our parent node. */
         p->parent = vd->cwd;

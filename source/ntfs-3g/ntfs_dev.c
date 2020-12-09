@@ -94,7 +94,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 #define ntfs_declare_error_state        int _errno = 0; 
 #define ntfs_declare_vol_state          ntfs_vd *vd = ((UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData)->ntfs;
 #define ntfs_declare_file_state         ntfs_file_state *file = ((ntfs_file_state*) fd);
-#define ntfs_declare_dir_state          ntfs_dir_state *dir = ((ntfs_dir_state*) dirState);
+#define ntfs_declare_dir_state          ntfs_dir_state *dir = ((ntfs_dir_state*) dirState->dirStruct);
 
 #define ntfs_lock_drive_ctx             UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*) r->deviceData; \
                                         UsbHsFsDriveContext *drive_ctx = ntfsdev_get_drive_ctx_and_lock(&fs_ctx); \
@@ -206,7 +206,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         }
         
         /* Ensure that this file is not actually a directory */
-        if ((file->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+        if ((file->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
         {
             ntfs_error(EISDIR);
         }
@@ -647,7 +647,7 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
     }
 
     /* Ensure the entry is indeed a directory */
-    if (!(ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+    if (!(ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
     {
         ntfs_error(ENOTDIR);
     }
@@ -787,7 +787,7 @@ DIR_ITER *ntfsdev_diropen (struct _reent *r, DIR_ITER *dirState, const char *pat
     }
 
     /* Ensure that this is indeed a directory. */
-    if (!(dir->ni->mrec->flags && MFT_RECORD_IS_DIRECTORY))
+    if (!(dir->ni->mrec->flags & MFT_RECORD_IS_DIRECTORY))
     {
         ntfs_error(ENOTDIR);
     }
