@@ -276,26 +276,6 @@ ntfs_inode *ntfs_inode_create (ntfs_vd *vd, const char *path, mode_t type, const
         }
     }
 
-    /* If the new entry was created. */
-    if (ni && dir_ni)
-    {
-        /* Update the entries last modify time. */
-        ntfs_inode_update_times_filtered(vd, ni, NTFS_UPDATE_MCTIME);
-        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
-
-        /* Mark the entries as dirty. */
-        NInoSetDirty(ni);
-        NInoSetDirty(dir_ni);
-
-        /* Mark the entries for archiving. */
-        ni->flags |= FILE_ATTR_ARCHIVE;
-        dir_ni->flags |= FILE_ATTR_ARCHIVE;
-        
-        /* Sync the entries (and attributes). */
-        ntfs_inode_sync(ni);
-        ntfs_inode_sync(dir_ni);
-    }
-
 end:
 
     if (utarget)
@@ -368,32 +348,7 @@ int ntfs_inode_link (ntfs_vd *vd, const char *old_path, const char *new_path)
 
     /* Link the entry to its new parent directory. */
     ntfs_log_debug("linking inode \"%s\" to \"%s\" as \"%s\"", full_old_path.path, full_new_path.dir, full_new_path.name);
-    if (ntfs_link(ni, dir_ni, uname, uname_len))
-    {
-        goto end;
-    }
-
-    /* If the new entry was created. */
-    if (ni && dir_ni)
-    {
-        /* Update the entries last modify time. */
-        ntfs_inode_update_times_filtered(vd, ni, NTFS_UPDATE_MCTIME);
-        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
-
-        /* Mark the entries as dirty. */
-        NInoSetDirty(ni);
-        NInoSetDirty(dir_ni);
-
-        /* Mark the entries for archiving. */
-        ni->flags |= FILE_ATTR_ARCHIVE;
-        dir_ni->flags |= FILE_ATTR_ARCHIVE;
-        
-        /* Sync the entries (and attributes). */
-        ntfs_inode_sync(ni);
-        ntfs_inode_sync(dir_ni);
-    }
-
-    ret = 0;
+    ret = ntfs_link(ni, dir_ni, uname, uname_len);
 
 end:
 

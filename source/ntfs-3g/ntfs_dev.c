@@ -353,6 +353,12 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
+    /* Sanity check. */
+    if (!file->ni || !file->data)
+    {
+        ntfs_error(EINVAL);
+    }
+
     /* Short circuit. */
     if (!ptr || len <= 0)
     {
@@ -423,6 +429,12 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     ntfs_declare_error_state;
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
+
+    /* Sanity check. */
+    if (!file->ni || !file->data)
+    {
+        ntfs_error(EINVAL);
+    }
 
     /* Short circuit. */
     if (!ptr || len <= 0)
@@ -505,6 +517,12 @@ int ntfsdev_fstat (struct _reent *r, void *fd, struct stat *st)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
+    /* Sanity check. */
+    if (!file->ni)
+    {
+        ntfs_error(EINVAL);
+    }
+
     /* Short circuit. */
     if (!st)
     {
@@ -553,7 +571,8 @@ int ntfsdev_stat (struct _reent *r, const char *path, struct stat *st)
 
     /* Get the entry. */
     ni = ntfs_inode_open_from_path(vd, path);
-    if (!ni) {
+    if (!ni)
+    {
         ntfs_error(errno);
     }
 
@@ -720,7 +739,6 @@ int ntfsdev_rename (struct _reent *r, const char *oldName, const char *newName)
     }
 
     /* Unlink the old entry. */
-    // TODO: Is this required?
     if (ntfs_inode_unlink(vd, oldName))
     {
         ntfs_error(errno);
@@ -853,7 +871,6 @@ int ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int
     ntfs_declare_dir_state;
 
     /* Ignore DOS file names. */
-    // TODO: Remove this?
     if (name_type == FILE_NAME_DOS)
     {
         /* Skip over this entry */
@@ -1149,6 +1166,12 @@ int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
     ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
+    /* Sanity check. */
+    if (!file->ni || !file->data)
+    {
+        ntfs_error(EINVAL);
+    }
+
     /* Make sure length is non-negative. */
     if (len < 0)
     {
@@ -1218,6 +1241,12 @@ int ntfsdev_fsync (struct _reent *r, void *fd)
 
     USBHSFS_LOG("Synchronizing data for file in %lu.", file->ni->mft_no);
     
+    /* Sanity check. */
+    if (!file->ni)
+    {
+        ntfs_error(EINVAL);
+    }
+
     /* Sync the file (and attributes). */
     ret = ntfs_inode_sync(file->ni);
     if (ret)
@@ -1249,7 +1278,7 @@ int ntfsdev_chmod (struct _reent *r, const char *path, mode_t mode)
         ntfs_error(errno);
     }
 
-    // TODO: Implement this...
+    // TODO: Consider implementing this this.
     //SECURITY_CONTEXT sxc; /* need to build this using info from 'vd' */
     //ntfs_set_mode(&scx, ni, mode);
     ntfs_error(ENOTSUP);
@@ -1273,7 +1302,13 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
     ntfs_declare_error_state;
     ntfs_lock_drive_ctx;
 
-    // TODO: Implement this...
+    /* Sanity check. */
+    if (!file->ni)
+    {
+        ntfs_error(EINVAL);
+    }
+
+    // TODO: Consider implementing this this.
     //SECURITY_CONTEXT sxc; /* need to build this using info from 'vd' */
     //ntfs_set_mode(&scx, file->ni, mode);
     ntfs_error(ENOTSUP);
@@ -1287,7 +1322,6 @@ end:
 int ntfsdev_rmdir (struct _reent *r, const char *name)
 {
     ntfs_log_trace("name \"%s\"", name);
-    // TODO: Check that there is nothing extra we need to do when unlinking directories
     return ntfsdev_unlink(r, name);
 }
 
@@ -1306,7 +1340,7 @@ int ntfsdev_utimes (struct _reent *r, const char *filename, const struct timeval
         ntfs_error(errno);
     }
     
-    // TODO: Implement this...
+    // TODO: Consider implementing this this.
     //u64 values[2] = times /* how to convert these? */
     //ntfs_inode_set_times(ni, values, 2, NTFS_UPDATE_ATIME | NTFS_UPDATE_MTIME);
     ntfs_error(ENOTSUP);
