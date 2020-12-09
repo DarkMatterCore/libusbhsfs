@@ -283,6 +283,10 @@ static_assert(sizeof(ScsiModeParameterHeader10) == 0x8, "Bad ScsiModeParameterHe
 static_assert(sizeof(ScsiReadCapacity10Data) == 0x8, "Bad ScsiReadCapacity10Data size! Expected 0x8.");
 static_assert(sizeof(ScsiReadCapacity16Data) == 0x20, "Bad ScsiReadCapacity16Data size! Expected 0x20.");
 
+/* Global variables. */
+
+static __thread bool g_mediumPresent = true;
+
 /* Function prototypes. */
 
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
@@ -332,6 +336,9 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     
     USBHSFS_LOG("Starting LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
     
+    /* Reset medium present flag. */
+    g_mediumPresent = true;
+    
     /* Send Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, &inquiry_data))
     {
@@ -369,12 +376,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
             eject_supported = true;
         } else {
             USBHSFS_LOG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+            if (!g_mediumPresent) goto end;
         }
     }
     
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
-    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
                                          &mode_parameter_header_6))
     {
 #ifdef DEBUG
@@ -390,7 +398,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         
         /* Send Mode Sense (10) SCSI command. */
         /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
-        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
                                                sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
         {
 #ifdef DEBUG
@@ -987,6 +995,7 @@ req_sense:
                 {
                     USBHSFS_LOG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
                     ret = false;
+                    g_mediumPresent = false;    /* Update medium present flag. */
                     break;
                 }
                 
