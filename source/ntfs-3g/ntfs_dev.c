@@ -263,6 +263,17 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         {
             ntfs_error(errno);
         }
+        else
+        {
+            /* Mark the file as dirty. */
+            NInoSetDirty(file->ni);
+
+            /* Mark the file for archiving. */
+            file->ni->flags |= FILE_ATTR_ARCHIVE;
+            
+            /* Update file last access and modify times. */
+            ntfs_inode_update_times_filtered(file->vd, file->ni, NTFS_UPDATE_AMCTIME);
+        }
     }
 
     /* Set the files current position and length. */
@@ -1303,6 +1314,7 @@ int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
     int ret = 0;
     ntfs_log_trace("fd %p, mode %i", fd, mode);
     ntfs_declare_error_state;
+    ntfs_declare_file_state;
     ntfs_lock_drive_ctx;
 
     /* Sanity check. */
