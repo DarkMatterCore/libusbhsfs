@@ -844,6 +844,7 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
     /* Configure the NTFS volume descriptor. */
     fs_ctx->ntfs->id = fs_ctx->device_id;
     fs_ctx->ntfs->atime = ((flags & USB_MOUNT_UPDATE_ACCESS_TIMES) ? ATIME_ENABLED : ATIME_DISABLED);
+    fs_ctx->ntfs->ignoreReadOnlyAttr = (flags & USB_MOUNT_IGNORE_READ_ONLY_ATTR);
     fs_ctx->ntfs->showHiddenFiles = (flags & USB_MOUNT_SHOW_HIDDEN_FILES);
     fs_ctx->ntfs->showSystemFiles = (flags & USB_MOUNT_SHOW_SYSTEM_FILES);
 

@@ -24,13 +24,14 @@
 #define USB_MOUNT_UPDATE_ACCESS_TIMES        	0x00000002 /* Update file and directory access times. (NTFS) */
 #define USB_MOUNT_SHOW_HIDDEN_FILES          	0x00000004 /* Display hidden files when enumerating directories. (NTFS) */
 #define USB_MOUNT_SHOW_SYSTEM_FILES          	0x00000008 /* Display system files when enumerating directories. (NTFS) */
+#define USB_MOUNT_IGNORE_READ_ONLY_ATTR         0x00000010 /* Allow writing to files even if they are marked as read-only. (NTFS) */
 
 #define USB_MOUNT_READ_ONLY                  	0x00000100 /* Mount in read-only mode. (NTFS) */
 #define USB_MOUNT_RECOVER                    	0x00000200 /* Replay the log/journal to restore filesystem consistency (i.e. fix unsafe device ejections). (NTFS) */
 
 #define USB_MOUNT_IGNORE_HIBERNATION           	0x00010000 /* Mount even if filesystem is hibernated. (NTFS) */
 
-#define USB_MOUNT_SU                         	USB_MOUNT_SHOW_HIDDEN_FILES | USB_MOUNT_SHOW_SYSTEM_FILES
+#define USB_MOUNT_SU                         	USB_MOUNT_SHOW_HIDDEN_FILES | USB_MOUNT_SHOW_SYSTEM_FILES | USB_MOUNT_IGNORE_READ_ONLY_ATTR
 #define USB_MOUNT_FORCE                      	USB_MOUNT_RECOVER | USB_MOUNT_IGNORE_HIBERNATION
 
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.

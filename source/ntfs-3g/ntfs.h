@@ -52,6 +52,7 @@ typedef struct _ntfs_vd {
     u16 fmask;                              /* Unix style permission mask for file creation */
     u16 dmask;                              /* Unix style permission mask for directory creation */
     ntfs_atime_t atime;                     /* Entry access time update strategy */
+    bool ignoreReadOnlyAttr;                /* True if read-only file attributes should be ignored (allows writing to read-only files) */
     bool showHiddenFiles;                   /* True if hidden files are shown when enumerating directories */
     bool showSystemFiles;                   /* True if system files are shown when enumerating directories */
 } ntfs_vd;

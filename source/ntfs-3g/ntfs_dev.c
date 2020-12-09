@@ -249,11 +249,13 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
         ntfs_error(EACCES);
     }
 
-    /* Make sure we aren't trying to write to a read-only file. */
+    /* Check if we're trying to write to a read-only file. */
     if ((file->ni->flags & FILE_ATTR_READONLY) && file->write)
     {
-        // TODO: Consider making this configurable with a mount flag (i.e. USB_MOUNT_ALLOW_WRITING_TO_READ_ONLY_FILES)
-        ntfs_error(EROFS);
+        if (!vd->ignoreReadOnlyAttr)
+        {
+            ntfs_error(EROFS);
+        }
     }
 
     /* Truncate the file if requested. */
