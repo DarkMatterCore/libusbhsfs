@@ -115,12 +115,60 @@ typedef enum {
     ScsiSenseKey_Completed      = 0x0F
 } ScsiSenseKey;
 
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 95).
+typedef enum {
+    ScsiPeripheralQualifier_Connected       = 0,
+    ScsiPeripheralQualifier_NotConnected    = 1,
+    ScsiPeripheralQualifier_Reserved        = 2,
+    ScsiPeripheralQualifier_Unsupported     = 3,
+    ScsiPeripheralQualifier_VendorSpecific1 = 4,
+    ScsiPeripheralQualifier_VendorSpecific2 = 5,
+    ScsiPeripheralQualifier_VendorSpecific3 = 6,
+    ScsiPeripheralQualifier_VendorSpecific4 = 7
+} ScsiPeripheralQualifier;
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 96).
+typedef enum {
+    ScsiPeripheralDeviceType_DirectAccessBlock       = 0x00,
+    ScsiPeripheralDeviceType_SequentialAccess        = 0x01,
+    ScsiPeripheralDeviceType_Printer                 = 0x02,
+    ScsiPeripheralDeviceType_Processor               = 0x03,
+    ScsiPeripheralDeviceType_WriteOnce               = 0x04,
+    ScsiPeripheralDeviceType_CdDvd                   = 0x05,
+    ScsiPeripheralDeviceType_Obsolete1               = 0x06,
+    ScsiPeripheralDeviceType_OpticalMemory           = 0x07,
+    ScsiPeripheralDeviceType_MediumChanger           = 0x08,
+    ScsiPeripheralDeviceType_Obsolete2               = 0x09,
+    ScsiPeripheralDeviceType_Obsolete3               = 0x0A,
+    ScsiPeripheralDeviceType_Obsolete4               = 0x0B,
+    ScsiPeripheralDeviceType_StorageArrayController  = 0x0C,
+    ScsiPeripheralDeviceType_EnclosureServices       = 0x0D,
+    ScsiPeripheralDeviceType_SimplifiedDirectAccess  = 0x0E,
+    ScsiPeripheralDeviceType_OpticalCardReaderWriter = 0x0F,
+    ScsiPeripheralDeviceType_BridgeControllerCommands = 0x10,
+    ScsiPeripheralDeviceType_ObjectBasedStorage       = 0x11,
+    ScsiPeripheralDeviceType_AutomationDriveInterface = 0x12,
+    ScsiPeripheralDeviceType_Reserved1                = 0x13,
+    ScsiPeripheralDeviceType_Reserved2                = 0x14,
+    ScsiPeripheralDeviceType_Reserved3                = 0x15,
+    ScsiPeripheralDeviceType_Reserved4                = 0x16,
+    ScsiPeripheralDeviceType_Reserved5                = 0x17,
+    ScsiPeripheralDeviceType_Reserved6                = 0x18,
+    ScsiPeripheralDeviceType_Reserved7                = 0x19,
+    ScsiPeripheralDeviceType_Reserved8                = 0x1A,
+    ScsiPeripheralDeviceType_Reserved9                = 0x1B,
+    ScsiPeripheralDeviceType_Reserved10               = 0x1C,
+    ScsiPeripheralDeviceType_Reserved11               = 0x1D,
+    ScsiPeripheralDeviceType_WellKnownLogicalUnit     = 0x1E,
+    ScsiPeripheralDeviceType_Unknown                  = 0x1F
+} ScsiPeripheralDeviceType;
+
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 94).
 /// Truncated at the product revision level field to just request the bare minimum - we don't need anything else past that point.
 typedef struct {
     struct {
-        u8 peripheral_device_type : 5;
-        u8 peripheral_qualifier   : 3;
+        u8 peripheral_device_type : 5;  ///< ScsiPeripheralDeviceType.
+        u8 peripheral_qualifier   : 3;  ///< ScsiPeripheralQualifier.
     };
     struct {
         u8 reserved_1 : 7;
@@ -235,6 +283,10 @@ static_assert(sizeof(ScsiModeParameterHeader10) == 0x8, "Bad ScsiModeParameterHe
 static_assert(sizeof(ScsiReadCapacity10Data) == 0x8, "Bad ScsiReadCapacity10Data size! Expected 0x8.");
 static_assert(sizeof(ScsiReadCapacity16Data) == 0x20, "Bad ScsiReadCapacity16Data size! Expected 0x20.");
 
+/* Global variables. */
+
+static __thread bool g_mediumPresent = true;
+
 /* Function prototypes. */
 
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
@@ -282,6 +334,11 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     char hexdump[0x50] = {0};
 #endif
     
+    USBHSFS_LOG("Starting LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
+    
+    /* Reset medium present flag. */
+    g_mediumPresent = true;
+    
     /* Send Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, &inquiry_data))
     {
@@ -293,6 +350,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), &inquiry_data, sizeof(ScsiInquiryStandardData));
     USBHSFS_LOG("Inquiry data (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, lun, hexdump);
 #endif
+    
+    /* Check if we're dealing with an available Direct Access Block device. */
+    if (inquiry_data.peripheral_qualifier != ScsiPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiPeripheralDeviceType_DirectAccessBlock)
+    {
+        USBHSFS_LOG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
+        goto end;
+    }
     
     /* Perform necessary steps for removable LUNs. */
     /* Reference: https://t10.org/ftp/t10/document.05/05-344r0.pdf (page 26). */
@@ -312,12 +376,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
             eject_supported = true;
         } else {
             USBHSFS_LOG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+            if (!g_mediumPresent) goto end;
         }
     }
     
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
-    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
                                          &mode_parameter_header_6))
     {
 #ifdef DEBUG
@@ -333,7 +398,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
         
         /* Send Mode Sense (10) SCSI command. */
         /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
-        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_ChangeableValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
                                                sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
         {
 #ifdef DEBUG
@@ -429,6 +494,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     
     /* Update return value. */
     ret = true;
+    
+    USBHSFS_LOG("Successfully started LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
     
 end:
     /* Stop removable LUN if we successfully started it but the overall process failed. */
@@ -928,6 +995,7 @@ req_sense:
                 {
                     USBHSFS_LOG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
                     ret = false;
+                    g_mediumPresent = false;    /* Update medium present flag. */
                     break;
                 }
                 

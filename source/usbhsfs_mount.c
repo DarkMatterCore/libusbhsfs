@@ -201,7 +201,7 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
 static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 #endif
 
-static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void);
 
 static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id);
@@ -721,6 +721,10 @@ end:
 
 static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags)
 {
+#ifdef DEBUG
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
+#endif
+    
     u8 pdrv = 0;
     char name[USB_MOUNT_NAME_LENGTH] = {0};
     FRESULT ff_res = FR_DISK_ERR;
@@ -766,7 +770,7 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsF
     }
     
     /* Register devoptab device. */
-    if (!usbHsFsMountRegisterDevoptabDevice(lun_ctx, fs_ctx)) goto end;
+    if (!usbHsFsMountRegisterDevoptabDevice(fs_ctx)) goto end;
     
     /* Update FatFs volume slot. */
     g_fatFsVolumeTable[pdrv] = true;
@@ -958,6 +962,10 @@ static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFil
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
+#ifdef DEBUG
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
+#endif
+    
     char name[USB_MOUNT_NAME_LENGTH] = {0};
     const devoptab_t *fs_device = NULL;
     int ad_res = -1;

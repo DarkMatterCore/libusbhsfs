@@ -57,7 +57,7 @@ Limitations
     * Only a single SCSI operation can be performed at any given time per UMS device, regardless of their number of logical units. This is an official limitation of the BOT protocol. Mutexes are used to avoid multiple SCSI operations from taking place at the same time on the same UMS device.
 * Filesystem libraries:
     * FatFs:
-        * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but the FatFs was slightly modified to allow for more volumes to be mounted simultaneously.
+        * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but FatFs was slightly modified to allow for more volumes to be mounted simultaneously.
     * NTFS-3G:
         * Support for crypto operations isn't provided.
 * Stack and/or heap memory consumption:
@@ -99,10 +99,11 @@ A `lib` directory will be generated, which holds the built static library.
 How to use
 --------------
 
-* Build libusbhsfs by following the steps from the previous section.
+This section assumes you've already built the library by following the steps from the previous section.
+
 * Update the `Makefile` from your homebrew application to reference the library.
     * Two different builds are generated: a release build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
-    * If you're using a GPLv2+ licensed build, you'll also need to link your application against NTFS-3G: `-lusbhsfd -lntfs-3g`.
+    * If you're using a GPLv2+ licensed build, you'll also need to link your application against NTFS-3G: `-lusbhsfs -lntfs-3g`.
     * In case you need to report any bugs, please make sure you're using the debug build and provide its logfile.
 * Include the `usbhsfs.h` header file somewhere in your code.
 * Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.

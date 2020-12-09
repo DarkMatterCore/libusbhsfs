@@ -41,7 +41,6 @@ static const size_t g_usbInterfacesMaxSize = (MAX_USB_INTERFACES * sizeof(UsbHsI
 
 static Thread g_usbDriveManagerThread = {0};
 static UEvent g_usbDriveManagerThreadExitEvent = {0};
-static CondVar g_usbDriveManagerThreadCondVar = 0;
 
 static UsbHsFsDriveContext *g_driveContexts = NULL;
 static u32 g_driveCount = 0;
@@ -56,6 +55,7 @@ static Result usbHsFsCloseDriveManagerThread(void);
 static void usbHsFsDriveManagerThreadFuncSXOS(void *arg);
 
 static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg);
+static void usbHsFsResetDrives(void);
 static bool usbHsFsUpdateDriveContexts(bool remove);
 
 static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool stop_lun);
@@ -141,7 +141,7 @@ Result usbHsFsInitialize(u8 event_idx)
         
         /* Create USB interface available event for our filter. */
         /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
-        rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, true, event_idx, &g_usbInterfaceFilter);
+        rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, false, event_idx, &g_usbInterfaceFilter);
         if (R_FAILED(rc))
         {
             USBHSFS_LOG("usbHsCreateInterfaceAvailableEvent failed! (0x%08X).", rc);
@@ -442,9 +442,6 @@ static Result usbHsFsCreateDriveManagerThread(void)
     /* Clear thread. */
     memset(&g_usbDriveManagerThread, 0, sizeof(Thread));
     
-    /* Initialize condvar. */
-    condvarInit(&g_usbDriveManagerThreadCondVar);
-    
     /* Get process core mask. */
     rc = svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0);
     if (R_FAILED(rc))
@@ -490,11 +487,6 @@ static Result usbHsFsCloseDriveManagerThread(void)
     /* Signal user-mode drive manager thread exit event. */
     ueventSignal(&g_usbDriveManagerThreadExitEvent);
     
-    /* Wait until the drive manager thread wakes us up. */
-    /* Public functions and the background thread share the same mutex. */
-    /* Without using a condvar here, we'll deadlock ourselves by waiting for the background thread to exit, which will also lock the same mutex we have already locked. */
-    condvarWait(&g_usbDriveManagerThreadCondVar, &g_managerMutex);
-    
     /* Wait for the drive manager thread to exit. */
     rc = threadWaitForExit(&g_usbDriveManagerThread);
     if (R_FAILED(rc))
@@ -526,10 +518,10 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
         /* Check if the thread exit event has been triggered (1s timeout). */
         rc = waitSingle(thread_exit_waiter, (u64)1000000000);
         
-        mutexLock(&g_managerMutex);
-        
         /* Exit event triggered. */
         if (R_SUCCEEDED(rc)) break;
+        
+        mutexLock(&g_managerMutex);
         
         /* Get UMS mount status. */
         rc = usbFsGetMountStatus(&cur_status);
@@ -543,18 +535,15 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
                 /* Check if the filesystem from the UMS device is truly mounted and if we can register a devoptab interface for it. */
                 g_sxOSDeviceAvailable = (cur_status == USBFS_MOUNTED && usbfsdev_register());
                 
-                if (g_sxOSDeviceAvailable)
-                {
-                    /* Signal user-mode event. */
-                    USBHSFS_LOG("Signaling status change event.");
-                    ueventSignal(&g_usbStatusChangeEvent);
-                } else {
-                    /* Unregister devoptab device. */
-                    usbfsdev_unregister();
-                }
+                /* Unregister devoptab device, if needed. */
+                if (!g_sxOSDeviceAvailable) usbfsdev_unregister();
                 
                 /* Update previous status. */
                 prev_status = cur_status;
+                
+                /* Signal user-mode event. */
+                USBHSFS_LOG("Signaling status change event.");
+                ueventSignal(&g_usbStatusChangeEvent);
             }
         } else {
             USBHSFS_LOG("usbFsGetMountStatus failed! (0x%08X).", rc);
@@ -574,10 +563,6 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
     /* Update device available flag. */
     g_sxOSDeviceAvailable = false;
     
-    /* Wake up usbHsFsCloseDriveManagerThread(). */
-    mutexUnlock(&g_managerMutex);
-    condvarWakeAll(&g_usbDriveManagerThreadCondVar);
-    
     /* Exit thread. */
     threadExit();
 }
@@ -594,13 +579,32 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
     Waiter usb_if_state_change_waiter = waiterForEvent(g_usbInterfaceStateChangeEvent);
     Waiter thread_exit_waiter = waiterForUEvent(&g_usbDriveManagerThreadExitEvent);
     
+    /* Check if any UMS devices are already connected to the console (no timeout). */
+    rc = waitSingle(usb_if_available_waiter, 0);
+    if (R_SUCCEEDED(rc))
+    {
+        USBHSFS_LOG("Interface available event triggered at startup (UMS devices already available).");
+        
+        mutexLock(&g_managerMutex);
+        
+        /* Reset each UMS device so we can safely issue Start Unit commands later on (if needed). */
+        /* A Stop Unit command could have been issued before for each UMS device (e.g. if an app linked against this library was previously launched, but the UMS devices weren't disconnected). */
+        /* Performing a bus reset on each one makes it possible to re-use them. */
+        usbHsFsResetDrives();
+        
+#ifdef DEBUG
+        /* Flush logfile. */
+        usbHsFsUtilsFlushLogFile();
+#endif
+        
+        mutexUnlock(&g_managerMutex);
+    }
+    
     while(true)
     {
         /* Wait until an event is triggered. */
         rc = waitMulti(&idx, -1, usb_if_available_waiter, usb_if_state_change_waiter, thread_exit_waiter);
         if (R_FAILED(rc)) continue;
-        
-        mutexLock(&g_managerMutex);
         
 #ifdef DEBUG
         switch(idx)
@@ -622,11 +626,21 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
         /* Exit event triggered. */
         if (idx == 2) break;
         
+        mutexLock(&g_managerMutex);
+        
         /* Update drive contexts. */
         ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
         
-        /* Clear the interface change event if it was triggered (not an autoclear event). */
-        if (idx == 1) eventClear(g_usbInterfaceStateChangeEvent);
+        if (idx == 0)
+        {
+            /* Clear the interface available event if it was triggered (not an autoclear event). */
+            eventClear(&g_usbInterfaceAvailableEvent);
+        } else
+        if (idx == 1)
+        {
+            /* Clear the interface change event if it was triggered (not an autoclear event). */
+            eventClear(g_usbInterfaceStateChangeEvent);
+        }
         
         /* Signal user-mode event if contexts were updated. */
         if (ctx_updated)
@@ -662,12 +676,56 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
     /* Reset drive count. */
     g_driveCount = 0;
     
-    /* Wake up usbHsFsCloseDriveManagerThread(). */
-    mutexUnlock(&g_managerMutex);
-    condvarWakeAll(&g_usbDriveManagerThreadCondVar);
-    
     /* Exit thread. */
     threadExit();
+}
+
+static void usbHsFsResetDrives(void)
+{
+    Result rc = 0;
+    s32 usb_if_count = 0;
+    UsbHsClientIfSession usb_if_session = {0};
+    
+    /* Clear USB interfaces buffer. */
+    memset(g_usbInterfaces, 0, g_usbInterfacesMaxSize);
+    
+    /* Retrieve available USB interfaces. */
+    rc = usbHsQueryAvailableInterfaces(&g_usbInterfaceFilter, g_usbInterfaces, g_usbInterfacesMaxSize, &usb_if_count);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("usbHsQueryAvailableInterfaces failed! (0x%08X).", rc);
+        return;
+    }
+    
+    USBHSFS_LOG("usbHsQueryAvailableInterfaces returned %d interface(s) matching our filter.", usb_if_count);
+    
+    /* Loop through the available USB interfaces. */
+    for(s32 i = 0; i < usb_if_count; i++)
+    {
+        UsbHsInterface *usb_if = &(g_usbInterfaces[i]);
+        memset(&usb_if_session, 0, sizeof(UsbHsClientIfSession));
+        
+        USBHSFS_LOG("Resetting USB Mass Storage device with interface %d.", usb_if->inf.ID);
+        
+        /* Open current interface. */
+        rc = usbHsAcquireUsbIf(&usb_if_session, usb_if);
+        if (R_FAILED(rc))
+        {
+            USBHSFS_LOG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+            continue;
+        }
+        
+        /* Perform a bus reset on this UMS device. */
+        rc = usbHsIfResetDevice(&usb_if_session);
+        if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfResetDevice failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+        
+        /* Close interface. */
+        usbHsIfClose(&usb_if_session);
+    }
+    
+    /* Clear both interface events (not autoclear). */
+    eventClear(&g_usbInterfaceAvailableEvent);
+    eventClear(g_usbInterfaceStateChangeEvent);
 }
 
 static bool usbHsFsUpdateDriveContexts(bool remove)

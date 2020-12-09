@@ -26,7 +26,8 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
-CFLAGS	:=	-g -Wall -Werror -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE) -DLIB_TITLE=\"lib${LIB_TITLE}\"
+CFLAGS	:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
+CFLAGS	+=	-DLIB_TITLE=\"lib${LIB_TITLE}\"
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
