@@ -40,5 +40,6 @@ package() {
   make DESTDIR="$pkgdir" install
   
   install -Dm644 COPYING.LIB "$pkgdir"/opt/devkitpro/portlibs/switch/licenses/$pkgname/COPYING
+  install -Dm644 config.h "$pkgdir"/opt/devkitpro/portlibs/switch/include/ntfs-3g/config.h
   rm -r "$pkgdir"/opt/devkitpro/portlibs/switch/share
 }
