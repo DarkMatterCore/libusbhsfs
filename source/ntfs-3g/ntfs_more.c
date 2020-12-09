@@ -453,36 +453,12 @@ int ntfs_inode_unlink (ntfs_vd *vd, const char *path)
     }
 
     /* Unlink the entry from its parent. */
-    /* NOTE: 'ni' is always closed after the call to this function (even if it failed) */
+    /* NOTE: 'ni' and 'dir_ni' are always closed after the call to this function (even if it failed) */
     ntfs_log_debug("unlinking inode \"%s\" from \"%s\"", full_path.path, full_path.dir);
-    if (ntfs_delete(vd->vol, full_path.path, ni, dir_ni, uname, uname_len))
-    {
-        ni = NULL;
-        goto end;
-    }
-    else
-    {
-        ni = NULL;
-    }
-
-    /* If the entry was deleted. */
-    if (dir_ni)
-    {
-        /* Update the entries last modify time. */
-        ntfs_inode_update_times_filtered(vd, dir_ni, NTFS_UPDATE_MCTIME);
-
-        /* Mark the entries as dirty. */
-        NInoSetDirty(dir_ni);
-
-        /* Mark the entries for archiving. */
-        dir_ni->flags |= FILE_ATTR_ARCHIVE;
-        
-        /* Sync the entries (and attributes). */
-        ntfs_inode_sync(dir_ni);
-    }
-
-    ret = 0;
-
+    ret = ntfs_delete(vd->vol, full_path.path, ni, dir_ni, uname, uname_len);
+    ni = NULL;
+    dir_ni = NULL;
+    
 end:
 
     if (uname)
