@@ -43,6 +43,7 @@ typedef struct _ntfs_vd {
     struct _usbhs_dd *dd;                   /* NTFS device descriptor */
     struct ntfs_device *dev;                /* NTFS device handle */
     ntfs_volume *vol;                       /* NTFS volume handle */
+    ntfs_inode *root;                       /* NTFS node handle for the root directory */
     ntfs_inode *cwd;                        /* NTFS node handle for the current directory */
     u32 flags;                              /* NTFS mount flags */
     s64 id;                                 /* Filesystem id */

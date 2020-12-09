@@ -17,6 +17,7 @@
 #include "ntfs-3g/ntfs.h"
 #include "ntfs-3g/ntfs_disk_io.h"
 #include "ntfs-3g/ntfs_dev.h"
+#include <ntfs-3g/inode.h>
 #endif
 
 #define MOUNT_NAME_PREFIX      "ums"
@@ -867,14 +868,26 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
         goto end;
     }
 
+    /* Open the root directory node. */
+    fs_ctx->ntfs->root = ntfs_inode_open(fs_ctx->ntfs->vol, FILE_root);
+    if (!fs_ctx->ntfs->root)
+    {    
+        USBHSFS_LOG("Failed to open NTFS root directory! (%u) (interface %d, LUN %u, FS %u, flags %i).", ntfs_volume_error(errno), lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+        goto end;
+    }
+
+    /* Configure volume case sensitivity. */
 	if (flags & USB_MOUNT_IGNORE_CASE)
     {
 		ntfs_set_ignore_case(fs_ctx->ntfs->vol);
     }
 
     /* Register devoptab device. */
-    if (!usbHsFsMountRegisterDevoptabDevice(lun_ctx, fs_ctx)) goto end;
-    
+    if (!usbHsFsMountRegisterDevoptabDevice(lun_ctx, fs_ctx))
+    {
+        goto end;
+    }
+
     /* Update return value. */
     ret = true;
     
@@ -883,6 +896,11 @@ end:
     /* Free stuff if something went wrong. */
     if (!ret && fs_ctx->ntfs)
     {
+        if (fs_ctx->ntfs->root)
+        {
+            ntfs_inode_close(fs_ctx->ntfs->root);
+            fs_ctx->ntfs->root = NULL;
+        }
         if (fs_ctx->ntfs->vol)
         {
             ntfs_umount(fs_ctx->ntfs->vol, true);
@@ -911,6 +929,20 @@ end:
 
 static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
+    /* Close the current directory node (if required). */
+    if (fs_ctx->ntfs->cwd && fs_ctx->ntfs->cwd != fs_ctx->ntfs->root)
+    {
+        ntfs_inode_close(fs_ctx->ntfs->cwd);
+        fs_ctx->ntfs->cwd = NULL;
+    }
+
+    /* Close the root directory node. */
+    if (fs_ctx->ntfs->root)
+    {
+        ntfs_inode_close(fs_ctx->ntfs->root);
+        fs_ctx->ntfs->root = NULL;
+    }
+
     /* Unmount NTFS volume. */
     ntfs_umount(fs_ctx->ntfs->vol, true);
     

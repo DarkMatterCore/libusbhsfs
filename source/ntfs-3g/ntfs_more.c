@@ -54,8 +54,8 @@ int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
         p->path = strchr(p->path, ':') + 1;
     }
 
-    /* Is this a relative path? (i.e. doesn't start with a '/') */
-    if (p->path[0] != PATH_SEP)
+    /* Is this a relative path from the current directory? (i.e. doesn't start with a '/') */
+    if (p->path[0] != PATH_SEP && vd->cwd)
     {
         /* Use the volumes current directory as our parent node. */
         p->parent = vd->cwd;
@@ -63,7 +63,7 @@ int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
     else
     {
         /* Use the volumes top-most directory (root) as our parent node. */
-        // TODO: p->parent = MREF(FILE_root)
+        p->parent = vd->root;
     }
   
     /* Copy the path to internal buffer that we can modify it. */

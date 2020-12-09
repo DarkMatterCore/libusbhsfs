@@ -650,6 +650,7 @@ end:
 int ntfsdev_chdir (struct _reent *r, const char *name)
 {
     int ret = 0;
+    ntfs_path path;
     ntfs_inode *ni = NULL, *old_cwd = NULL;
     ntfs_log_trace("name \"%s\"", name);
     ntfs_declare_error_state;
@@ -658,6 +659,12 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
 
     USBHSFS_LOG("Changing current directory to \"%s\".", name);
 
+    /* Resolve the directory path */
+    if (!ntfs_resolve_path(vd, name, &path))
+    {
+        ntfs_error(errno);
+    }
+    
     /* Find the directory entry */
     ni = ntfs_inode_open_from_path(vd, name);
     if (!ni)
@@ -671,21 +678,17 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
         ntfs_error(ENOTDIR);
     }
 
-    /* Swap current directories */
+    /* Swap the current directory references around. */
     old_cwd = vd->cwd;
     vd->cwd = ni;
     ni = old_cwd;
 
-    // TODO: Update the fs_ctx cwd path
-    /*
-    cwd_len = strlen(fs_ctx->cwd);
-    if (fs_ctx->cwd[cwd_len - 1] != '/')
-    {
-        fs_ctx->cwd[cwd_len] = '/';
-        fs_ctx->cwd[cwd_len + 1] = '\0';
-    }
-    */
+    /* Update the current directory. */
+    sprintf(fs_ctx->cwd, "%s", path.dir);
 
+    /* Set default devoptab device. */
+    usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
+    
 end:
 
     /* Clean-up. */
