@@ -193,12 +193,12 @@ static void usbHsFsMountParseExtendedBootRecord(UsbHsFsDriveContext *drive_ctx, 
 static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block, u64 gpt_lba, u32 flags);
 
 static bool usbHsFsMountRegisterVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u8 fs_type, u32 flags);
-static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags);
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr);
 static void usbHsFsMountDestroyFatVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 
 #ifdef GPL_BUILD
 static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags);
-static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
+static void usbHsFsMountDestroyNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
 #endif
 
 static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx);
@@ -314,7 +314,7 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
 #ifdef GPL_BUILD
 
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: /* NTFS. */
-            usbHsFsMountDestroyNtfsVolume(name, fs_ctx);        
+            usbHsFsMountDestroyNtfsVolume(fs_ctx);        
             break;
         
 #endif
@@ -678,7 +678,7 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDr
     switch(fs_type)
     {
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT: /* FAT12/FAT16/FAT32/exFAT. */
-            ret = usbHsFsMountRegisterFatVolume(drive_ctx, lun_ctx, tmp_fs_ctx, block, block_addr, flags);
+            ret = usbHsFsMountRegisterFatVolume(tmp_fs_ctx, block, block_addr);
             break;
         
 #ifdef GPL_BUILD
@@ -719,7 +719,7 @@ end:
     return ret;
 }
 
-static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr, u32 flags)
+static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
 {
 #ifdef DEBUG
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
@@ -743,17 +743,17 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsF
     
     if (pdrv == FF_VOLUMES)
     {
-        USBHSFS_LOG("Failed to locate a free FatFs volume slot! (interface %d, LUN %u, FS %u, flags %i).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+        USBHSFS_LOG("Failed to locate a free FatFs volume slot! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
     
-    USBHSFS_LOG("Located free FatFs volume slot: %u (interface %d, LUN %u, FS %u, flags %i).", pdrv, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+    USBHSFS_LOG("Located free FatFs volume slot: %u (interface %d, LUN %u, FS %u).", pdrv, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
     
     /* Allocate memory for the FatFs object. */
     fs_ctx->fatfs = calloc(1, sizeof(FATFS));
     if (!fs_ctx->fatfs)
     {
-        USBHSFS_LOG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u, flags %i).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+        USBHSFS_LOG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
     
@@ -765,7 +765,7 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveContext *drive_ctx, UsbHsF
     ff_res = ff_mount(fs_ctx->fatfs, name, 1);
     if (ff_res != FR_OK)
     {
-        USBHSFS_LOG("Failed to mount FAT volume! (%u) (interface %d, LUN %u, FS %u, flags %i).", ff_res, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx, flags);
+        USBHSFS_LOG("Failed to mount FAT volume! (%u) (interface %d, LUN %u, FS %u).", ff_res, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
     
@@ -888,7 +888,7 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveContext *drive_ctx, UsbHs
     }
 
     /* Register devoptab device. */
-    if (!usbHsFsMountRegisterDevoptabDevice(lun_ctx, fs_ctx))
+    if (!usbHsFsMountRegisterDevoptabDevice(fs_ctx))
     {
         goto end;
     }
@@ -932,7 +932,7 @@ end:
     return ret;
 }
 
-static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+static void usbHsFsMountDestroyNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
     /* Close the current directory node (if required). */
     if (fs_ctx->ntfs->cwd && fs_ctx->ntfs->cwd != fs_ctx->ntfs->root)
@@ -960,7 +960,7 @@ static void usbHsFsMountDestroyNtfsVolume(char *name, UsbHsFsDriveLogicalUnitFil
 
 #endif
 
-static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
 #ifdef DEBUG
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;

@@ -431,6 +431,7 @@ int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
 
 int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
 {
+    (void) argp;
     ntfs_log_trace("dev %p, request %i, argp %p", dev, request, argp);
 
     // Get the device descriptor

@@ -137,6 +137,7 @@ static UsbHsFsDriveContext *ntfsdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUn
 
 int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
+    (void) mode;
     int ret = 0;
     ntfs_log_trace("fd %p, path \"%s\", flags %i, mode %i", fd, path, flags, mode);
     ntfs_declare_error_state;
@@ -396,7 +397,7 @@ ssize_t ntfsdev_write (struct _reent *r, void *fd, const char *ptr, size_t len)
     while (len)
     {
         USBHSFS_LOG("Writing 0x%lX byte(s) to file in %lu at offset 0x%lX.", len, file->ni->mft_no, file->pos);
-        ssize_t written = ntfs_attr_pwrite(file->data, file->pos, len, ptr);
+        size_t written = ntfs_attr_pwrite(file->data, file->pos, len, ptr);
         if (written <= 0 || written > len)
         {
             ntfs_error(errno);
@@ -475,7 +476,7 @@ ssize_t ntfsdev_read (struct _reent *r, void *fd, char *ptr, size_t len)
     while (len)
     {
         USBHSFS_LOG("Reading 0x%lX byte(s) from file in %lu at offset 0x%lX.", len, file->ni->mft_no, file->pos);
-        ssize_t read = ntfs_attr_pread(file->data, file->pos, len, ptr);
+        size_t read = ntfs_attr_pread(file->data, file->pos, len, ptr);
         if (read <= 0 || read > len)
         {
             ntfs_error(errno);
@@ -673,7 +674,7 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
     USBHSFS_LOG("Changing current directory to \"%s\".", name);
 
     /* Resolve the directory path */
-    if (!ntfs_resolve_path(vd, name, &path))
+    if (ntfs_resolve_path(vd, name, &path))
     {
         ntfs_error(errno);
     }
@@ -697,7 +698,7 @@ int ntfsdev_chdir (struct _reent *r, const char *name)
     ni = old_cwd;
 
     /* Update the current directory. */
-    sprintf(fs_ctx->cwd, "%s", path.dir);
+    sprintf(fs_ctx->cwd, "%s", path.path);
 
     /* Set default devoptab device. */
     usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
@@ -768,6 +769,7 @@ end:
 
 int ntfsdev_mkdir (struct _reent *r, const char *path, int mode)
 {
+    (void) mode;
     int ret = 0;
     ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", mode %i", path, mode);
@@ -878,6 +880,8 @@ end:
 int ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int name_len, const int name_type,
                              const s64 pos, const MFT_REF mref, const unsigned dt_type)
 {
+    (void) pos;
+    (void) dt_type;
     int ret = 0;
     ntfs_inode *ni = NULL;
     ntfs_dir_entry *entry = NULL;
@@ -1105,6 +1109,7 @@ end:
 
 int ntfsdev_statvfs (struct _reent *r, const char *path, struct statvfs *buf)
 {
+    (void) path;
     int ret = 0;
     ntfs_log_trace("path \"%s\", buf %p", path, buf);
     ntfs_declare_error_state;
@@ -1228,7 +1233,7 @@ int ntfsdev_ftruncate (struct _reent *r, void *fd, off_t len)
 end:
 
     /* Did the file size actually change? */
-    if (file && file->len != file->data->data_size)
+    if (file && file->len != (u64) file->data->data_size)
     {
         /* Mark the file as dirty. */
         NInoSetDirty(file->ni);
@@ -1281,6 +1286,7 @@ end:
 
 int ntfsdev_chmod (struct _reent *r, const char *path, mode_t mode)
 {
+    (void) mode;
     int ret = 0;
     ntfs_inode *ni = NULL;
     ntfs_log_trace("path \"%s\", mode %i", path, mode);
@@ -1313,6 +1319,7 @@ end:
 
 int ntfsdev_fchmod (struct _reent *r, void *fd, mode_t mode)
 {
+    (void) mode;
     int ret = 0;
     ntfs_log_trace("fd %p, mode %i", fd, mode);
     ntfs_declare_error_state;
@@ -1344,6 +1351,7 @@ int ntfsdev_rmdir (struct _reent *r, const char *name)
 
 int ntfsdev_utimes (struct _reent *r, const char *filename, const struct timeval times[2])
 {
+    (void) times;
     int ret = 0;
     ntfs_inode *ni = NULL;
     ntfs_log_trace("filename \"%s\", time[0] %li, time[1] %li", filename, times[0].tv_sec, times[1].tv_sec);

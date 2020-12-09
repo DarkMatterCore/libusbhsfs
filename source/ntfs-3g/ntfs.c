@@ -17,6 +17,10 @@
 int ntfs_log_handler_usbhsfs(const char *function, const char *file,
 	int line, u32 level, void *data, const char *format, va_list args)
 {
+	(void) file;
+	(void) line;
+	(void) level;
+	(void) data;
 	char logbuf[1024];
 	int ret = vsnprintf(logbuf, 1024, format, args);
 	if (ret)
