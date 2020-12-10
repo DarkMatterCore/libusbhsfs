@@ -262,7 +262,7 @@ end:
     return ret;
 }
 
-void usbHsFsMountUnregisterLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
+void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
     if (!usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx)) return;
     

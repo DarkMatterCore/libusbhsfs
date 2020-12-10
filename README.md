@@ -176,6 +176,7 @@ Changelog
     * Both peripheral qualifier and peripheral device type values from Inquiry data are now filtered. Thanks to [ginkuji](https://github.com/ginkuji) for reporting this issue.
     * Logical unit startup now returns right away if an optional SCSI command fails and a `Medium Not Present` additional sense code is reported by the UMS device.
     * A bus reset is now performed on all UMS devices that are already available when `usbHsFsInitialize()` is called. Fixes logical unit startup for drives that were stopped during a previous library session, but not removed from the console. Thanks to [FlyingBananaTree](https://github.com/FlyingBananaTree) for reporting this issue.
+    * Fixed potential memory corruption issues that could have taken place because of not updating LUN/FS context references after reallocating their buffers.
 * SX OS:
     * The status change user-mode event is now signaled on every `usbfs` status change.
 * Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.
