@@ -25,6 +25,7 @@ extern "C" {
 
 /// Filesystem mount flags.
 /// Not all supported filesystems are compatible with these flags.
+/// The default, not configured mount flags bitmask is `USB_MOUNT_UPDATE_ACCESS_TIMES | USB_MOUNT_SHOW_HIDDEN_FILES`.
 #define USB_MOUNT_DEFAULT               0x00000000  /* Default options, don't do anything special. */
 
 #define USB_MOUNT_IGNORE_CASE           0x00000001  /* Ignore case sensitivity. Everything will be lowercase (NTFS only). */
