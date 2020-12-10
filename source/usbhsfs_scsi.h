@@ -17,7 +17,7 @@
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 
 /// Starts a LUN from the provided drive context using SCSI commands and fills the provided LUN context.
-bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx);
+bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx);
 
 /// Stops a LUN from the provided drive context using SCSI commands, as long as it's removable (returns right away if it isn't).
 void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx);

@@ -108,23 +108,31 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     /* Prepare LUNs using SCSI commands. */
     for(u8 i = 0; i < drive_ctx->max_lun; i++)
     {
-        /* Retrieve pointer to LUN context, increase LUN context count and clear context. */
-        UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[(drive_ctx->lun_count)++]);
+        /* Generate LUN context index and increase LUN context count. */
+        u8 lun_ctx_idx = (drive_ctx->lun_count)++;
+        
+        /* Retrieve pointer to LUN context and clear it. */
+        UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
         memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
         
+        /* Set USB interface ID and LUN index. */
+        lun_ctx->usb_if_id = drive_ctx->usb_if_id;
+        lun_ctx->lun = i;
+        
         /* Start LUN. */
-        if (!usbHsFsScsiStartDriveLogicalUnit(drive_ctx, i, lun_ctx))
+        if (!usbHsFsScsiStartDriveLogicalUnit(drive_ctx, lun_ctx_idx))
         {
             USBHSFS_LOG("Failed to initialize context for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            (drive_ctx->lun_count)--;
+            (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
             continue;
         }
         
         /* Initialize filesystem contexts for this LUN. */
-        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(drive_ctx, drive_ctx->lun_count - 1))
+        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(drive_ctx, lun_ctx_idx))
         {
             USBHSFS_LOG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            usbHsFsDriveDestroyLogicalUnitContext(drive_ctx, --(drive_ctx->lun_count), true);   /* Decrease LUN context count and destroy LUN context. */
+            usbHsFsDriveDestroyLogicalUnitContext(drive_ctx, lun_ctx_idx, true);   /* Destroy LUN context. */
+            (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
         }
     }
     
@@ -142,6 +150,23 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         {
             drive_ctx->lun_ctx = tmp_lun_ctx;
             tmp_lun_ctx = NULL;
+            
+            /* Update LUN context references. */
+            for(u8 i = 0; i < drive_ctx->lun_count; i++)
+            {
+                UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[i]);
+                
+                for(u32 j = 0; j < lun_ctx->fs_count; j++)
+                {
+                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[j]);
+                    
+                    fs_ctx->lun_ctx = lun_ctx;
+                    
+#ifdef GPL_BUILD
+                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_NTFS) fs_ctx->ntfs->dd->lun_ctx = lun_ctx;
+#endif
+                }
+            }
         }
     }
     

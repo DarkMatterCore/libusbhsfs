@@ -88,7 +88,7 @@ DRESULT ff_disk_write (
     
     /* Get drive context and write logical blocks. */
     drive_ctx = usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(pdrv, &lun_ctx_idx);
-    if (drive_ctx && usbHsFsScsiWriteLogicalUnitBlocks(drive_ctx, lun_ctx_idx, (void*)buff, sector, count)) ret = RES_OK;
+    if (drive_ctx && usbHsFsScsiWriteLogicalUnitBlocks(drive_ctx, lun_ctx_idx, buff, sector, count)) ret = RES_OK;
     
     return ret;
 }

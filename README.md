@@ -59,7 +59,10 @@ Limitations
     * FatFs:
         * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but FatFs was slightly modified to allow for more volumes to be mounted simultaneously.
     * NTFS-3G:
-        * Support for crypto operations isn't provided.
+        * Crypto operations aren't supported.
+        * Security contexts are always ignored.
+        * Only partial journaling is supported, so unexpected crashes or power loss can leave the a mounted NTFS volume in an inconsistent state. In cases where there has been heavy activity prior to the crash or power loss, it is recommended to plug the UMS device into a Windows PC and let it replay the journal properly before remounting with NTFS-3G, in order to prevent possible data loss and/or corruption.
+        * Symbolic links are transparent. This means that when a symbolic link in encountered, its hard link will be used instead.
 * Stack and/or heap memory consumption:
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
@@ -90,7 +93,7 @@ This section assumes you've already installed both devkitA64 and libnx. If not, 
     1. Run `make BUILD_TYPE=ISC [all/release/debug]` on the root directory from the project.
 
 * **GPLv2+ licensed build**:
-    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
+    1. Enter the `libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
         * If you're using Windows, you must use `msys2` for this step. You can either install it on your own or use the one provided by devkitPro.
     2. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
 
@@ -155,6 +158,27 @@ Thanks to
 
 Changelog
 --------------
+
+**v0.1.0:**
+
+* Built using libnx commit `767a7a2`.
+* `usbHsFsUnmountDevice()` is now provided as a way to safely unmount UMS devices at runtime before disconnecting them.
+* Implemented partition table parsing (MBR/GPT/VBR). The library now takes care of looking for boot sectors and/or partition tables on its own, and just passes volume LBAs to filesystem libraries. This makes it possible to mount multiple partitions from the same logical unit as individual devoptab devices.
+* Implemented NTFS support. Big thanks to [Rhys Koedijk](https://github.com/rhyskoedijk)!
+    * Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.
+    * Certain limitations apply. Please read the **Limitations** section from the README for more information.
+    * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using the library, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
+* `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
+    * Please read `include/usbhsfs.h` for more information about these flags and what they do.
+    * These flags only affect NTFS volume mounting at this moment. If a ISC licensed build is used, no changes will be noticeable.
+* BOT driver:
+    * Inquiry SCSI command is now retried if an unexpected CSW with no sense data is received.
+    * Both peripheral qualifier and peripheral device type values from Inquiry data are now filtered. Thanks to [ginkuji](https://github.com/ginkuji) for reporting this issue.
+    * Logical unit startup now returns right away if an optional SCSI command fails and a `Medium Not Present` additional sense code is reported by the UMS device.
+    * A bus reset is now performed on all UMS devices that are already available when `usbHsFsInitialize()` is called. Fixes logical unit startup for drives that were stopped during a previous library session, but not removed from the console. Thanks to [FlyingBananaTree](https://github.com/FlyingBananaTree) for reporting this issue.
+* SX OS:
+    * The status change user-mode event is now signaled on every `usbfs` status change.
+* Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.
 
 **v0.0.3:**
 

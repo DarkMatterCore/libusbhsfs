@@ -18,6 +18,7 @@
 
 #ifdef GPL_BUILD
 #include "ntfs-3g/ntfs.h"
+#include "ntfs-3g/ntfs_disk_io.h"
 #endif
 
 #define USB_BOT_MAX_LUN         16                  /* Max returned value is actually a zero-based index to the highest LUN. */
@@ -40,12 +41,11 @@ typedef struct {
     u32 fs_idx;         ///< Filesystem index within the fs_ctx array from the LUN context.
     u8 fs_type;         ///< UsbHsFsDriveLogicalUnitFileSystemType.
     FATFS *fatfs;       ///< Pointer to a dynamically allocated FatFs object. Only used if fs_type == UsbHsFsFileSystemType_FAT.
-
 #ifdef GPL_BUILD
-    NTFS *ntfs;         ///< Pointer to a dynamically allocated NTFS object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
+    ntfs_vd *ntfs;      ///< Pointer to a dynamically allocated ntfs_vd object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
 #endif
-
-    /// TO DO: add more FS objects here after implemententing support for other filesystems.
+    
+    /// TO DO: add more FS objects here after implementing support for other filesystems.
     
     u32 device_id;      ///< ID used as part of the mount name.
     char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).
@@ -107,23 +107,27 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitCont
 }
 
 /// Checks if the provided filesystem context is valid.
+/// TO DO: update this after adding support for more filesystems.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    bool ctxValid = (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
-    bool fsValid = false;
+    bool ctx_valid = (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
+    bool fs_valid = false;
+    
     switch (fs_ctx->fs_type)
     {
-        case UsbHsFsDriveLogicalUnitFileSystemType_FAT: fsValid = fs_ctx->fatfs; break;
-
+        case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
+            fs_valid = (fs_ctx->fatfs != NULL);
+            break;
 #ifdef GPL_BUILD
-
-        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS: fsValid = fs_ctx->ntfs; break;
-
+        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
+            fs_valid = (fs_ctx->ntfs != NULL);
+            break;
 #endif
-
+        default:
+            break;
     }
     
-    return (ctxValid && fsValid);
+    return (ctx_valid && fs_valid);
 }
 
 #endif  /* __USBHSFS_DRIVE_H__ */

@@ -15,7 +15,6 @@
 #include "sxos/usbfs_dev.h"
 
 #if defined(DEBUG) && defined(GPL_BUILD)
-#include <ntfs-3g/logging.h>
 #include "ntfs-3g/ntfs.h"
 #endif 
 
@@ -77,18 +76,17 @@ Result usbHsFsInitialize(u8 event_idx)
     /* Start new log session. */
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
-    USBHSFS_LOG(LIB_TITLE " FatFs support enabled");
 #ifdef GPL_BUILD
-    USBHSFS_LOG(LIB_TITLE " NTFS-3G support enabled");
+    USBHSFS_LOG("Supported filesystem libraries: FatFs, NTFS-3G.");
+    
+    /* Setup NTFS-3G logging. */
     ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
-    ntfs_log_set_levels(
-        NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE |
-        NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_WARNING |
-        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL |
-        NTFS_LOG_LEVEL_PROGRESS
-    );
-#endif /* GPL_BUILD */
-#endif /* DEBUG */
+    ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_WARNING | \
+                        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_PROGRESS);
+#else
+    USBHSFS_LOG("Supported filesystem libraries: FatFs.");
+#endif  /* GPL_BUILD */
+#endif  /* DEBUG */
     
     /* Check if the deprecated fsp-usb service is running. */
     /* This custom mitm service offers system-wide UMS support - we definitely don't want to run alongside it to avoid undesired results. */
@@ -365,6 +363,21 @@ end:
     mutexUnlock(&g_managerMutex);
     
     return ret;
+}
+
+u32 usbHsFsGetFileSystemMountFlags(void)
+{
+    mutexLock(&g_managerMutex);
+    u32 flags = usbHsFsMountGetFileSystemMountFlags();
+    mutexUnlock(&g_managerMutex);
+    return flags;
+}
+
+void usbHsFsSetFileSystemMountFlags(u32 flags)
+{
+    mutexLock(&g_managerMutex);
+    usbHsFsMountSetFileSystemMountFlags(flags);
+    mutexUnlock(&g_managerMutex);
 }
 
 /* Non-static function not meant to be disclosed to users. */
@@ -849,7 +862,7 @@ static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool sto
         for(u32 i = 0; i < g_driveCount; i++) mutexLock(&(g_driveContexts[i].mutex));
         for(u32 i = g_driveCount; i > 0; i--) mutexUnlock(&(g_driveContexts[i - 1].mutex));
         
-        /* Move data in drive context buffer, if needed. */
+        /* Move data within the drive context buffer, if needed. */
         if (drive_ctx_idx < (g_driveCount - 1))
         {
             u32 move_count = (g_driveCount - (drive_ctx_idx + 1));
@@ -959,15 +972,12 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
             device->fs_type = fs_ctx->fatfs->fs_type;   /* FatFs type values correlate with our UsbHsFsDeviceFileSystemType enum. */
             break;
-        
 #ifdef GPL_BUILD
-
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
             device->fs_type = UsbHsFsDeviceFileSystemType_NTFS;
             break;
-        
 #endif
-
+        
         /* TO DO: populate this after adding support for additional filesystems. */
         
         default:

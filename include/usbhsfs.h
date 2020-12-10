@@ -18,9 +18,28 @@
 extern "C" {
 #endif
 
+/// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
-#define LIBUSBHSFS_VERSION_MINOR    0
-#define LIBUSBHSFS_VERSION_MICRO    4
+#define LIBUSBHSFS_VERSION_MINOR    1
+#define LIBUSBHSFS_VERSION_MICRO    0
+
+/// Filesystem mount flags.
+/// Not all supported filesystems are compatible with these flags.
+#define USB_MOUNT_DEFAULT               0x00000000  /* Default options, don't do anything special. */
+
+#define USB_MOUNT_IGNORE_CASE           0x00000001  /* Ignore case sensitivity. Everything will be lowercase (NTFS only). */
+#define USB_MOUNT_UPDATE_ACCESS_TIMES   0x00000002  /* Update file and directory access times (NTFS only). */
+#define USB_MOUNT_SHOW_HIDDEN_FILES     0x00000004  /* Display hidden files when enumerating directories (NTFS only). */
+#define USB_MOUNT_SHOW_SYSTEM_FILES     0x00000008  /* Display system files when enumerating directories (NTFS only). */
+#define USB_MOUNT_IGNORE_READ_ONLY_ATTR 0x00000010  /* Allow writing to files even if they are marked as read-only (NTFS only). */
+
+#define USB_MOUNT_READ_ONLY             0x00000100  /* Mount in read-only mode (NTFS only). */
+#define USB_MOUNT_RECOVER               0x00000200  /* Replay the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections) (NTFS only). */
+
+#define USB_MOUNT_IGNORE_HIBERNATION    0x00010000  /* Mount even if filesystem is hibernated (NTFS only). */
+
+#define USB_MOUNT_SU                    (USB_MOUNT_SHOW_HIDDEN_FILES | USB_MOUNT_SHOW_SYSTEM_FILES | USB_MOUNT_IGNORE_READ_ONLY_ATTR)
+#define USB_MOUNT_FORCE                 (USB_MOUNT_RECOVER | USB_MOUNT_IGNORE_HIBERNATION)
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
@@ -72,9 +91,17 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 /// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
 /// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
 /// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
-/// If running under SX OS, this function does absolutely nothing and returns right away.
 /// If successful, and signal_status_event is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+/// If running under SX OS, this function does absolutely nothing and returns right away.
 bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
+
+/// Returns a bitmask with the current filesystem mount flags.
+/// Can be used even if the USB Mass Storage Host interface hasn't been initialized.
+u32 usbHsFsGetFileSystemMountFlags(void);
+
+/// Takes an input bitmask with the desired filesystem mount flags, which will be used for all mount operations.
+/// Can be used even if the USB Mass Storage Host interface hasn't been initialized.
+void usbHsFsSetFileSystemMountFlags(u32 flags);
 
 #ifdef __cplusplus
 }

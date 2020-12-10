@@ -253,7 +253,7 @@ int ntfsdev_open (struct _reent *r, void *fd, const char *path, int flags, int m
     /* Check if we're trying to write to a read-only file. */
     if ((file->ni->flags & FILE_ATTR_READONLY) && file->write)
     {
-        if (!vd->ignoreReadOnlyAttr)
+        if (!vd->ignore_read_only_attr)
         {
             ntfs_error(EROFS);
         }
@@ -898,7 +898,7 @@ int ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int
     }
 
     /* Check that this entry can be enumerated (as described by the volume descriptor). */
-    if (MREF(mref) < FILE_first_user && MREF(mref) != FILE_root && !dir->vd->showSystemFiles)
+    if (MREF(mref) < FILE_first_user && MREF(mref) != FILE_root && !dir->vd->show_system_files)
     {
         /* Skip over this entry */
         ntfs_end;
@@ -930,8 +930,8 @@ int ntfsdev_diropen_filldir (DIR_ITER *dirState, const ntfschar *name, const int
         }
 
         /* Check that this entry can be emuerated (as described by the volume descriptor). */
-        if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->showHiddenFiles) ||
-            ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->showSystemFiles))
+        if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->show_hidden_files) ||
+            ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->show_system_files))
         {
             /* Skip over this entry */
             ntfs_end;

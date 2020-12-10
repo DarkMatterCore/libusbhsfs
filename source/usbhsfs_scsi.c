@@ -311,13 +311,16 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx);
 
-bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, UsbHsFsDriveLogicalUnitContext *lun_ctx)
+bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
 {
-    if (!usbHsFsDriveIsValidContext(drive_ctx) || lun >= USB_BOT_MAX_LUN || !lun_ctx)
+    if (!usbHsFsDriveIsValidContext(drive_ctx) || !drive_ctx->lun_ctx || lun_ctx_idx >= drive_ctx->lun_count)
     {
         USBHSFS_LOG("Invalid parameters!");
         return false;
     }
+    
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    u8 lun = lun_ctx->lun;
     
     ScsiInquiryStandardData inquiry_data = {0};
     
@@ -471,8 +474,6 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun, Us
     USBHSFS_LOG("Capacity (interface %d, LUN %u): 0x%lX byte(s).", drive_ctx->usb_if_id, lun, capacity);
     
     /* Fill LUN context. */
-    lun_ctx->usb_if_id = drive_ctx->usb_if_id;
-    lun_ctx->lun = lun;
     lun_ctx->removable = inquiry_data.rmb;
     lun_ctx->eject_supported = eject_supported;
     lun_ctx->write_protect = write_protect;
