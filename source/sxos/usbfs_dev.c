@@ -32,13 +32,33 @@
 #include "../usbhsfs_utils.h"
 #include "usbfs_dev.h"
 
+/* Helper macros. */
+
+#define usbfs_end                       goto end
+#define usbfs_ended_with_error          (_errno != 0)
+#define usbfs_set_error(x)              r->_errno = _errno = (x)
+#define usbfs_set_error_and_exit(x)     \
+do { \
+    usbfs_set_error((x)); \
+    usbfs_end; \
+} while(0)
+
+#define usbfs_declare_error_state       int _errno = 0
+#define usbfs_declare_file_state        usbfsdev_file *file = (usbfsdev_file*)fd
+#define usbfs_declare_dir_state         usbfsdev_dir *dir = (usbfsdev_dir*)dirState->dirStruct
+
+#define usbfs_return(x)                 return (usbfs_ended_with_error ? -1 : (x))
+#define usbfs_return_ptr(x)             return (usbfs_ended_with_error ? NULL : (x))
+
 /* Type definitions. */
 
+/// usbfs file state.
 typedef struct {
     uint64_t fileid;
     int flags;
 } usbfsdev_file;
 
+/// usbfs directory state.
 typedef struct
 {
     uint64_t dirid;
@@ -46,7 +66,7 @@ typedef struct
 
 /* Function prototypes. */
 
-static int       usbfsdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode);
+static int       usbfsdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode);
 static int       usbfsdev_close(struct _reent *r, void *fd);
 static ssize_t   usbfsdev_write(struct _reent *r, void *fd, const char *ptr, size_t len);
 static ssize_t   usbfsdev_read(struct _reent *r, void *fd, char *ptr, size_t len);
@@ -133,171 +153,171 @@ void usbfsdev_unregister(void)
     RemoveDevice(USBFS_MOUNT_NAME ":");
 }
 
-static int usbfsdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
+static int usbfsdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
     (void)mode;
     
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fileStruct;
-    int ret = -1;
+    char *path_start = NULL;
     
-    char *pathAtColon = strchr(path, ':');
-    if (pathAtColon) path = (pathAtColon + 1);
-
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
+    
+    /* Sanity check. */
+    if (!file || !path || !*path || !(path_start = strchr(path, ':')) || !*(++path_start)) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Reset file state. */
     memset(file, 0, sizeof(usbfsdev_file));
     file->flags = flags;
     
-    rc = usbFsOpenFile(&(file->fileid), path, (u64)flags);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = ENOENT;
-    }
+    /* Open file. */
+    rc = usbFsOpenFile(&(file->fileid), path_start, (u64)flags);
+    if (R_FAILED(rc)) usbfs_set_error(ENOENT);
     
-    return ret;
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_close(struct _reent *r, void *fd)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    int ret = -1;
     
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
+    
+    /* Sanity check. */
+    if (!file) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Close file. */
     rc = usbFsCloseFile(file->fileid);
-    if (R_SUCCEEDED(rc))
-    {
-        file->fileid = 0xFFFFFFFF;
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Invalidate file ID. */
+    file->fileid = 0xFFFFFFFF;
+    
+end:
+    usbfs_return(0);
 }
 
 static ssize_t usbfsdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    ssize_t ret = -1;
     u64 pos = 0;
     
-    if ((file->flags & O_ACCMODE) == O_RDONLY)
-    {
-        r->_errno = EBADF;
-        goto end;
-    }
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
     
+    /* Sanity check. */
+    if (!file || !ptr || !len) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with write access. */
+    if ((file->flags & O_ACCMODE) == O_RDONLY) usbfs_set_error_and_exit(EBADF);
+    
+    /* Check if the append flag is enabled. */
     if (file->flags & O_APPEND)
     {
+        /* Seek to EOF. */
         rc = usbFsSeekFile(file->fileid, 0, SEEK_END, &pos);
-        if (R_FAILED(rc))
-        {
-            r->_errno = EINVAL;
-            goto end;
-        }
+        if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
     }
     
+    /* Write file data. */
     rc = usbFsWriteFile(file->fileid, ptr, len, (size_t*)&pos);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = (ssize_t)pos;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
     
 end:
-    return ret;
+    usbfs_return((ssize_t)pos);
 }
 
 static ssize_t usbfsdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    ssize_t ret = -1;
     size_t rd_sz = 0;
     
-    if ((file->flags & O_ACCMODE) == O_WRONLY)
-    {
-        r->_errno = EBADF;
-        goto end;
-    }
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
     
+    /* Sanity check. */
+    if (!file || !ptr || !len) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with read access. */
+    if ((file->flags & O_ACCMODE) == O_WRONLY) usbfs_set_error_and_exit(EBADF);
+    
+    /* Read file data. */
     rc = usbFsReadFile(file->fileid, ptr, len, &rd_sz);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = (ssize_t)rd_sz;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
     
 end:
-    return ret;
+    usbfs_return((ssize_t)rd_sz);
 }
 
 static off_t usbfsdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    off_t ret = -1;
     u64 outpos = 0;
     
-    rc = usbFsSeekFile(file->fileid, (u64)pos, (u64)dir, &outpos);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = (off_t)outpos;
-    } else {
-        r->_errno = EINVAL;
-    }
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
     
-    return ret;
+    /* Sanity check. */
+    if (!file) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Perform file seek. */
+    rc = usbFsSeekFile(file->fileid, (u64)pos, (u64)dir, &outpos);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
+    
+end:
+    usbfs_return((off_t)outpos);
 }
 
 static int usbfsdev_fstat(struct _reent *r, void *fd, struct stat *st)
 {
     Result rc = 0;
-    usbfsdev_file* file = (usbfsdev_file*)fd;
     u64 size = 0, mode = 0;
-    int ret = -1;
     
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
+    
+    /* Sanity check. */
+    if (!file || !st) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Get file stats. */
     rc = usbFsStatFile(file->fileid, &size, &mode);
-    if (R_SUCCEEDED(rc))
-    {
-        memset(st, 0, sizeof(struct stat));
-        st->st_nlink = 1;
-        st->st_size = (off_t)size;
-        st->st_mode = (mode_t)mode;
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Fill stat info. */
+    memset(st, 0, sizeof(struct stat));
+    st->st_nlink = 1;
+    st->st_size = (off_t)size;
+    st->st_mode = (mode_t)mode;
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_stat(struct _reent *r, const char *file, struct stat *st)
 {
     Result rc = 0;
     u64 size = 0, mode = 0;
-    int ret = -1;
+    char *path_start = NULL;
     
-    char *pathAtColon = strchr(file, ':');
-    if (pathAtColon) file = (pathAtColon + 1);
+    usbfs_declare_error_state;
     
-    rc = usbFsStatPath(file, &size, &mode);
-    if (R_SUCCEEDED(rc))
-    {
-        memset(st, 0, sizeof(struct stat));
-        st->st_nlink = 1;
-        st->st_size = (off_t)size;
-        st->st_mode = (mode_t)mode;
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    /* Sanity check. */
+    if (!file || !*file || !(path_start = strchr(file, ':')) || !*(++path_start) || !st) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Get file stats. */
+    rc = usbFsStatPath(path_start, &size, &mode);
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Fill stat info. */
+    memset(st, 0, sizeof(struct stat));
+    st->st_nlink = 1;
+    st->st_size = (off_t)size;
+    st->st_mode = (mode_t)mode;
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_link(struct _reent *r, const char *existing, const char *newLink)
@@ -313,20 +333,19 @@ static int usbfsdev_link(struct _reent *r, const char *existing, const char *new
 static int usbfsdev_unlink(struct _reent *r, const char *name)
 {
     Result rc = 0;
-    int ret = -1;
+    char *path_start = NULL;
     
-    char *pathAtColon = strchr(name, ':');
-    if (pathAtColon) name = (pathAtColon + 1);
+    usbfs_declare_error_state;
     
-    rc = usbFsDeleteFile(name);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
-
-    return ret;
+    /* Sanity check. */
+    if (!name || !*name || !(path_start = strchr(name, ':')) || !*(++path_start)) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Delete file. */
+    rc = usbFsDeleteFile(path_start);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_chdir(struct _reent *r, const char *name)
@@ -353,40 +372,46 @@ static int usbfsdev_mkdir(struct _reent *r, const char *path, int mode)
     (void)mode;
     
     Result rc = 0;
-    int ret = -1;
+    char *path_start = NULL;
     
-    char *pathAtColon = strchr(path, ':');
-    if (pathAtColon) path = (pathAtColon + 1);
+    usbfs_declare_error_state;
     
-    rc = usbFsCreateDir(path);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    /* Sanity check. */
+    if (!path || !*path || !(path_start = strchr(path, ':')) || !*(++path_start)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Create directory. */
+    rc = usbFsCreateDir(path_start);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
+    
+end:
+    usbfs_return(0);
 }
 
 static DIR_ITER *usbfsdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path)
 {
     Result rc = 0;
-    usbfsdev_dir *d = (usbfsdev_dir*)dirState->dirStruct;
+    char *path_start = NULL;
     DIR_ITER *ret = NULL;
     
-    char *pathAtColon = strchr(path, ':');
-    if (pathAtColon) path = (pathAtColon + 1);
+    usbfs_declare_error_state;
     
-    rc = usbFsOpenDir(&(d->dirid), path);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = dirState;
-    } else {
-        r->_errno = EINVAL;
-    }
+    /* Sanity check. */
+    if (!dirState || !path || !*path || !(path_start = strchr(path, ':')) || !*(++path_start)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    usbfs_declare_dir_state;
+    
+    /* Reset directory state. */
+    memset(dir, 0, sizeof(usbfsdev_dir));
+    
+    /* Open directory. */
+    rc = usbFsOpenDir(&(dir->dirid), path_start);
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Update return value. */
+    ret = dirState;
+    
+end:
+    usbfs_return_ptr(ret);
 }
 
 static int usbfsdev_dirreset(struct _reent *r, DIR_ITER *dirState)
@@ -401,42 +426,48 @@ static int usbfsdev_dirreset(struct _reent *r, DIR_ITER *dirState)
 static int usbfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
 {
     Result rc = 0;
-    usbfsdev_dir *d = (usbfsdev_dir*)(dirState->dirStruct);
     u64 type = 0, size = 0;
-    int ret = -1;
     
+    usbfs_declare_error_state;
+    
+    /* Sanity check. */
+    if (!dirState || !filename || !filestat) usbfs_set_error_and_exit(EINVAL);
+    
+    usbfs_declare_dir_state;
+    
+    /* Clear filename buffer. */
     memset(filename, 0, NAME_MAX);
     
-    rc = usbFsReadDir(d->dirid, &type, &size, filename, NAME_MAX);
-    if (R_SUCCEEDED(rc))
-    {
-        filestat->st_ino = 0;
-        filestat->st_mode = (mode_t)type;
-        filestat->st_size = (off_t)size;
-        ret = 0;
-    } else {
-        /* ENOENT signals EOD. */
-        r->_errno = (rc == 0x68A ? ENOENT : EINVAL);
-    }
+    /* Read directory. */
+    rc = usbFsReadDir(dir->dirid, &type, &size, filename, NAME_MAX);
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(rc == 0x68A ? ENOENT : EINVAL);  /* ENOENT signals EOD. */
     
-    return ret;
+    /* Fill stat info. */
+    filestat->st_ino = 0;
+    filestat->st_mode = (mode_t)type;
+    filestat->st_size = (off_t)size;
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_dirclose(struct _reent *r, DIR_ITER *dirState)
 {
     Result rc = 0;
-    usbfsdev_dir *d = (usbfsdev_dir*)dirState->dirStruct;
-    int ret = -1;
     
-    rc = usbFsCloseDir(d->dirid);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    usbfs_declare_error_state;
     
-    return ret;
+    /* Sanity check. */
+    if (!dirState) usbfs_set_error_and_exit(EINVAL);
+    
+    usbfs_declare_dir_state;
+    
+    /* Close directory. */
+    rc = usbFsCloseDir(dir->dirid);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
@@ -445,70 +476,72 @@ static int usbfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *
     
     Result rc = 0;
     u64 freespace = 0, totalspace = 0;
-    int ret = -1;
     
+    usbfs_declare_error_state;
+    
+    /* Sanity check. */
+    if (!buf) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Get volume information. */
     rc = usbFsStatFilesystem(&totalspace, &freespace);
-    if (R_SUCCEEDED(rc))
-    {
-        memset(buf, 0, sizeof(struct statvfs));
-        buf->f_bsize   = 1;
-        buf->f_frsize  = 1;
-        buf->f_blocks  = totalspace;
-        buf->f_bfree   = freespace;
-        buf->f_bavail  = freespace;
-        buf->f_files   = 0;
-        buf->f_ffree   = 0;
-        buf->f_favail  = 0;
-        buf->f_fsid    = 0;
-        buf->f_flag    = ST_NOSUID;
-        buf->f_namemax = 0;
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Fill filesystem stats. */
+    memset(buf, 0, sizeof(struct statvfs));
+    
+    buf->f_bsize = 1;
+    buf->f_frsize = 1;
+    buf->f_blocks = totalspace;
+    buf->f_bfree = freespace;
+    buf->f_bavail = freespace;
+    buf->f_files = 0;
+    buf->f_ffree = 0;
+    buf->f_favail = 0;
+    buf->f_fsid = 0;
+    buf->f_flag = ST_NOSUID;
+    buf->f_namemax = 0;
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_ftruncate(struct _reent *r, void *fd, off_t len)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    int ret = -1;
     
-    if (len < 0)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
     
-    rc = usbFsTruncateFile(file->fileid, len);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    /* Sanity check. */
+    if (!file || len < 0) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with write access. */
+    if ((file->flags & O_ACCMODE) == O_RDONLY) usbfs_set_error_and_exit(EBADF);
+    
+    /* Truncate file. */
+    rc = usbFsTruncateFile(file->fileid, (u64)len);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
     
 end:
-    return ret;
+    usbfs_return(0);
 }
 
 static int usbfsdev_fsync(struct _reent *r, void *fd)
 {
     Result rc = 0;
-    usbfsdev_file *file = (usbfsdev_file*)fd;
-    int ret = -1;
     
+    usbfs_declare_error_state;
+    usbfs_declare_file_state;
+    
+    /* Sanity check. */
+    if (!file) usbfs_set_error_and_exit(EINVAL);
+    
+    /* Synchronize file. */
     rc = usbFsSyncFile(file->fileid);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
     
-    return ret;
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_chmod(struct _reent *r, const char *path, mode_t mode)
@@ -534,20 +567,19 @@ static int usbfsdev_fchmod(struct _reent *r, void *fd, mode_t mode)
 static int usbfsdev_rmdir(struct _reent *r, const char *name)
 {
     Result rc = 0;
-    int ret = -1;
+    char *path_start = NULL;
     
-    char *pathAtColon = strchr(name, ':');
-    if (pathAtColon) name = (pathAtColon + 1);
+    usbfs_declare_error_state;
     
-    rc = usbFsDeleteDir(name);
-    if (R_SUCCEEDED(rc))
-    {
-        ret = 0;
-    } else {
-        r->_errno = EINVAL;
-    }
+    /* Sanity check. */
+    if (!name || !*name || !(path_start = strchr(name, ':')) || !*(++path_start)) usbfs_set_error_and_exit(EINVAL);
     
-    return ret;
+    /* Delete directory. */
+    rc = usbFsDeleteDir(path_start);
+    if (R_FAILED(rc)) usbfs_set_error(EINVAL);
+    
+end:
+    usbfs_return(0);
 }
 
 static int usbfsdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2])

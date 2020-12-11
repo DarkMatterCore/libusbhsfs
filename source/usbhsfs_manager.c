@@ -381,14 +381,27 @@ void usbHsFsSetFileSystemMountFlags(u32 flags)
 }
 
 /* Non-static function not meant to be disclosed to users. */
-void usbHsFsManagerMutexControl(bool lock)
+UsbHsFsDriveContext *usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
 {
-    if (lock)
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
+    UsbHsFsDriveContext *drive_ctx = NULL;
+    
+    mutexLock(&g_managerMutex);
+    
+    /* Check if we have a valid filesystem context pointer. */
+    if (fs_ctx && *fs_ctx)
     {
-        mutexLock(&g_managerMutex);
-    } else {
-        mutexUnlock(&g_managerMutex);
+        /* Get pointer to the LUN context. */
+        lun_ctx = (UsbHsFsDriveLogicalUnitContext*)(*fs_ctx)->lun_ctx;
+        
+        /* Get pointer to the drive context and lock its mutex. */
+        drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
+        if (drive_ctx) mutexLock(&(drive_ctx->mutex));
     }
+    
+    mutexUnlock(&g_managerMutex);
+    
+    return drive_ctx;
 }
 
 /* Non-static function not meant to be disclosed to users. */

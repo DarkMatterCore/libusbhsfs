@@ -14,10 +14,6 @@
 #ifndef __NTFS_MORE_H__
 #define __NTFS_MORE_H__
 
-#include <ntfs-3g/config.h>
-#include <ntfs-3g/types.h>
-#include <ntfs-3g/inode.h>
-
 #include "ntfs.h"
 
 #define NTFS_ENTRY_NAME_SELF                "." /* Current directory */

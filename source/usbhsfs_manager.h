@@ -14,9 +14,10 @@
 
 #include "usbhsfs_drive.h"
 
-/// Used to lock the drive manager mutex to prevent the background thread from updating drive contexts while working with them.
-/// Use with caution.
-void usbHsFsManagerMutexControl(bool lock);
+/// Locks the drive manager mutex to prevent the background thread from updating drive contexts while working with them, then looks up the drive context for the provided filesystem context.
+/// If a drive context is found, its mutex is locked. The drive manager mutex is unlocked right before this function returns.
+/// This function is thread-safe.
+UsbHsFsDriveContext *usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx);
 
 /// Returns a pointer to the parent drive context from the provided LUN context, or NULL if an error occurs.
 /// The drive manager mutex must have been locked beforehand to achieve thread-safety.

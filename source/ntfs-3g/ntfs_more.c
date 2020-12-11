@@ -10,19 +10,10 @@
  */
 
 #include <sys/iosupport.h>
-#include <sys/reent.h>
 #include <sys/param.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <malloc.h>
-#include <errno.h>
 
 #include "ntfs.h"
 #include "ntfs_more.h"
-
-#include <ntfs-3g/dir.h>
-#include <ntfs-3g/reparse.h>
 
 int ntfs_resolve_path (ntfs_vd *vd, const char *path, ntfs_path *p)
 {

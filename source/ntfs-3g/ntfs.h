@@ -20,6 +20,8 @@
 #include <ntfs-3g/volume.h>
 #include <ntfs-3g/inode.h>
 #include <ntfs-3g/logging.h>
+#include <ntfs-3g/dir.h>
+#include <ntfs-3g/reparse.h>
 
 #include "../usbhsfs_utils.h"
 
@@ -29,7 +31,7 @@
 #define EDIRTY      3002    /* Volume is dirty and NTFS_RECOVER was not specified during mount. */
 #define EHIBERNATED 3003    /* Volume is hibernated and NTFS_IGNORE_HIBERFILE was not specified during mount. */
 
-/// NTFS file access time update strategies
+/// NTFS file access time update strategies.
 typedef enum {
     ATIME_ENABLED,  ///< Update access times.
     ATIME_DISABLED  ///< Don't update access times.

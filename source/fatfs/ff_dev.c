@@ -16,17 +16,37 @@
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_mount.h"
 
+/* Helper macros. */
+
+#define ff_end                      goto end
+#define ff_ended_with_error         (_errno != 0)
+#define ff_set_error(x)             r->_errno = _errno = (x)
+#define ff_set_error_and_exit(x)    \
+do { \
+    ff_set_error((x)); \
+    ff_end; \
+} while(0)
+
+#define ff_declare_error_state      int _errno = 0
+#define ff_declare_file_state       FIL *file = (FIL*)fd
+#define ff_declare_dir_state        DIR *dir = (DIR*)dirState->dirStruct
+#define ff_declare_fs_ctx           UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData
+#define ff_declare_drive_ctx        UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(&fs_ctx)
+#define ff_declare_vol_state        FATFS *fatfs = fs_ctx->fatfs
+
+#define ff_lock_drive_ctx           ff_declare_fs_ctx; \
+                                    ff_declare_drive_ctx; \
+                                    if (!drive_ctx) ff_set_error_and_exit(ENODEV);
+
+#define ff_unlock_drive_ctx         if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
+
+#define ff_return(x)                return (ff_ended_with_error ? -1 : (x))
+#define ff_return_ptr(x)            return (ff_ended_with_error ? NULL : (x))
+#define ff_return_bool              return (ff_ended_with_error ? false : true)
+
 /* Function prototypes. */
 
-static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx);
-
-static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath);
-
-static void ffdev_fill_stat(struct stat *st, const FILINFO *info);
-
-static int ffdev_translate_error(FRESULT res);
-
-static int       ffdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode);
+static int       ffdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode);
 static int       ffdev_close(struct _reent *r, void *fd);
 static ssize_t   ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t len);
 static ssize_t   ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len);
@@ -49,6 +69,12 @@ static int       ffdev_chmod(struct _reent *r, const char *path, mode_t mode);
 static int       ffdev_fchmod(struct _reent *r, void *fd, mode_t mode);
 static int       ffdev_rmdir(struct _reent *r, const char *name);
 static int       ffdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2]);
+
+static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath);
+
+static void ffdev_fill_stat(struct stat *st, const FILINFO *info);
+
+static int ffdev_translate_error(FRESULT res);
 
 /* Global variables. */
 
@@ -90,46 +116,664 @@ const devoptab_t *ffdev_get_devoptab()
     return &ffdev_devoptab;
 }
 
-static UsbHsFsDriveContext *ffdev_get_drive_ctx_and_lock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
+static int ffdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
-    UsbHsFsDriveContext *drive_ctx = NULL;
+    (void)mode;
     
-    /* Lock drive manager mutex. */
-    usbHsFsManagerMutexControl(true);
+    BYTE ffdev_flags = 0;
+    FRESULT res = FR_OK;
     
-    /* Check if we have a valid filesystem context pointer. */
-    if (fs_ctx && *fs_ctx)
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file) ff_set_error_and_exit(EINVAL);
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
+    
+    /* Check access mode. */
+    switch(flags & O_ACCMODE)
     {
-        /* Get pointer to the LUN context. */
-        lun_ctx = (UsbHsFsDriveLogicalUnitContext*)(*fs_ctx)->lun_ctx;
-        
-        /* Get pointer to the drive context and lock its mutex. */
-        drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-        if (drive_ctx) mutexLock(&(drive_ctx->mutex));
+        case O_RDONLY:  /* Read-only. Don't allow append flag. */
+            if (flags & O_APPEND) ff_set_error_and_exit(EINVAL);
+            ffdev_flags |= FA_READ;
+            break;
+        case O_WRONLY:  /* Write-only. */
+            ffdev_flags |= FA_WRITE;
+            break;
+        case O_RDWR:    /* Read and write. */
+            ffdev_flags |= (FA_READ | FA_WRITE);
+            break;
+        default:        /* Invalid option. */
+            ff_set_error_and_exit(EINVAL);
     }
     
-    /* Unlock drive manager mutex. */
-    usbHsFsManagerMutexControl(false);
+    if ((flags & O_ACCMODE) != O_RDONLY)
+    {
+        if (flags & O_TRUNC)
+        {
+            /* Create a new file. If the file exists, it will be truncated and overwritten. */
+            ffdev_flags |= FA_CREATE_ALWAYS;
+        } else
+        if (flags & O_CREAT)
+        {
+            /* O_EXCL set: create a new file. Fail if the file already exists. */
+            /* O_EXCL cleared: */
+            /*     - O_APPEND set: open file. If it doesn't exist, it will be created. The file pointer will be set to EOF before each write. */
+            /*     - O_APPEND cleared: open file. If it doesn't exist, it will be created. */
+            ffdev_flags |= ((flags & O_EXCL) ? FA_CREATE_NEW : ((flags & O_APPEND) ? FA_OPEN_APPEND : FA_OPEN_ALWAYS));
+        } else {
+            /* Open file. Fail if the file doesn't exist. */
+            ffdev_flags |= FA_OPEN_EXISTING;
+        }
+    } else {
+        /* Open file. Fail if the file doesn't exist. */
+        ffdev_flags |= FA_OPEN_EXISTING;
+    }
     
-    return drive_ctx;
+    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, ffdev_path_buf, flags, ffdev_flags);
+    
+    /* Reset file descriptor. */
+    memset(file, 0, sizeof(FIL));
+    
+    /* Open file. */
+    res = ff_open(file, ffdev_path_buf, ffdev_flags);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_close(struct _reent *r, void *fd)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file) ff_set_error_and_exit(EINVAL);
+    
+    USBHSFS_LOG("Closing file from \"%u:\".", file->obj.fs->pdrv);
+    
+    /* Close file. */
+    res = ff_close(file);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Reset file descriptor. */
+    memset(file, 0, sizeof(FIL));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
+{
+    UINT bw = 0;
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file || !ptr || !len) ff_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with write access. */
+    if (!(file->flag & FA_WRITE)) ff_set_error_and_exit(EBADF);
+    
+    /* Check if the append flag is enabled. */
+    if ((file->flag & (FA_OPEN_APPEND & ~FA_OPEN_ALWAYS)) && !ff_eof(file))
+    {
+        /* Seek to EOF. */
+        res = ff_lseek(file, ff_size(file));
+        if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    }
+    
+    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
+    
+    /* Write file data. */
+    res = ff_write(file, ptr, (UINT)len, &bw);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return((ssize_t)bw);
+}
+
+static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
+{
+    UINT br = 0;
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file || !ptr || !len) ff_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with read access. */
+    if (!(file->flag & FA_READ)) ff_set_error_and_exit(EBADF);
+    
+    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
+    
+    /* Read file data. */
+    res = ff_read(file, ptr, (UINT)len, &br);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return((ssize_t)br);
+}
+
+static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
+{
+    off_t offset = 0;
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file) ff_set_error_and_exit(EINVAL);
+    
+    /* Find the offset to seek from. */
+    switch(dir)
+    {
+        case SEEK_SET:  /* Set absolute position relative to zero (start offset). */
+            break;
+        case SEEK_CUR:  /* Set position relative to the current position. */
+            offset = (off_t)ff_tell(file);
+            break;
+        case SEEK_END:  /* Set position relative to EOF. */
+            offset = (off_t)ff_size(file);
+            break;
+        default:        /* Invalid option. */
+            ff_set_error_and_exit(EINVAL);
+    }
+    
+    /* Don't allow negative seeks beyond the beginning of the file. */
+    if (pos < 0 && offset < -pos) ff_set_error_and_exit(EINVAL);
+    
+    /* Calculate actual offset. */
+    offset += pos;
+    
+    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, ff_tell(file));
+    
+    /* Perform file seek. */
+    res = ff_lseek(file, (FSIZE_t)offset);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(offset);
+}
+
+static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
+{
+    (void)fd;
+    (void)st;
+    
+    /* Not supported by FatFs. */
+    r->_errno = ENOSYS;
+    return -1;
+}
+
+static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
+{
+    FILINFO info = {0};
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!st) ff_set_error_and_exit(EINVAL);
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) ff_end;
+    
+    USBHSFS_LOG("Getting stats for \"%s\" (\"%s\").", file, ffdev_path_buf);
+    
+    /* Get stats. */
+    res = ff_stat(ffdev_path_buf, &info);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+    /* Fill stat info. */
+    ffdev_fill_stat(st, &info);
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_link(struct _reent *r, const char *existing, const char *newLink)
+{
+    (void)existing;
+    (void)newLink;
+    
+    /* Not supported by FatFs. */
+    r->_errno = ENOSYS;
+    return -1;
+}
+
+static int ffdev_unlink(struct _reent *r, const char *name)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
+    
+    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, ffdev_path_buf);
+    
+    /* Delete file. */
+    res = ff_unlink(ffdev_path_buf);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_chdir(struct _reent *r, const char *name)
+{
+    DIR dir = {0};
+    FRESULT res = FR_OK;
+    size_t cwd_len = 0;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
+    
+    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
+    
+    /* Open directory. */
+    res = ff_opendir(&dir, ffdev_path_buf);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+    /* Close directory. */
+    ff_closedir(&dir);
+    
+    /* Update current working directory. */
+    sprintf(fs_ctx->cwd, "%s", strchr(ffdev_path_buf, '/'));
+    
+    cwd_len = strlen(fs_ctx->cwd);
+    if (fs_ctx->cwd[cwd_len - 1] != '/')
+    {
+        fs_ctx->cwd[cwd_len] = '/';
+        fs_ctx->cwd[cwd_len + 1] = '\0';
+    }
+    
+    /* Set default devoptab device. */
+    usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_rename(struct _reent *r, const char *oldName, const char *newName)
+{
+    char old_path[USB_MAX_PATH_LENGTH] = {0};
+    char *new_path = ffdev_path_buf;
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Fix input paths. */
+    if (!ffdev_fixpath(r, oldName, &fs_ctx, old_path) || !ffdev_fixpath(r, newName, &fs_ctx, new_path)) ff_end;
+    
+    USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
+    
+    /* Rename entry. */
+    res = ff_rename(old_path, new_path);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
+{
+    (void)mode;
+    
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
+    
+    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, ffdev_path_buf);
+    
+    /* Create directory. */
+    res = ff_mkdir(ffdev_path_buf);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path)
+{
+    FRESULT res = FR_OK;
+    DIR_ITER *ret = NULL;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!dirState) ff_set_error_and_exit(EINVAL);
+    
+    ff_declare_dir_state;
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
+    
+    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, ffdev_path_buf);
+    
+    /* Reset directory state. */
+    memset(dir, 0, sizeof(DIR));
+    
+    /* Open directory. */
+    res = ff_opendir(dir, ffdev_path_buf);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Update return value. */
+    ret = dirState;
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return_ptr(ret);
+}
+
+static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!dirState) ff_set_error_and_exit(EINVAL);
+    
+    ff_declare_dir_state;
+    
+    USBHSFS_LOG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
+    
+    /* Reset directory state. */
+    res = ff_rewinddir(dir);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
+{
+    FILINFO info = {0};
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!dirState || !filename || !filestat) ff_set_error_and_exit(EINVAL);
+    
+    ff_declare_dir_state;
+    
+    USBHSFS_LOG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
+    
+    /* Read directory. */
+    res = ff_readdir(dir, &info);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Check if we haven't reached EOD. */
+    /* FatFs returns an empty string if so. */
+    if (info.fname[0])
+    {
+        /* Copy filename. */
+        strcpy(filename, info.fname);
+        
+        /* Fill stat info. */
+        ffdev_fill_stat(filestat, &info);
+    } else {
+        /* ENOENT signals EOD. */
+        ff_set_error(ENOENT);
+    }
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!dirState) ff_set_error_and_exit(EINVAL);
+    
+    ff_declare_dir_state;
+    
+    USBHSFS_LOG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
+    
+    /* Close directory. */
+    res = ff_closedir(dir);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Reset directory state. */
+    memset(dir, 0, sizeof(DIR));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
+{
+    (void)path;
+    
+    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    DWORD free_clusters = 0;
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    ff_declare_vol_state;
+    
+    /* Sanity check. */
+    if (!buf) ff_set_error_and_exit(EINVAL);
+    
+    /* Generate volume name. */
+    sprintf(name, "%u:", fatfs->pdrv);
+    
+    USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
+    
+    /* Get volume information. */
+    res = ff_getfree(name, &free_clusters, &fatfs);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Fill filesystem stats. */
+    memset(buf, 0, sizeof(struct statvfs));
+    
+    buf->f_bsize = fatfs->ssize;                                    /* Sector size. */
+    buf->f_frsize = fatfs->ssize;                                   /* Sector size. */
+    buf->f_blocks = ((fatfs->n_fatent - 2) * (DWORD)fatfs->csize);  /* Total cluster count * cluster size in sectors. */
+    buf->f_bfree = (free_clusters * (DWORD)fatfs->csize);           /* Free cluster count * cluster size in sectors. */
+    buf->f_bavail = buf->f_bfree;                                   /* Free cluster count * cluster size in sectors. */
+    buf->f_files = 0;
+    buf->f_ffree = 0;
+    buf->f_favail = 0;
+    buf->f_fsid = 0;
+    buf->f_flag = ST_NOSUID;
+    buf->f_namemax = FF_LFN_BUF;
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file || len < 0) ff_set_error_and_exit(EINVAL);
+    
+    /* Check if the file was opened with write access. */
+    if (!(file->flag & FA_WRITE)) ff_set_error_and_exit(EBADF);
+    
+    USBHSFS_LOG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
+    
+    /* Seek to the provided offset. */
+    res = ff_lseek(file, (FSIZE_t)len);
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+    
+    /* Truncate file. */
+    res = ff_truncate(file);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_fsync(struct _reent *r, void *fd)
+{
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_declare_file_state;
+    ff_lock_drive_ctx;
+    
+    /* Sanity check. */
+    if (!file) ff_set_error_and_exit(EINVAL);
+    
+    USBHSFS_LOG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
+    
+    /* Synchronize file. */
+    res = ff_sync(file);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
+}
+
+static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
+{
+    (void)path;
+    (void)mode;
+    
+    /* Not supported by FatFs. */
+    r->_errno = ENOSYS;
+    return -1;
+}
+
+static int ffdev_fchmod(struct _reent *r, void *fd, mode_t mode)
+{
+    (void)fd;
+    (void)mode;
+    
+    /* Not supported by FatFs. */
+    r->_errno = ENOSYS;
+    return -1;
+}
+
+static int ffdev_rmdir(struct _reent *r, const char *name)
+{
+    /* Exactly the same as ffdev_unlink(). */
+    return ffdev_unlink(r, name);
+}
+
+static int ffdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2])
+{
+    Result rc = 0;
+    time_t mtime = 0;
+    TimeCalendarTime caltime = {0};
+    DWORD timestamp = 0;
+    
+    FILINFO info = {0};
+    FRESULT res = FR_OK;
+    
+    ff_declare_error_state;
+    ff_lock_drive_ctx;
+    
+    /* Fix input path. */
+    if (!ffdev_fixpath(r, filename, &fs_ctx, NULL)) ff_end;
+    
+    /* Check if we should use the current time. */
+    /* We can only modify the last modification date and time. */
+    if (!times)
+    {
+        /* Get current time. */
+        mtime = time(NULL);
+    } else {
+        /* Only use full second precision from the provided timeval value. */
+        mtime = times[1].tv_sec;
+    }
+    
+    /* Convert POSIX timestamp to calendar time. */
+    rc = timeToCalendarTimeWithMyRule((u64)mtime, &caltime, NULL);
+    if (R_SUCCEEDED(rc))
+    {
+        /* Generate FAT timestamp. */
+        timestamp = FAT_TIMESTAMP(caltime.year, caltime.month, caltime.day, caltime.hour, caltime.minute, caltime.second);
+        
+        /* Fill FILINFO time data. */
+        info.fdate = (WORD)(timestamp >> 16);
+        info.ftime = (WORD)(timestamp & 0xFF);
+    }
+    
+    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, ffdev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
+                caltime.minute, caltime.second, info.fdate, info.ftime);
+    
+    /* Change timestamp. */
+    res = ff_utime(ffdev_path_buf, &info);
+    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    
+end:
+    ff_unlock_drive_ctx;
+    ff_return(0);
 }
 
 static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath)
 {
     FATFS *fatfs = NULL;
-    
-    if (!r || !path || !*path || !fs_ctx || !*fs_ctx || !(fatfs = (*fs_ctx)->fatfs))
-    {
-        r->_errno = EINVAL;
-        return false;
-    }
-    
     ssize_t units = 0;
     u32 code = 0;
     const u8 *p = (const u8*)path;
     size_t len = 0;
-    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf), *cwd = (*fs_ctx)->cwd;
+    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf), *cwd = NULL;
+    
+    ff_declare_error_state;
+    
+    if (!r || !path || !*path || !fs_ctx || !*fs_ctx || !(fatfs = (*fs_ctx)->fatfs) || !(cwd = (*fs_ctx)->cwd)) ff_set_error_and_exit(EINVAL);
     
     USBHSFS_LOG("Input path: \"%s\".", path);
     
@@ -139,12 +783,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     /* Move the path pointer to the start of the actual path. */
     do {
         units = decode_utf8(&code, p);
-        if (units < 0)
-        {
-            r->_errno = EILSEQ;
-            return false;
-        }
-        
+        if (units < 0) ff_set_error_and_exit(EILSEQ);
         p += units;
     } while(code != ':' && code != 0);
     
@@ -153,20 +792,11 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     
     /* Make sure there are no more colons and that the remainder of the filename is valid UTF-8. */
     p = (const uint8_t*)path;
+    
     do {
         units = decode_utf8(&code, p);
-        if (units < 0)
-        {
-            r->_errno = EILSEQ;
-            return false;
-        }
-        
-        if (code == ':')
-        {
-            r->_errno = EINVAL;
-            return false;
-        }
-        
+        if (units < 0) ff_set_error_and_exit(EILSEQ);
+        if (code == ':') ff_set_error_and_exit(EINVAL);
         p += units;
     } while(code != 0);
     
@@ -174,11 +804,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     len = (strlen(name) + strlen(path));
     if (path[0] != '/') len += strlen(cwd);
     
-    if (len >= USB_MAX_PATH_LENGTH)
-    {
-        r->_errno = ENAMETOOLONG;
-        return false;
-    }
+    if (len >= USB_MAX_PATH_LENGTH) ff_set_error_and_exit(ENAMETOOLONG);
     
     /* Generate fixed path. */
     if (path[0] == '/')
@@ -190,7 +816,8 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     
     USBHSFS_LOG("Fixed path: \"%s\".", outptr);
     
-    return true;
+end:
+    ff_return_bool;
 }
 
 static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
@@ -288,856 +915,6 @@ static int ffdev_translate_error(FRESULT res)
     }
     
     USBHSFS_LOG("FRESULT: %u. Translated errno: %d.", res, ret);
-    
-    return ret;
-}
-
-static int ffdev_open(struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
-{
-    (void)mode;
-    
-    FIL *file = (FIL*)fileStruct;
-    BYTE ffdev_flags = 0;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
-    
-    /* Check access mode. */
-    switch(flags & O_ACCMODE)
-    {
-        case O_RDONLY:  /* Read-only. Don't allow append flag. */
-            if (flags & O_APPEND)
-            {
-                r->_errno = EINVAL;
-                goto end;
-            }
-            
-            ffdev_flags |= FA_READ;
-            break;
-        case O_WRONLY:  /* Write-only. */
-            ffdev_flags |= FA_WRITE;
-            break;
-        case O_RDWR:    /* Read and write. */
-            ffdev_flags |= (FA_READ | FA_WRITE);
-            break;
-        default:        /* Invalid option. */
-            r->_errno = EINVAL;
-            goto end;
-    }
-    
-    if ((flags & O_ACCMODE) != O_RDONLY)
-    {
-        if (flags & O_TRUNC)
-        {
-            /* Create a new file. If the file exists, it will be truncated and overwritten. */
-            ffdev_flags |= FA_CREATE_ALWAYS;
-        } else
-        if (flags & O_CREAT)
-        {
-            /* O_EXCL set: create a new file. Fail if the file already exists. */
-            /* O_EXCL cleared: */
-            /*     - O_APPEND set: open file. If it doesn't exist, it will be created. The file pointer will be set to EOF before each write. */
-            /*     - O_APPEND cleared: open file. If it doesn't exist, it will be created. */
-            ffdev_flags |= ((flags & O_EXCL) ? FA_CREATE_NEW : ((flags & O_APPEND) ? FA_OPEN_APPEND : FA_OPEN_ALWAYS));
-        } else {
-            /* Open file. Fail if the file doesn't exist. */
-            ffdev_flags |= FA_OPEN_EXISTING;
-        }
-    } else {
-        /* Open file. Fail if the file doesn't exist. */
-        ffdev_flags |= FA_OPEN_EXISTING;
-    }
-    
-    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, ffdev_path_buf, flags, ffdev_flags);
-    
-    /* Open file. */
-    res = ff_open(file, ffdev_path_buf, ffdev_flags);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_close(struct _reent *r, void *fd)
-{
-    FIL *file = (FIL*)fd;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Closing file from \"%u:\".", file->obj.fs->pdrv);
-    
-    /* Close file. */
-    res = ff_close(file);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
-{
-    FIL *file = (FIL*)fd;
-    UINT bw = 0;
-    FRESULT res = FR_OK;
-    ssize_t ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Check if the file was opened with write access. */
-    if (!(file->flag & FA_WRITE))
-    {
-        r->_errno = EBADF;
-        goto end;
-    }
-    
-    /* Check if the append flag is enabled. */
-    if ((file->flag & (FA_OPEN_APPEND & ~FA_OPEN_ALWAYS)) && !ff_eof(file))
-    {
-        res = ff_lseek(file, ff_size(file));
-        if (res != FR_OK)
-        {
-            r->_errno = ffdev_translate_error(res);
-            goto end;
-        }
-    }
-    
-    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
-    
-    /* Write file data. */
-    res = ff_write(file, ptr, (UINT)len, &bw);
-    if (res == FR_OK)
-    {
-        ret = (ssize_t)bw;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
-{
-    FIL *file = (FIL*)fd;
-    UINT br = 0;
-    FRESULT res = FR_OK;
-    ssize_t ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Check if the file was opened with read access. */
-    if (!(file->flag & FA_READ))
-    {
-        r->_errno = EBADF;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
-    
-    /* Read file data. */
-    res = ff_read(file, ptr, (UINT)len, &br);
-    if (res == FR_OK)
-    {
-        ret = (ssize_t)br;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
-{
-    FIL *file = (FIL*)fd;
-    s64 offset = 0;
-    FRESULT res = FR_OK;
-    off_t ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Find the offset to seek from. */
-    switch(dir)
-    {
-        case SEEK_SET:  /* Set absolute position relative to zero (start offset). */
-            break;
-        case SEEK_CUR:  /* Set position relative to the current position. */
-            offset = (s64)ff_tell(file);
-            break;
-        case SEEK_END:  /* Set position relative to EOF. */
-            offset = (s64)ff_size(file);
-            break;
-        default:        /* Invalid option. */
-            r->_errno = EINVAL;
-            goto end;
-    }
-    
-    /* Don't allow negative seeks beyond the beginning of the file. */
-    if (pos < 0 && offset < -pos)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Calculate actual offset. */
-    offset += pos;
-    
-    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, ff_tell(file));
-    
-    /* Perform file seek. */
-    res = ff_lseek(file, (FSIZE_t)offset);
-    if (res == FR_OK)
-    {
-        ret = (off_t)offset;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
-{
-    (void)fd;
-    (void)st;
-    
-    /* Not supported by FatFs. */
-    r->_errno = ENOSYS;
-    return -1;
-}
-
-static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
-{
-    FILINFO info = {0};
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) goto end;
-    
-    USBHSFS_LOG("Getting file stats for \"%s\" (\"%s\").", file, ffdev_path_buf);
-    
-    /* Get file stats. */
-    res = ff_stat(ffdev_path_buf, &info);
-    if (res == FR_OK)
-    {
-        /* Fill stat info. */
-        ffdev_fill_stat(st, &info);
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_link(struct _reent *r, const char *existing, const char *newLink)
-{
-    (void)existing;
-    (void)newLink;
-    
-    /* Not supported by FatFs. */
-    r->_errno = ENOSYS;
-    return -1;
-}
-
-static int ffdev_unlink(struct _reent *r, const char *name)
-{
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) goto end;
-    
-    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, ffdev_path_buf);
-    
-    /* Delete file. */
-    res = ff_unlink(ffdev_path_buf);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_chdir(struct _reent *r, const char *name)
-{
-    DIR dir = {0};
-    FRESULT res = FR_OK;
-    size_t cwd_len = 0;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) goto end;
-    
-    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
-    
-    /* Open directory. */
-    res = ff_opendir(&dir, ffdev_path_buf);
-    if (res == FR_OK)
-    {
-        /* Close directory. */
-        ff_closedir(&dir);
-        
-        /* Update current working directory. */
-        sprintf(fs_ctx->cwd, "%s", strchr(ffdev_path_buf, '/'));
-        
-        cwd_len = strlen(fs_ctx->cwd);
-        if (fs_ctx->cwd[cwd_len - 1] != '/')
-        {
-            fs_ctx->cwd[cwd_len] = '/';
-            fs_ctx->cwd[cwd_len + 1] = '\0';
-        }
-        
-        /* Set default devoptab device. */
-        usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
-        
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_rename(struct _reent *r, const char *oldName, const char *newName)
-{
-    char old_path[USB_MAX_PATH_LENGTH] = {0};
-    char *new_path = ffdev_path_buf;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input paths. */
-    if (!ffdev_fixpath(r, oldName, &fs_ctx, old_path) || !ffdev_fixpath(r, newName, &fs_ctx, new_path)) goto end;
-    
-    USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
-    
-    /* Rename entry. */
-    res = ff_rename(old_path, new_path);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
-{
-    (void)mode;
-    
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
-    
-    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, ffdev_path_buf);
-    
-    /* Create directory. */
-    res = ff_mkdir(ffdev_path_buf);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path)
-{
-    DIR *dir = (DIR*)dirState->dirStruct;
-    FRESULT res = FR_OK;
-    DIR_ITER *ret = NULL;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) goto end;
-    
-    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, ffdev_path_buf);
-    
-    /* Open directory. */
-    res = ff_opendir(dir, ffdev_path_buf);
-    if (res == FR_OK)
-    {
-        ret = dirState;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
-{
-    DIR *dir = (DIR*)dirState->dirStruct;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
-    
-    /* Reset directory state. */
-    res = ff_rewinddir(dir);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
-{
-    DIR *dir = (DIR*)dirState->dirStruct;
-    FILINFO info = {0};
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
-    
-    /* Read directory. */
-    res = ff_readdir(dir, &info);
-    if (res == FR_OK)
-    {
-        /* Check if we haven't reached EOD. */
-        /* FatFs returns an empty string if so. */
-        if (info.fname[0])
-        {
-            /* Copy filename. */
-            strcpy(filename, info.fname);
-            
-            /* Fill stat info. */
-            ffdev_fill_stat(filestat, &info);
-            ret = 0;
-        } else {
-            /* ENOENT signals EOD. */
-            r->_errno = ENOENT;
-        }
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
-{
-    DIR *dir = (DIR*)dirState->dirStruct;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
-    
-    /* Close directory. */
-    res = ff_closedir(dir);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
-{
-    (void)path;
-    
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
-    DWORD free_clusters = 0;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Generate volume name. */
-    FATFS *fatfs = fs_ctx->fatfs;
-    sprintf(name, "%u:", fatfs->pdrv);
-    
-    USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
-    
-    /* Get volume information. */
-    res = ff_getfree(name, &free_clusters, &fatfs);
-    if (res == FR_OK)
-    {
-        /* Fill filesystem stats. */
-        memset(buf, 0, sizeof(struct statvfs));
-        
-        buf->f_bsize = fatfs->ssize;                                    /* Sector size. */
-        buf->f_frsize = fatfs->ssize;                                   /* Sector size. */
-        buf->f_blocks = ((fatfs->n_fatent - 2) * (DWORD)fatfs->csize);  /* Total cluster count * cluster size in sectors. */
-        buf->f_bfree = (free_clusters * (DWORD)fatfs->csize);           /* Free cluster count * cluster size in sectors. */
-        buf->f_bavail = buf->f_bfree;                                     /* Free cluster count * cluster size in sectors. */
-        buf->f_files = 0;
-        buf->f_ffree = 0;
-        buf->f_favail = 0;
-        buf->f_fsid = 0;
-        buf->f_flag = ST_NOSUID;
-        buf->f_namemax = FF_LFN_BUF;
-        
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
-{
-    FIL *file = (FIL*)fd;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Make sure length is non-negative. */
-    if (len < 0)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
-    
-    /* Seek to the provided offset. */
-    res = ff_lseek(file, (FSIZE_t)len);
-    if (res == FR_OK)
-    {
-        /* Truncate file. */
-        res = ff_truncate(file);
-        if (res == FR_OK) ret = 0;
-    }
-    
-    if (res != FR_OK) r->_errno = ffdev_translate_error(res);
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_fsync(struct _reent *r, void *fd)
-{
-    FIL *file = (FIL*)fd;
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    USBHSFS_LOG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
-    
-    /* Synchronize file data. */
-    res = ff_sync(file);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
-    
-    return ret;
-}
-
-static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
-{
-    (void)path;
-    (void)mode;
-    
-    /* Not supported by FatFs. */
-    r->_errno = ENOSYS;
-    return -1;
-}
-
-static int ffdev_fchmod(struct _reent *r, void *fd, mode_t mode)
-{
-    (void)fd;
-    (void)mode;
-    
-    /* Not supported by FatFs. */
-    r->_errno = ENOSYS;
-    return -1;
-}
-
-static int ffdev_rmdir(struct _reent *r, const char *name)
-{
-    /* Exactly the same as ffdev_unlink(). */
-    return ffdev_unlink(r, name);
-}
-
-static int ffdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2])
-{
-    Result rc = 0;
-    time_t mtime = times[1].tv_sec; /* Only modify the last modification date and time. */
-    TimeCalendarTime caltime = {0};
-    DWORD timestamp = 0;
-    
-    FILINFO info = {0};
-    FRESULT res = FR_OK;
-    int ret = -1;
-    
-    /* Get drive context and lock its mutex. */
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData;
-    UsbHsFsDriveContext *drive_ctx = ffdev_get_drive_ctx_and_lock(&fs_ctx);
-    if (!drive_ctx)
-    {
-        r->_errno = EINVAL;
-        goto end;
-    }
-    
-    /* Fix input path. */
-    if (!ffdev_fixpath(r, filename, &fs_ctx, NULL)) goto end;
-    
-    /* Convert POSIX timestamp to calendar time. */
-    rc = timeToCalendarTimeWithMyRule((u64)mtime, &caltime, NULL);
-    if (R_SUCCEEDED(rc))
-    {
-        /* Generate FAT timestamp. */
-        timestamp = FAT_TIMESTAMP(caltime.year, caltime.month, caltime.day, caltime.hour, caltime.minute, caltime.second);
-        
-        /* Fill FILINFO time data. */
-        info.fdate = (WORD)(timestamp >> 16);
-        info.ftime = (WORD)(timestamp & 0xFF);
-    }
-    
-    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, ffdev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
-                caltime.minute, caltime.second, info.fdate, info.ftime);
-    
-    /* Change timestamp. */
-    res = ff_utime(ffdev_path_buf, &info);
-    if (res == FR_OK)
-    {
-        ret = 0;
-    } else {
-        r->_errno = ffdev_translate_error(res);
-    }
-    
-end:
-    /* Unlock drive mutex. */
-    if (drive_ctx) mutexUnlock(&(drive_ctx->mutex));
     
     return ret;
 }
