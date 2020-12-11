@@ -170,7 +170,8 @@ Changelog
     * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using the library, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
 * `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
     * Please read `include/usbhsfs.h` for more information about these flags and what they do.
-    * These flags only affect NTFS volume mounting at this moment. If a ISC licensed build is used, no changes will be noticeable.
+    * These flags only apply for NTFS volume mounting at this moment. It means these functions currently have no effect under ISC licensed builds of the library.
+* Improved safety checks across all devoptab functions.
 * BOT driver:
     * Inquiry SCSI command is now retried if an unexpected CSW with no sense data is received.
     * Both peripheral qualifier and peripheral device type values from Inquiry data are now filtered. Thanks to [ginkuji](https://github.com/ginkuji) for reporting this issue.
