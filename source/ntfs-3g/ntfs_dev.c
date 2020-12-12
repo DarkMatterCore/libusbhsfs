@@ -155,6 +155,10 @@ static int ntfsdev_open(struct _reent *r, void *fd, const char *path, int flags,
     /* Sanity check. */
     if (!file || !path || !*path) ntfs_set_error_and_exit(EINVAL);
     
+    /* Setup file state. */
+    memset(file, 0, sizeof(ntfs_file_state));
+    file->vd = vd;
+    
     /* Check access mode. */
     switch(flags & O_ACCMODE)
     {
@@ -179,10 +183,6 @@ static int ntfsdev_open(struct _reent *r, void *fd, const char *path, int flags,
     }
     
     USBHSFS_LOG("Opening file \"%s\" with flags 0x%X.", path, flags);
-    
-    /* Setup file state. */
-    memset(file, 0, sizeof(ntfs_file_state));
-    file->vd = vd;
     
     /* Open file. */
     file->ni = ntfs_inode_open_from_path(file->vd, path);
@@ -380,13 +380,13 @@ static ssize_t ntfsdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     {
         USBHSFS_LOG("Reading 0x%lX byte(s) from file %lu at offset 0x%lX.", len, file->ni->mft_no, file->pos);
         
-        s64 written = ntfs_attr_pread(file->data, (s64)file->pos, (s64)len, ptr);
-        if (written <= 0 || written > (s64)len) ntfs_set_error_and_exit(errno);
+        s64 read = ntfs_attr_pread(file->data, (s64)file->pos, (s64)len, ptr);
+        if (read <= 0 || read > (s64)len) ntfs_set_error_and_exit(errno);
         
-        rd_sz += written;
-        file->pos += written;
-        len -= written;
-        ptr += written;
+        rd_sz += read;
+        file->pos += read;
+        len -= read;
+        ptr += read;
     }
     
 end:
