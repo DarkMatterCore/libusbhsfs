@@ -138,11 +138,15 @@ int ntfs_resolve_path(ntfs_vd *vd, const char *path, ntfs_path *p)
     
     /* Check if the path ends with a trailing separator. */
     /* If so, remove it. */
-    if (p->buf[len - 1] == PATH_SEP) p->buf[len - 1] = '\0';
+    while(len > 0)
+    {
+        if (p->buf[len - 1] != PATH_SEP) break;
+        p->buf[--len] = '\0';
+    }
     
     /* Check if we're dealing with a path that's exactly just "/". */
     /* If so, just resolve to the root directory. */
-    if (p->buf[0] == '\0')
+    if (!len)
     {
         p->dir = NTFS_ENTRY_NAME_SELF;
         p->name = p->buf;
@@ -180,7 +184,7 @@ int ntfs_resolve_path(ntfs_vd *vd, const char *path, ntfs_path *p)
     ret = 0;
     
 end:
-    if (ret == 0) USBHSFS_LOG("Output strings -> Path: \"%s\" | Directory: \"%s\" | Name: \"%s\".", path, p->path, p->dir, p->name);
+    if (ret == 0) USBHSFS_LOG("Output strings -> Path: \"%s\" | Directory: \"%s\" | Name: \"%s\".", p->path, p->dir, p->name);
     
     return ret;
 }
@@ -269,7 +273,7 @@ ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *path, int
     USBHSFS_LOG("Successfully opened inode from path \"%s\" (mft_no %lu).", path, ni->mft_no);
     
     /* If the entry was found and it has reparse data, then resolve the true entry. */
-    /* This effectivly follows directory junctions and symbolic links until the target entry is found. */
+    /* This effectively follows directory junctions and symbolic links until the target entry is found. */
     if ((ni->flags & FILE_ATTR_REPARSE_POINT) && ntfs_possible_symlink(ni))
     {
         /* Get the target path of this entry. */

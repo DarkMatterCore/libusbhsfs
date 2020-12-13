@@ -537,10 +537,11 @@ static int ntfsdev_chdir(struct _reent *r, const char *name)
     /* Safety check. */
     if (!name || !*name) ntfs_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Changing current directory to \"%s\".", name);
-    
     /* Resolve directory path. */
+    /* We will use this to build the current working directory string. */
     if (ntfs_resolve_path(vd, name, &path)) ntfs_set_error_and_exit(errno);
+    
+    USBHSFS_LOG("Changing current directory to \"%s\".", name);
     
     /* Find directory entry. */
     ni = ntfs_inode_open_from_path(vd, name);
@@ -554,8 +555,25 @@ static int ntfsdev_chdir(struct _reent *r, const char *name)
     vd->cwd = ni;
     ni = old_cwd;
     
-    /* Update current directory. */
-    sprintf(fs_ctx->cwd, "%s", path.path);
+    /* Build current working directory string. */
+    if (!strcmp(path.dir, NTFS_ENTRY_NAME_SELF))
+    {
+        if (path.name[0] == '\0')
+        {
+            /* We resolved to the root directory. */
+            fs_ctx->cwd[0] = '\0';
+        } else {
+            /* We resolved to a relative entry. */
+            strcat(fs_ctx->cwd, path.name);
+        }
+    } else {
+        /* We resolved to an absolute entry. */
+        sprintf(fs_ctx->cwd, "/%s/%s", path.dir, path.name);
+    }
+    
+    strcat(fs_ctx->cwd, "/");
+    
+    USBHSFS_LOG("Generated CWD: \"%s\".", fs_ctx->cwd);
     
     /* Set default devoptab device. */
     usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
