@@ -13,7 +13,6 @@
 #include <fcntl.h>
 
 #include "ntfs.h"
-#include "ntfs_more.h"
 
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_mount.h"

@@ -94,7 +94,7 @@ This section assumes you've already installed both devkitA64 and libnx. If not, 
 
 * **GPLv2+ licensed build**:
     1. Enter the `libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
-        * If you're using Windows, you must use `msys2` for this step. You can either install it on your own or use the one provided by devkitPro.
+        * If you're using Windows, you must use `msys2` for this step. You can either use the one provided by devkitPro (recommended) or install it on your own.
     2. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
 
 A `lib` directory will be generated, which holds the built static library.
@@ -161,7 +161,7 @@ Changelog
 
 **v0.1.0:**
 
-* Built using libnx commit `767a7a2`.
+* Built using libnx commit `13716b5`.
 * `usbHsFsUnmountDevice()` is now provided as a way to safely unmount UMS devices at runtime before disconnecting them.
 * Implemented partition table parsing (MBR/GPT/VBR). The library now takes care of looking for boot sectors and/or partition tables on its own, and just passes volume LBAs to filesystem libraries. This makes it possible to mount multiple partitions from the same logical unit as individual devoptab devices.
 * Implemented NTFS support. Big thanks to [Rhys Koedijk](https://github.com/rhyskoedijk)!

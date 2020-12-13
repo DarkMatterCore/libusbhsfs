@@ -26,10 +26,16 @@
 #include "../usbhsfs_utils.h"
 
 /// NTFS errno values.
-#define ENOPART     3000    /* No partition was found. */
-#define EINVALPART  3001    /* Specified partition is invalid or not supported. */
-#define EDIRTY      3002    /* Volume is dirty and NTFS_RECOVER was not specified during mount. */
-#define EHIBERNATED 3003    /* Volume is hibernated and NTFS_IGNORE_HIBERFILE was not specified during mount. */
+#define ENOPART                 3000    /* No partition was found. */
+#define EINVALPART              3001    /* Specified partition is invalid or not supported. */
+#define EDIRTY                  3002    /* Volume is dirty and NTFS_RECOVER was not specified during mount. */
+#define EHIBERNATED             3003    /* Volume is hibernated and NTFS_IGNORE_HIBERFILE was not specified during mount. */
+
+/// NTFS directory aliases.
+#define NTFS_ENTRY_NAME_SELF    "."     /* Current directory. */
+#define NTFS_ENTRY_NAME_PARENT  ".."    /* Parent directory. */
+
+#define NTFS_MAX_SYMLINK_DEPTH  10      /* Maximum search depth when resolving symbolic links. */
 
 /// NTFS file access time update strategies.
 typedef enum {
@@ -56,8 +62,30 @@ typedef struct _ntfs_vd {
     bool show_system_files;     ///< True if system files are shown when enumerating directories.
 } ntfs_vd;
 
+/// NTFS path.
+typedef struct _ntfs_path {
+    char buf[USB_MAX_PATH_LENGTH];  ///< Internal buffer containing the path name.
+    ntfs_volume *vol;               ///< NTFS volume handle.
+    ntfs_inode *parent;             ///< NTFS parent node handle.
+    const char *path;               ///< Volume path (e.g. '/foo/bar/file.txt').
+    const char *dir;                ///< Directory path (e.g. '/foo/bar').
+    const char *name;               ///< Filename (e.g. 'file.txt').
+} ntfs_path;
+
 #ifdef DEBUG
 int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u32 level, void *data, const char *format, va_list args);
 #endif
+
+int ntfs_resolve_path(ntfs_vd *vd, const char *path, ntfs_path *p);
+
+ntfs_inode *ntfs_inode_open_from_path(ntfs_vd *vd, const char *path);
+ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *path, int reparse_depth);
+
+ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const char *target);
+int ntfs_inode_link(ntfs_vd *vd, const char *old_path, const char *new_path);
+int ntfs_inode_unlink(ntfs_vd *vd, const char *path);
+
+int ntfs_inode_stat(ntfs_vd *vd, ntfs_inode *ni, struct stat *st);
+void ntfs_inode_update_times_filtered(ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask);
 
 #endif  /* __NTFS_H__ */
