@@ -93,15 +93,17 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 /// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
 /// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
 /// If successful, and signal_status_event is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
-/// If running under SX OS, this function does absolutely nothing and returns right away.
+/// This function has no effect at all under SX OS.
 bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
 
 /// Returns a bitmask with the current filesystem mount flags.
 /// Can be used even if the USB Mass Storage Host interface hasn't been initialized.
+/// This function has no effect at all under SX OS.
 u32 usbHsFsGetFileSystemMountFlags(void);
 
 /// Takes an input bitmask with the desired filesystem mount flags, which will be used for all mount operations.
 /// Can be used even if the USB Mass Storage Host interface hasn't been initialized.
+/// This function has no effect at all under SX OS.
 void usbHsFsSetFileSystemMountFlags(u32 flags);
 
 #ifdef __cplusplus

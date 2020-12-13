@@ -460,7 +460,7 @@ static int ntfsdev_stat(struct _reent *r, const char *path, struct stat *st)
     if (!path || !*path || !st) ntfs_set_error_and_exit(EINVAL);
     
     /* Short circuit for current and parent directory references. */
-    if (strcmp(path, NTFS_ENTRY_NAME_SELF) == 0 || strcmp(path, NTFS_ENTRY_NAME_PARENT) == 0)
+    if (!strcmp(path, NTFS_ENTRY_NAME_SELF) || !strcmp(path, NTFS_ENTRY_NAME_PARENT))
     {
         memset(st, 0, sizeof(struct stat));
         st->st_mode = S_IFDIR;
@@ -734,7 +734,7 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
     /* Fetch current entry name. */
     strcpy(filename, dir->current->name);
     
-    if (strcmp(dir->current->name, NTFS_ENTRY_NAME_SELF) == 0 || strcmp(dir->current->name, NTFS_ENTRY_NAME_PARENT) == 0)
+    if (!strcmp(dir->current->name, NTFS_ENTRY_NAME_SELF) || !strcmp(dir->current->name, NTFS_ENTRY_NAME_PARENT))
     {
         /* Current/parent directory alias. */
         memset(filestat, 0, sizeof(struct stat));
@@ -1006,8 +1006,8 @@ static int ntfsdev_diropen_filldir(void *dirent, const ntfschar *name, const int
     /* Check if this entry can be enumerated (as described by the volume descriptor). */
     if (MREF(mref) < FILE_first_user && MREF(mref) != FILE_root && !dir->vd->show_system_files) ntfs_end;
     
-    /* Convert the entry name from unicode in to our current local. */
-    if (ntfs_unicode_to_local(name, name_len, &entry_name, 0) < 0)
+    /* Convert the entry name from UTF-16LE into our current locale (UTF-8). */
+    if (ntfs_ucstombs(name, name_len, &entry_name, 0) <= 0)
     {
         _errno = errno;
         ntfs_end;

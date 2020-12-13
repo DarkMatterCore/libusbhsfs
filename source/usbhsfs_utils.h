@@ -25,6 +25,9 @@
 
 #define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
 
+#define USB_MOUNT_NAME_LENGTH   32
+#define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
+
 #ifdef DEBUG
 #define USBHSFS_LOG(fmt, ...)   usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
 

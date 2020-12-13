@@ -765,9 +765,9 @@ end:
 static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath)
 {
     FATFS *fatfs = NULL;
+    const u8 *p = (const u8*)path;
     ssize_t units = 0;
     u32 code = 0;
-    const u8 *p = (const u8*)path;
     size_t len = 0;
     char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf), *cwd = NULL;
     
@@ -790,7 +790,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     /* We found a colon; p points to the actual path. */
     if (code == ':') path = (const char*)p;
     
-    /* Make sure there are no more colons and that the remainder of the filename is valid UTF-8. */
+    /* Make sure there are no more colons and that the remainder of the string is valid UTF-8. */
     p = (const uint8_t*)path;
     
     do {
@@ -832,8 +832,10 @@ static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
     
     if (info->fattrib & AM_DIR)
     {
+        /* We're dealing with a directory entry. */
         st->st_mode = (S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO);
     } else {
+        /* We're dealing with a file entry. */
         st->st_size = (off_t)info->fsize;
         st->st_mode = (S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     }

@@ -165,19 +165,22 @@ Changelog
 * `usbHsFsUnmountDevice()` is now provided as a way to safely unmount UMS devices at runtime before disconnecting them.
 * Implemented partition table parsing (MBR/GPT/VBR). The library now takes care of looking for boot sectors and/or partition tables on its own, and just passes volume LBAs to filesystem libraries. This makes it possible to mount multiple partitions from the same logical unit as individual devoptab devices.
 * Implemented NTFS support. Big thanks to [Rhys Koedijk](https://github.com/rhyskoedijk)!
-    * Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.
+    * You must link your application against both libusbhsfs and NTFS-3G if you wish to use NTFS support. Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.
     * Certain limitations apply. Please read the **Limitations** section from the README for more information.
-    * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using the library, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
+    * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using libusbhsfs, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
 * `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
     * Please read `include/usbhsfs.h` for more information about these flags and what they do.
-    * These flags only apply for NTFS volume mounting at this moment. It means these functions currently have no effect under ISC licensed builds of the library.
+    * These flags only affect NTFS volume mounting at this moment, so they have no effect under ISC licensed builds of the library.
+    * Furthermore, these functions have no effect at all under SX OS.
 * Improved safety checks across all devoptab functions.
 * BOT driver:
     * Inquiry SCSI command is now retried if an unexpected CSW with no sense data is received.
     * Both peripheral qualifier and peripheral device type values from Inquiry data are now filtered. Thanks to [ginkuji](https://github.com/ginkuji) for reporting this issue.
     * Logical unit startup now returns right away if an optional SCSI command fails and a `Medium Not Present` additional sense code is reported by the UMS device.
-    * A bus reset is now performed on all UMS devices that are already available when `usbHsFsInitialize()` is called. Fixes logical unit startup for drives that were stopped during a previous library session, but not removed from the console. Thanks to [FlyingBananaTree](https://github.com/FlyingBananaTree) for reporting this issue.
-    * Fixed potential memory corruption issues that could have taken place because of not updating LUN/FS context references after reallocating their buffers.
+    * A bus reset is now performed on all UMS devices that are already available when `usbHsFsInitialize()` is called. Fixes logical unit startup for drives that were stopped during a previous session, but not removed from the console. Thanks to [FlyingBananaTree](https://github.com/FlyingBananaTree) for reporting this issue.
+    * Fixed potential memory corruption issues that could have taken place due to not updating LUN/FS context references after reallocating their buffers.
+* Debug build:
+    * Implemented proper caching into debug logging code, making debug builds a lot faster now.
 * SX OS:
     * The status change user-mode event is now signaled on every `usbfs` status change.
 * Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.

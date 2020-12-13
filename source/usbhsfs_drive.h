@@ -21,10 +21,7 @@
 #include "ntfs-3g/ntfs_disk_io.h"
 #endif
 
-#define USB_BOT_MAX_LUN         16                  /* Max returned value is actually a zero-based index to the highest LUN. */
-
-#define USB_MOUNT_NAME_LENGTH   32
-#define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
+#define USB_BOT_MAX_LUN 16  /* Max returned value is actually a zero-based index to the highest LUN. */
 
 /// Used by filesystem contexts to determine which FS object to use.
 typedef enum {
@@ -113,18 +110,21 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
     bool ctx_valid = (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
     bool fs_valid = false;
     
-    switch (fs_ctx->fs_type)
+    if (ctx_valid)
     {
-        case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
-            fs_valid = (fs_ctx->fatfs != NULL);
-            break;
+        switch(fs_ctx->fs_type)
+        {
+            case UsbHsFsDriveLogicalUnitFileSystemType_FAT:
+                fs_valid = (fs_ctx->fatfs != NULL);
+                break;
 #ifdef GPL_BUILD
-        case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
-            fs_valid = (fs_ctx->ntfs != NULL);
-            break;
+            case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
+                fs_valid = (fs_ctx->ntfs != NULL);
+                break;
 #endif
-        default:
-            break;
+            default:
+                break;
+        }
     }
     
     return (ctx_valid && fs_valid);
