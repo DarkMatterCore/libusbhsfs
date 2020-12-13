@@ -162,17 +162,18 @@ Changelog
 **v0.1.0:**
 
 * Built using libnx commit `13716b5`.
-* `usbHsFsUnmountDevice()` is now provided as a way to safely unmount UMS devices at runtime before disconnecting them.
 * Implemented partition table parsing (MBR/GPT/VBR). The library now takes care of looking for boot sectors and/or partition tables on its own, and just passes volume LBAs to filesystem libraries. This makes it possible to mount multiple partitions from the same logical unit as individual devoptab devices.
 * Implemented NTFS support. Big thanks to [Rhys Koedijk](https://github.com/rhyskoedijk)!
     * You must link your application against both libusbhsfs and NTFS-3G if you wish to use NTFS support. Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.
     * Certain limitations apply. Please read the **Limitations** section from the README for more information.
     * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using libusbhsfs, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
-* `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
-    * Please read `include/usbhsfs.h` for more information about these flags and what they do.
-    * These flags only affect NTFS volume mounting at this moment, so they have no effect under ISC licensed builds of the library.
-    * Furthermore, these functions have no effect at all under SX OS.
-* Improved safety checks across all devoptab functions.
+* Improved safety checks across all internal devoptab functions.
+* Library API:
+    * `usbHsFsUnmountDevice()` is now provided as a way to safely unmount UMS devices at runtime before disconnecting them.
+    * `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
+        * Please read `include/usbhsfs.h` for more information about these flags and what they do.
+        * These flags only affect NTFS volume mounting at this moment, so they have no effect under ISC licensed builds of the library.
+        * Furthermore, these functions have no effect at all under SX OS.
 * BOT driver:
     * Inquiry SCSI command is now retried if an unexpected CSW with no sense data is received.
     * Both peripheral qualifier and peripheral device type values from Inquiry data are now filtered. Thanks to [ginkuji](https://github.com/ginkuji) for reporting this issue.
