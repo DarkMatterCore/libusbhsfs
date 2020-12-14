@@ -19,7 +19,9 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
 {
     if (!device) return;
     
-    char path[FS_MAX_PATH] = {0}, tmp[0x40] = {0}, new_path[FS_MAX_PATH] = {0};
+    char path[FS_MAX_PATH] = {0}, tmp[0x40] = {0}, new_path[FS_MAX_PATH] = {0}, *ptr = NULL;
+    const char *test_str = "Hello world!";
+    size_t test_str_len = strlen(test_str);
     
     FILE *fd = NULL, *ums_fd = NULL;
     struct stat st = {0};
@@ -29,24 +31,45 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     struct statvfs fsinfo = {0};
     
-    int ret = -1;
+    bool copy_failed = false;
+    
+    int ret = -1, val = 0;
     
     u8 *buf = NULL;
     size_t blksize = 0x800000;
     
-    sprintf(path, "%s/" APP_TITLE ".txt", device->name);
-    sprintf(new_path, "%s/test.txt", device->name);
+    sprintf(path, "%s/test_dir", device->name);
+    
+    /* Create directory. */
+    printf("\t\t- Create directory (\"%s\"): ", path);
+    consoleUpdate(NULL);
+    
+    if (!mkdir(path, 0))
+    {
+        printf("OK!\n");
+    } else {
+        printf("FAILED! (%d).\n", errno);
+    }
+    
+    consoleUpdate(NULL);
     
     /* Write data to file. */
-    printf("\t\t- Write data to file (\"%s\"): ", path);
+    strcat(path, "/" APP_TITLE ".txt");
+    printf("\t\t- Write data to file (\"%s\") (\"%s\"): ", path, test_str);
     consoleUpdate(NULL);
     
     fd = fopen(path, "w");
     if (fd)
     {
-        fprintf(fd, "Hello world!");
+        val = fprintf(fd, test_str);
+        if (val == (int)test_str_len)
+        {
+            printf("OK!\n");
+        } else {
+            printf("FAILED! (%d, %d).\n", errno, val);
+        }
+        
         fclose(fd);
-        printf("OK!\n");
     } else {
         printf("FAILED! (%d).\n", errno);
     }
@@ -60,9 +83,14 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     fd = fopen(path, "r");
     if (fd)
     {
-        fscanf(fd, "%s", tmp);
+        if (fgets(tmp, test_str_len + 1, fd) != NULL)
+        {
+            printf("OK! (\"%s\").\n", tmp);
+        } else {
+            printf("FAILED! (%d).\n", errno);
+        }
+        
         fclose(fd);
-        printf("OK! (\"%s\").\n", tmp);
     } else {
         printf("FAILED! (%d).\n", errno);
     }
@@ -83,12 +111,51 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     consoleUpdate(NULL);
     
     /* Rename file. */
+    ptr = strrchr(path, '/');
+    sprintf(new_path, "%.*s/test.txt", (int)(ptr - path), path);
     printf("\t\t- Rename file (\"%s\" -> \"%s\"): ", path, new_path);
     consoleUpdate(NULL);
     
     if (!rename(path, new_path))
     {
         printf("OK!\n");
+    } else {
+        printf("FAILED! (%d).\n", errno);
+    }
+    
+    consoleUpdate(NULL);
+    
+    /* Change directory. */
+    *ptr = '\0';
+    printf("\t\t- Change directory (\"%s\"): ", path);
+    consoleUpdate(NULL);
+    
+    ret = chdir(path);
+    if (!ret)
+    {
+        printf("OK!\n");
+        
+        /* Directory listing. */
+        printf("\t\t- Directory listing (\".\"): ");
+        consoleUpdate(NULL);
+        
+        dp = opendir(".");  /* Open current directory. */
+        if (dp)
+        {
+            printf("OK!\n");
+            consoleUpdate(NULL);
+            
+            while((dt = readdir(dp)))
+            {
+                printf("\t\t\t- [%c] ./%s\n", (dt->d_type & DT_DIR) ? 'D' : 'F', dt->d_name);
+                consoleUpdate(NULL);
+            }
+            
+            closedir(dp);
+        } else {
+            printf("FAILED! (%d).\n", errno);
+            consoleUpdate(NULL);
+        }
     } else {
         printf("FAILED! (%d).\n", errno);
     }
@@ -108,38 +175,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     consoleUpdate(NULL);
     
-    /* Filesystem stats. */
-    printf("\t\t- Filesystem stats: ");
-    consoleUpdate(NULL);
-    
-    if (!statvfs(path, &fsinfo))
-    {
-        u64 fsid = ((u64)fsinfo.f_fsid);
-        u64 total_size = ((u64)fsinfo.f_blocks * (u64)fsinfo.f_frsize);
-        u64 free_space = ((u64)fsinfo.f_bfree * (u64)fsinfo.f_frsize);
-        
-        printf("OK!\n\t\t\t- ID: %lu.\n\t\t\t- Total FS size: 0x%lX bytes.\n\t\t\t- Free FS space: 0x%lX bytes.\n", fsid, total_size, free_space);
-    } else {
-        printf("FAILED! (%d).\n", errno);
-    }
-    
-    consoleUpdate(NULL);
-    
-    /* Create directory. */
-    sprintf(path, "%s/test-dir", device->name);
-    printf("\t\t- Create directory (\"%s\"): ", path);
-    consoleUpdate(NULL);
-
-    if (!mkdir(path, 0))
-    {
-        printf("OK!\n");
-    } else {
-        printf("FAILED! (%d).\n", errno);
-    }
-
-    consoleUpdate(NULL);
-    
-    /* Delete directory tests. */
+    /* Delete directory. */
     printf("\t\t- Delete directory (\"%s\"): ", path);
     consoleUpdate(NULL);
     
@@ -152,51 +188,22 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     
     consoleUpdate(NULL);
     
-    /* Relative path tests. */
-    for(u8 i = 0; i < 2; i++)
+    /* Filesystem stats. */
+    printf("\t\t- Filesystem stats: ");
+    consoleUpdate(NULL);
+    
+    if (!statvfs(".", &fsinfo))
     {
-        /* Change directory. */
-        sprintf(path, "%s/", i == 0 ? device->name : "sdmc:");
-        printf("\t\t- Change directory (\"%s\"): ", path);
-        consoleUpdate(NULL);
+        u64 fsid = (u64)fsinfo.f_fsid;
+        u64 total_size = ((u64)fsinfo.f_blocks * (u64)fsinfo.f_frsize);
+        u64 free_space = ((u64)fsinfo.f_bfree * (u64)fsinfo.f_frsize);
         
-        ret = chdir(path);
-        if (!ret)
-        {
-            printf("OK!\n");
-        } else {
-            printf("FAILED!\n");
-        }
-        
-        consoleUpdate(NULL);
-        
-        if (ret) break;
-        
-        /* Directory listing. */
-        sprintf(path, "."); /* Current directory. */
-        printf("\t\t- Directory listing (\"%s\"): ", path);
-        consoleUpdate(NULL);
-        
-        dp = opendir(path);
-        if (dp)
-        {
-            printf("OK!\n");
-            consoleUpdate(NULL);
-            
-            while((dt = readdir(dp)))
-            {
-                printf("\t\t\t- %s/%s [%c].\n", path, dt->d_name, (dt->d_type & DT_DIR) ? 'D' : 'F');
-                consoleUpdate(NULL);
-            }
-            
-            closedir(dp);
-        } else {
-            printf("FAILED! (%d).\n", errno);
-            consoleUpdate(NULL);
-        }
-        
-        if (!dp && i == 0) break;
+        printf("OK!\n\t\t\t- ID: %lu.\n\t\t\t- Total FS size: 0x%lX bytes.\n\t\t\t- Free FS space: 0x%lX bytes.\n", fsid, total_size, free_space);
+    } else {
+        printf("FAILED! (%d).\n", errno);
     }
+    
+    consoleUpdate(NULL);
     
     /* File copy. */
     sprintf(path, "sdmc:/test.file");
@@ -205,7 +212,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     consoleUpdate(NULL);
     
     fd = fopen(path, "rb");
-    ums_fd = fopen(path, "wb");
+    ums_fd = fopen(new_path, "wb");
     buf = malloc(blksize);
     
     if (fd && ums_fd && buf)
@@ -236,10 +243,17 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     } else {
         printf("FAILED! (%d).\n", errno);
         consoleUpdate(NULL);
+        copy_failed = true;
     }
     
     if (buf) free(buf);
-    if (ums_fd) fclose(fd);
+    
+    if (ums_fd)
+    {
+        fclose(ums_fd);
+        if (copy_failed) unlink(new_path);
+    }
+    
     if (fd) fclose(fd);
     
     printf("\n");

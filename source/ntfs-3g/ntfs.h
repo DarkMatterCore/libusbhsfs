@@ -49,7 +49,6 @@ typedef struct _ntfs_vd {
     struct ntfs_device *dev;    ///< NTFS device handle.
     ntfs_volume *vol;           ///< NTFS volume handle.
     ntfs_inode *root;           ///< NTFS node handle for the root directory.
-    ntfs_inode *cwd;            ///< NTFS node handle for the current directory.
     u32 flags;                  ///< NTFS mount flags.
     s64 id;                     ///< Filesystem ID.
     u16 uid;                    ///< User ID for entry creation.
@@ -62,30 +61,17 @@ typedef struct _ntfs_vd {
     bool show_system_files;     ///< True if system files are shown when enumerating directories.
 } ntfs_vd;
 
-/// NTFS path.
-typedef struct _ntfs_path {
-    char buf[USB_MAX_PATH_LENGTH];  ///< Internal buffer containing the path name.
-    ntfs_volume *vol;               ///< NTFS volume handle.
-    ntfs_inode *parent;             ///< NTFS parent node handle.
-    const char *path;               ///< Volume path (e.g. '/foo/bar/file.txt').
-    const char *dir;                ///< Directory path (e.g. '/foo/bar').
-    const char *name;               ///< Filename (e.g. 'file.txt').
-} ntfs_path;
-
 #ifdef DEBUG
 int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u32 level, void *data, const char *format, va_list args);
 #endif
 
-int ntfs_resolve_path(ntfs_vd *vd, const char *path, ntfs_path *p);
-
 ntfs_inode *ntfs_inode_open_from_path(ntfs_vd *vd, const char *path);
-ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *path, int reparse_depth);
 
 ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const char *target);
+
 int ntfs_inode_link(ntfs_vd *vd, const char *old_path, const char *new_path);
 int ntfs_inode_unlink(ntfs_vd *vd, const char *path);
 
-int ntfs_inode_stat(ntfs_vd *vd, ntfs_inode *ni, struct stat *st);
 void ntfs_inode_update_times_filtered(ntfs_vd *vd, ntfs_inode *ni, ntfs_time_update_flags mask);
 
 #endif  /* __NTFS_H__ */

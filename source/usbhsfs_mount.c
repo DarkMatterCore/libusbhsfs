@@ -186,6 +186,8 @@ static const u8 g_linuxFilesystemDataGuid[0x10] = { 0xAF, 0x3D, 0xC6, 0x0F, 0x83
 
 static u32 g_fileSystemMountFlags = (USB_MOUNT_UPDATE_ACCESS_TIMES | USB_MOUNT_SHOW_HIDDEN_FILES);
 
+__thread char __usbhsfs_dev_path_buf[USB_MAX_PATH_LENGTH] = {0};
+
 /* Function prototypes. */
 
 static bool usbHsFsMountParseMasterBootRecord(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, u8 *block);
@@ -945,13 +947,6 @@ end:
 
 static void usbHsFsMountUnregisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    /* Close the current directory node (if required). */
-    if (fs_ctx->ntfs->cwd && fs_ctx->ntfs->cwd != fs_ctx->ntfs->root)
-    {
-        ntfs_inode_close(fs_ctx->ntfs->cwd);
-        fs_ctx->ntfs->cwd = NULL;
-    }
-    
     /* Close the root directory node. */
     if (fs_ctx->ntfs->root)
     {

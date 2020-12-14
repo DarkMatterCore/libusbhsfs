@@ -78,8 +78,6 @@ static int ffdev_translate_error(FRESULT res);
 
 /* Global variables. */
 
-static __thread char ffdev_path_buf[USB_MAX_PATH_LENGTH] = {0};
-
 static const devoptab_t ffdev_devoptab = {
     .name         = NULL,
     .structSize   = sizeof(FIL),
@@ -173,13 +171,13 @@ static int ffdev_open(struct _reent *r, void *fd, const char *path, int flags, i
         ffdev_flags |= FA_OPEN_EXISTING;
     }
     
-    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, ffdev_path_buf, flags, ffdev_flags);
+    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, __usbhsfs_dev_path_buf, flags, ffdev_flags);
     
     /* Reset file descriptor. */
     memset(file, 0, sizeof(FIL));
     
     /* Open file. */
-    res = ff_open(file, ffdev_path_buf, ffdev_flags);
+    res = ff_open(file, __usbhsfs_dev_path_buf, ffdev_flags);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
 end:
@@ -340,10 +338,10 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     /* Fix input path. */
     if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Getting stats for \"%s\" (\"%s\").", file, ffdev_path_buf);
+    USBHSFS_LOG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
     
     /* Get stats. */
-    res = ff_stat(ffdev_path_buf, &info);
+    res = ff_stat(__usbhsfs_dev_path_buf, &info);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
     /* Fill stat info. */
@@ -374,10 +372,10 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, ffdev_path_buf);
+    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Delete file. */
-    res = ff_unlink(ffdev_path_buf);
+    res = ff_unlink(__usbhsfs_dev_path_buf);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
 end:
@@ -397,17 +395,17 @@ static int ffdev_chdir(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, ffdev_path_buf);
+    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Open directory. */
-    res = ff_opendir(&dir, ffdev_path_buf);
+    res = ff_opendir(&dir, __usbhsfs_dev_path_buf);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
     /* Close directory. */
     ff_closedir(&dir);
     
     /* Update current working directory. */
-    sprintf(fs_ctx->cwd, "%s", strchr(ffdev_path_buf, '/'));
+    sprintf(fs_ctx->cwd, "%s", strchr(__usbhsfs_dev_path_buf, '/'));
     
     cwd_len = strlen(fs_ctx->cwd);
     if (fs_ctx->cwd[cwd_len - 1] != '/')
@@ -427,7 +425,7 @@ end:
 static int ffdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
     char old_path[USB_MAX_PATH_LENGTH] = {0};
-    char *new_path = ffdev_path_buf;
+    char *new_path = __usbhsfs_dev_path_buf;
     FRESULT res = FR_OK;
     
     ff_declare_error_state;
@@ -459,10 +457,10 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, ffdev_path_buf);
+    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Create directory. */
-    res = ff_mkdir(ffdev_path_buf);
+    res = ff_mkdir(__usbhsfs_dev_path_buf);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
 end:
@@ -486,13 +484,13 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, ffdev_path_buf);
+    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Reset directory state. */
     memset(dir, 0, sizeof(DIR));
     
     /* Open directory. */
-    res = ff_opendir(dir, ffdev_path_buf);
+    res = ff_opendir(dir, __usbhsfs_dev_path_buf);
     if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
     
     /* Update return value. */
@@ -750,11 +748,11 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
         info.ftime = (WORD)(timestamp & 0xFF);
     }
     
-    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, ffdev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
+    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, __usbhsfs_dev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
                 caltime.minute, caltime.second, info.fdate, info.ftime);
     
     /* Change timestamp. */
-    res = ff_utime(ffdev_path_buf, &info);
+    res = ff_utime(__usbhsfs_dev_path_buf, &info);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
 end:
@@ -769,7 +767,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     ssize_t units = 0;
     u32 code = 0;
     size_t len = 0;
-    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : ffdev_path_buf), *cwd = NULL;
+    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : __usbhsfs_dev_path_buf), *cwd = NULL;
     
     ff_declare_error_state;
     
@@ -785,20 +783,20 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
         units = decode_utf8(&code, p);
         if (units < 0) ff_set_error_and_exit(EILSEQ);
         p += units;
-    } while(code != ':' && code != 0);
+    } while(code >= ' ' && code != ':');
     
     /* We found a colon; p points to the actual path. */
     if (code == ':') path = (const char*)p;
     
     /* Make sure there are no more colons and that the remainder of the string is valid UTF-8. */
-    p = (const uint8_t*)path;
+    p = (const u8*)path;
     
     do {
         units = decode_utf8(&code, p);
         if (units < 0) ff_set_error_and_exit(EILSEQ);
         if (code == ':') ff_set_error_and_exit(EINVAL);
         p += units;
-    } while(code != 0);
+    } while(code >= ' ');
     
     /* Verify fixed path length. */
     len = (strlen(name) + strlen(path));
