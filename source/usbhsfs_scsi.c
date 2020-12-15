@@ -311,16 +311,16 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
 
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx);
 
-bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
+bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
-    if (!usbHsFsDriveIsValidContext(drive_ctx) || !drive_ctx->lun_ctx || lun_ctx_idx >= drive_ctx->lun_count)
+    UsbHsFsDriveContext *drive_ctx = NULL;
+    u8 lun = 0;
+    
+    if (!lun_ctx || !usbHsFsDriveIsValidContext((drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx)) || (lun = lun_ctx->lun) >= USB_BOT_MAX_LUN)
     {
         USBHSFS_LOG("Invalid parameters!");
         return false;
     }
-    
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
-    u8 lun = lun_ctx->lun;
     
     ScsiInquiryStandardData inquiry_data = {0};
     
@@ -512,14 +512,13 @@ end:
 }
 
 /* Reference: https://t10.org/ftp/t10/document.05/05-344r0.pdf (page 26). */
-void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx)
+void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
-    if (!usbHsFsDriveIsValidContext(drive_ctx) || !drive_ctx->lun_ctx || lun_ctx_idx >= drive_ctx->lun_count) return;
+    /* Only perform these steps on valid LUNs that are removable and support ejection. */
+    if (!usbHsFsDriveIsValidLogicalUnitContext(lun_ctx) || !lun_ctx->removable || !lun_ctx->eject_supported) return;
     
     /* Retrieve LUN context. */
-    /* Only perform these steps on removable LUNs with ejection supported. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
-    if (!lun_ctx->removable || !lun_ctx->eject_supported) return;
+    UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx;
     
     /* Send Prevent/Allow Medium Removal SCSI command. */
     if (usbHsFsScsiSendPreventAllowMediumRemovalCommand(drive_ctx, lun_ctx->lun, false))
@@ -529,9 +528,9 @@ void usbHsFsScsiStopDriveLogicalUnit(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_
     }
 }
 
-bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, void *buf, u64 block_addr, u32 block_count)
+bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, void *buf, u64 block_addr, u32 block_count)
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx;
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
@@ -567,9 +566,9 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx
     return (block_count == 0);
 }
 
-bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, const void *buf, u64 block_addr, u32 block_count)
+bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, const void *buf, u64 block_addr, u32 block_count)
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx;
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
     u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;

@@ -14,7 +14,7 @@
 
 /* Function prototypes. */
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, bool stop_lun);
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun);
 
 bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterface *usb_if)
 {
@@ -116,11 +116,12 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
         
         /* Set USB interface ID and LUN index. */
+        lun_ctx->drive_ctx = drive_ctx;
         lun_ctx->usb_if_id = drive_ctx->usb_if_id;
         lun_ctx->lun = i;
         
         /* Start LUN. */
-        if (!usbHsFsScsiStartDriveLogicalUnit(drive_ctx, lun_ctx_idx))
+        if (!usbHsFsScsiStartDriveLogicalUnit(lun_ctx))
         {
             USBHSFS_LOG("Failed to initialize context for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
             (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
@@ -128,10 +129,10 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         }
         
         /* Initialize filesystem contexts for this LUN. */
-        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(drive_ctx, lun_ctx_idx))
+        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(lun_ctx))
         {
             USBHSFS_LOG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            usbHsFsDriveDestroyLogicalUnitContext(drive_ctx, lun_ctx_idx, true);   /* Destroy LUN context. */
+            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, true);   /* Destroy LUN context. */
             (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
         }
     }
@@ -191,7 +192,7 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     if (drive_ctx->lun_ctx)
     {
         /* Destroy LUN contexts. */
-        for(u8 i = 0; i < drive_ctx->lun_count; i++) usbHsFsDriveDestroyLogicalUnitContext(drive_ctx, i, stop_lun);
+        for(u8 i = 0; i < drive_ctx->lun_count; i++) usbHsFsDriveDestroyLogicalUnitContext(&(drive_ctx->lun_ctx[i]), stop_lun);
         
         /* Free LUN context buffer. */
         free(drive_ctx->lun_ctx);
@@ -211,11 +212,9 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     }
 }
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun_ctx_idx, bool stop_lun)
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun)
 {
-    if (!drive_ctx || lun_ctx_idx >= drive_ctx->lun_count) return;
-    
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
+    if (!lun_ctx || !usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) || lun_ctx->lun >= USB_BOT_MAX_LUN) return;
     
     if (lun_ctx->fs_ctx)
     {
@@ -228,5 +227,5 @@ static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveContext *drive_ctx
     }
     
     /* Stop current LUN. */
-    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(drive_ctx, lun_ctx_idx);
+    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx);
 }

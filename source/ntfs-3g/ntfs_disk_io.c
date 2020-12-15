@@ -387,13 +387,9 @@ static bool ntfs_io_device_readsectors(struct ntfs_device *dev, u64 start, u32 c
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd) return false;
     
-    /* Get drive context. */
+    /* Get LUN context and read sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-    if (!drive_ctx) return false;
-    
-    /* Read sectors. */
-    return usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx->lun, buf, start, count);
+    return usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buf, start, count);
 }
 
 static bool ntfs_io_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, const void *buf)
@@ -402,13 +398,9 @@ static bool ntfs_io_device_writesectors(struct ntfs_device *dev, u64 start, u32 
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd) return false;
     
-    /* Get drive context. */
+    /* Get LUN context and write sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-    if (!drive_ctx) return false;
-    
-    /* Write sectors. */
-    return usbHsFsScsiWriteLogicalUnitBlocks(drive_ctx, lun_ctx->lun, buf, start, count);
+    return usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buf, start, count);
 }
 
 static int ntfs_io_device_sync(struct ntfs_device *dev)

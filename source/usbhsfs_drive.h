@@ -52,7 +52,8 @@ typedef struct {
 
 /// Used to handle LUNs from drives.
 typedef struct {
-    s32 usb_if_id;                                      ///< USB interface ID. Used to find the drive context this LUN context belongs to.
+    void *drive_ctx;                                    ///< Pointer to the drive context this LUN belongs to.
+    s32 usb_if_id;                                      ///< USB interface ID. Kept here for convenience.
     u8 lun;                                             ///< Drive LUN index (zero-based, up to 15). Used to send SCSI commands.
     bool removable;                                     ///< Set to true if this LUN is removable. Retrieved via Inquiry SCSI command.
     bool eject_supported;                               ///< Set to true if ejection via Prevent/Allow Medium Removal + Start Stop Unit is supported.
@@ -100,14 +101,15 @@ NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *drive_ctx)
 /// Checks if the provided LUN context is valid.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
-    return (lun_ctx && lun_ctx->lun < USB_BOT_MAX_LUN && lun_ctx->block_count && lun_ctx->block_length && lun_ctx->capacity);
+    return (lun_ctx && usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) && lun_ctx->lun < USB_BOT_MAX_LUN && lun_ctx->block_count && lun_ctx->block_length && lun_ctx->capacity);
 }
 
 /// Checks if the provided filesystem context is valid.
 /// TO DO: update this after adding support for more filesystems.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    bool ctx_valid = (fs_ctx && fs_ctx->lun_ctx && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
+    bool ctx_valid = (fs_ctx && usbHsFsDriveIsValidLogicalUnitContext((UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx) && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && \
+                      fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
     bool fs_valid = false;
     
     if (ctx_valid)

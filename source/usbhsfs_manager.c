@@ -41,7 +41,7 @@ static const size_t g_usbInterfacesMaxSize = (MAX_USB_INTERFACES * sizeof(UsbHsI
 static Thread g_usbDriveManagerThread = {0};
 static UEvent g_usbDriveManagerThreadExitEvent = {0};
 
-static UsbHsFsDriveContext *g_driveContexts = NULL;
+static UsbHsFsDriveContext **g_driveContexts = NULL;
 static u32 g_driveCount = 0;
 
 static UEvent g_usbStatusChangeEvent = {0};
@@ -294,7 +294,8 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
     
     for(u32 i = 0; i < g_driveCount; i++)
     {
-        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
+        UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+        if (!drive_ctx) continue;
         
         for(u8 j = 0; j < drive_ctx->lun_count; j++)
         {
@@ -317,6 +318,11 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
 end:
     mutexUnlock(&g_managerMutex);
     
+#ifdef DEBUG
+    /* Flush logfile. */
+    usbHsFsUtilsFlushLogFile();
+#endif
+    
     return ret;
 }
 
@@ -336,7 +342,8 @@ bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
     /* Locate drive context. */
     for(drive_ctx_idx = 0; drive_ctx_idx < g_driveCount; drive_ctx_idx++)
     {
-        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[drive_ctx_idx]);
+        UsbHsFsDriveContext *drive_ctx = g_driveContexts[drive_ctx_idx];
+        if (!drive_ctx) continue;
         if (drive_ctx->usb_if_id == device->usb_if_id) break;
     }
     
@@ -346,8 +353,10 @@ bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
         goto end;
     }
     
-    /* Destroy drive context and remove it from our buffer. */
+    /* Destroy drive context and remove it from our pointer array. */
     usbHsFsRemoveDriveContextFromListByIndex(drive_ctx_idx, true);
+    
+    USBHSFS_LOG("Successfully unmounted UMS device with ID %d.", device->usb_if_id);
     
     if (signal_status_event)
     {
@@ -361,6 +370,11 @@ bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
     
 end:
     mutexUnlock(&g_managerMutex);
+    
+#ifdef DEBUG
+    /* Flush logfile. */
+    usbHsFsUtilsFlushLogFile();
+#endif
     
     return ret;
 }
@@ -381,60 +395,51 @@ void usbHsFsSetFileSystemMountFlags(u32 flags)
 }
 
 /* Non-static function not meant to be disclosed to users. */
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx)
+bool usbHsFsManagerIsDriveContextPointerValid(UsbHsFsDriveContext *drive_ctx)
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
-    UsbHsFsDriveContext *drive_ctx = NULL;
+    bool ret = false;
     
     mutexLock(&g_managerMutex);
     
-    /* Check if we have a valid filesystem context pointer. */
-    if (fs_ctx && *fs_ctx)
+    /* Try to find a drive context in our pointer array that matches the provided drive context. */
+    for(u32 i = 0; i < g_driveCount; i++)
     {
-        /* Get pointer to the LUN context. */
-        lun_ctx = (UsbHsFsDriveLogicalUnitContext*)(*fs_ctx)->lun_ctx;
+        UsbHsFsDriveContext *cur_drive_ctx = g_driveContexts[i];
+        if (!cur_drive_ctx) continue;
         
-        /* Get pointer to the drive context and lock its mutex. */
-        drive_ctx = usbHsFsManagerGetDriveContextForLogicalUnitContext(lun_ctx);
-        if (drive_ctx) mutexLock(&(drive_ctx->mutex));
+        if (cur_drive_ctx == drive_ctx)
+        {
+            ret = true;
+            break;
+        }
     }
+    
+    /* Lock drive context mutex if we found a match. */
+    if (ret) mutexLock(&(drive_ctx->mutex));
     
     mutexUnlock(&g_managerMutex);
     
-    return drive_ctx;
+    return ret;
 }
 
 /* Non-static function not meant to be disclosed to users. */
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx)
+UsbHsFsDriveLogicalUnitContext *usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(u8 pdrv)
 {
-    if (!lun_ctx || !g_driveCount || !g_driveContexts)
+    bool lock = !mutexIsLockedByCurrentThread(&g_managerMutex);
+    UsbHsFsDriveLogicalUnitContext *ret = NULL;
+    
+    if (lock) mutexLock(&g_managerMutex);
+    
+    if (!g_driveCount || !g_driveContexts || pdrv >= FF_VOLUMES)
     {
         USBHSFS_LOG("Invalid parameters!");
-        return NULL;
+        goto end;
     }
     
     for(u32 i = 0; i < g_driveCount; i++)
     {
-        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
-        if (lun_ctx->usb_if_id == drive_ctx->usb_if_id) return drive_ctx;
-    }
-    
-    USBHSFS_LOG("Unable to find a matching drive context for LUN context with USB interface ID %d.", lun_ctx->usb_if_id);
-    return NULL;
-}
-
-/* Non-static function not meant to be disclosed to users. */
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(u8 pdrv, u8 *out_lun_ctx_idx)
-{
-    if (!g_driveCount || !g_driveContexts || pdrv >= FF_VOLUMES || !out_lun_ctx_idx)
-    {
-        USBHSFS_LOG("Invalid parameters!");
-        return NULL;
-    }
-    
-    for(u32 i = 0; i < g_driveCount; i++)
-    {
-        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
+        UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+        if (!drive_ctx) continue;
         
         for(u8 j = 0; j < drive_ctx->lun_count; j++)
         {
@@ -446,15 +451,19 @@ UsbHsFsDriveContext *usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForF
                 
                 if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_FAT && fs_ctx->fatfs && fs_ctx->fatfs->pdrv == pdrv)
                 {
-                    *out_lun_ctx_idx = j;
-                    return drive_ctx;
+                    ret = lun_ctx;
+                    goto end;
                 }
             }
         }
     }
     
-    USBHSFS_LOG("Unable to find a matching drive context for filesystem context with FatFs drive number %u!", pdrv);
-    return NULL;
+    USBHSFS_LOG("Unable to find a matching LUN context for filesystem context with FatFs drive number %u!", pdrv);
+    
+end:
+    if (lock) mutexUnlock(&g_managerMutex);
+    
+    return ret;
 }
 
 /* Used to create and start a new thread with preemptive multithreading enabled without using libnx's newlib wrappers. */
@@ -575,12 +584,12 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
             USBHSFS_LOG("usbFsGetMountStatus failed! (0x%08X).", rc);
         }
         
+        mutexUnlock(&g_managerMutex);
+        
 #ifdef DEBUG
         /* Flush logfile. */
         usbHsFsUtilsFlushLogFile();
 #endif
-        
-        mutexUnlock(&g_managerMutex);
     }
     
     /* Unregister devoptab device. */
@@ -618,12 +627,12 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
         /* Performing a bus reset on each one makes it possible to re-use them. */
         usbHsFsResetDrives();
         
+        mutexUnlock(&g_managerMutex);
+        
 #ifdef DEBUG
         /* Flush logfile. */
         usbHsFsUtilsFlushLogFile();
 #endif
-        
-        mutexUnlock(&g_managerMutex);
     }
     
     while(true)
@@ -675,26 +684,31 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
             ueventSignal(&g_usbStatusChangeEvent);
         }
         
+        mutexUnlock(&g_managerMutex);
+        
 #ifdef DEBUG
         /* Flush logfile. */
         usbHsFsUtilsFlushLogFile();
 #endif
-        
-        mutexUnlock(&g_managerMutex);
     }
     
-    /* Destroy drive contexts, one by one. */
-    for(u32 i = 0; i < g_driveCount; i++)
-    {
-        UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[i]);
-        mutexLock(&(drive_ctx->mutex));
-        usbHsFsDriveDestroyContext(drive_ctx, true);
-        mutexUnlock(&(drive_ctx->mutex));
-    }
-    
-    /* Free drive context buffer. */
     if (g_driveContexts)
     {
+        /* Destroy drive contexts, one by one. */
+        for(u32 i = 0; i < g_driveCount; i++)
+        {
+            UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+            if (!drive_ctx) continue;
+            
+            mutexLock(&(drive_ctx->mutex));
+            usbHsFsDriveDestroyContext(drive_ctx, true);
+            mutexUnlock(&(drive_ctx->mutex));
+            
+            free(drive_ctx);
+            drive_ctx = NULL;
+        }
+        
+        /* Free drive context pointer array. */
         free(g_driveContexts);
         g_driveContexts = NULL;
     }
@@ -790,7 +804,9 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
         /* Find out which drives were removed. */
         for(u32 i = 0; i < g_driveCount; i++)
         {
-            UsbHsFsDriveContext *cur_drive_ctx = &(g_driveContexts[i]);
+            UsbHsFsDriveContext *cur_drive_ctx = g_driveContexts[i];
+            if (!cur_drive_ctx) continue;
+            
             bool found = false;
             
             for(s32 j = 0; j < usb_if_count; j++)
@@ -857,45 +873,42 @@ end:
 
 static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool stop_lun)
 {
-    if (!g_driveContexts || !g_driveCount || drive_ctx_idx >= g_driveCount) return;
+    UsbHsFsDriveContext *drive_ctx = NULL, **tmp_drive_ctx = NULL;
     
-    UsbHsFsDriveContext *drive_ctx = &(g_driveContexts[drive_ctx_idx]), *tmp_drive_ctx = NULL;
+    if (!g_driveContexts || !g_driveCount || drive_ctx_idx >= g_driveCount || !(drive_ctx = g_driveContexts[drive_ctx_idx])) return;
     
     mutexLock(&(drive_ctx->mutex));
     usbHsFsDriveDestroyContext(drive_ctx, stop_lun);
     mutexUnlock(&(drive_ctx->mutex));
     
+    free(drive_ctx);
+    drive_ctx = NULL;
+    
     USBHSFS_LOG("Destroyed drive context with index %u.", drive_ctx_idx);
     
     if (g_driveCount > 1)
     {
-        /* Lock and unlock all drive mutexes. */
-        /* This is done to avoid issues with devoptab interfaces that have already locked the mutex from at least one drive context and unlocked the drive manager mutex. */
-        /* We'll essentially wait until they finish doing their thing. */
-        for(u32 i = 0; i < g_driveCount; i++) mutexLock(&(g_driveContexts[i].mutex));
-        for(u32 i = g_driveCount; i > 0; i--) mutexUnlock(&(g_driveContexts[i - 1].mutex));
-        
-        /* Move data within the drive context buffer, if needed. */
+        /* Move pointers within the drive context pointer array, if needed. */
         if (drive_ctx_idx < (g_driveCount - 1))
         {
             u32 move_count = (g_driveCount - (drive_ctx_idx + 1));
-            memmove(drive_ctx, drive_ctx + 1, move_count * sizeof(UsbHsFsDriveContext));
-            USBHSFS_LOG("Moved %u drive context(s) within drive context buffer.", move_count);
+            memmove(&(g_driveContexts[drive_ctx_idx]), &(g_driveContexts[drive_ctx_idx + 1]), move_count * sizeof(UsbHsFsDriveContext*));
+            USBHSFS_LOG("Moved %u drive context pointer(s) within drive context pointer array.", move_count);
         }
         
-        /* Reallocate drive context buffer. */
-        tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount - 1) * sizeof(UsbHsFsDriveContext));
+        /* Reallocate drive context pointer array. */
+        tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount - 1) * sizeof(UsbHsFsDriveContext*));
         if (tmp_drive_ctx)
         {
             g_driveContexts = tmp_drive_ctx;
             tmp_drive_ctx = NULL;
-            USBHSFS_LOG("Successfully reallocated drive context buffer.");
+            USBHSFS_LOG("Successfully reallocated drive context pointer array.");
         }
     } else {
-        /* Free drive context buffer. */
+        /* Free drive context pointer array. */
         free(g_driveContexts);
         g_driveContexts = NULL;
-        USBHSFS_LOG("Freed drive context buffer.");
+        USBHSFS_LOG("Freed drive context pointer array.");
     }
     
     /* Decrease drive count. */
@@ -910,52 +923,56 @@ static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if)
         return false;
     }
     
-    UsbHsFsDriveContext *tmp_drive_ctx = NULL;
+    UsbHsFsDriveContext *drive_ctx = NULL, **tmp_drive_ctx = NULL;
     bool ret = false;
     
     USBHSFS_LOG("Adding drive context for interface %d.", usb_if->inf.ID);
     
-    /* Lock and unlock all drive mutexes. */
-    /* This is done to avoid issues with devoptab interfaces that have already locked the mutex from at least one drive context and unlocked the drive manager mutex. */
-    /* We'll essentially wait until they finish doing their thing. */
-    for(u32 i = 0; i < g_driveCount; i++) mutexLock(&(g_driveContexts[i].mutex));
-    for(u32 i = g_driveCount; i > 0; i--) mutexUnlock(&(g_driveContexts[i - 1].mutex));
-    
-    /* Reallocate drive context buffer. */
-    USBHSFS_LOG("Reallocating drive context buffer from %u to %u (interface %d).", g_driveCount, g_driveCount + 1, usb_if->inf.ID);
-    tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount + 1) * sizeof(UsbHsFsDriveContext));
+    /* Reallocate drive context pointer array. */
+    USBHSFS_LOG("Reallocating drive context pointer array from %u to %u (interface %d).", g_driveCount, g_driveCount + 1, usb_if->inf.ID);
+    tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount + 1) * sizeof(UsbHsFsDriveContext*));
     if (!tmp_drive_ctx)
     {
-        USBHSFS_LOG("Failed to reallocate drive context buffer! (interface %d).", usb_if->inf.ID);
+        USBHSFS_LOG("Failed to reallocate drive context pointer array! (interface %d).", usb_if->inf.ID);
         goto end;
     }
     
     g_driveContexts = tmp_drive_ctx;
+    tmp_drive_ctx = NULL;
     
-    /* Clear new drive context. */
-    tmp_drive_ctx = &(g_driveContexts[g_driveCount++]); /* Increase drive count. */
-    memset(tmp_drive_ctx, 0, sizeof(UsbHsFsDriveContext));
+    /* Allocate memory for new drive context. */
+    g_driveContexts[g_driveCount] = calloc(1, sizeof(UsbHsFsDriveContext));
+    if (!g_driveContexts[g_driveCount])
+    {
+        USBHSFS_LOG("Failed to allocate memory for new drive context! (interface %d).", usb_if->inf.ID);
+        goto end;
+    }
+    
+    drive_ctx = g_driveContexts[g_driveCount++];    /* Increase drive count. */
     
     /* Initialize drive context. */
     /* We don't need to lock its mutex - it's a new drive context the user knows nothing about. */
-    ret = usbHsFsDriveInitializeContext(tmp_drive_ctx, usb_if);
+    ret = usbHsFsDriveInitializeContext(drive_ctx, usb_if);
     if (!ret)
     {
+        free(drive_ctx);
+        drive_ctx = NULL;
+        
         if (g_driveCount > 1)
         {
-            /* Reallocate drive context buffer. */
-            tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount - 1) * sizeof(UsbHsFsDriveContext));
+            /* Reallocate drive context pointer array. */
+            tmp_drive_ctx = realloc(g_driveContexts, (g_driveCount - 1) * sizeof(UsbHsFsDriveContext*));
             if (tmp_drive_ctx)
             {
                 g_driveContexts = tmp_drive_ctx;
                 tmp_drive_ctx = NULL;
-                USBHSFS_LOG("Successfully reallocated drive context buffer.");
+                USBHSFS_LOG("Successfully reallocated drive context pointer array.");
             }
         } else {
-            /* Free drive context buffer. */
+            /* Free drive context pointer array. */
             free(g_driveContexts);
             g_driveContexts = NULL;
-            USBHSFS_LOG("Freed drive context buffer.");
+            USBHSFS_LOG("Freed drive context pointer array.");
         }
         
         /* Decrease drive count. */

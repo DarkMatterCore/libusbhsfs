@@ -32,14 +32,17 @@ do { \
 #define ntfs_declare_file_state     ntfs_file_state *file = (ntfs_file_state*)fd
 #define ntfs_declare_dir_state      ntfs_dir_state *dir = (ntfs_dir_state*)dirState->dirStruct
 #define ntfs_declare_fs_ctx         UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData
-#define ntfs_declare_drive_ctx      UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(&fs_ctx)
+#define ntfs_declare_lun_ctx        UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx
+#define ntfs_declare_drive_ctx      UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx
 #define ntfs_declare_vol_state      ntfs_vd *vd = fs_ctx->ntfs
 
 #define ntfs_lock_drive_ctx         ntfs_declare_fs_ctx; \
+                                    ntfs_declare_lun_ctx; \
                                     ntfs_declare_drive_ctx; \
-                                    if (!drive_ctx) ntfs_set_error_and_exit(ENODEV);
+                                    bool drive_ctx_valid = usbHsFsManagerIsDriveContextPointerValid(drive_ctx); \
+                                    if (!drive_ctx_valid) ntfs_set_error_and_exit(ENODEV)
 
-#define ntfs_unlock_drive_ctx       if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
+#define ntfs_unlock_drive_ctx       if (drive_ctx_valid) mutexUnlock(&(drive_ctx->mutex))
 
 #define ntfs_return(x)              return (ntfs_ended_with_error ? -1 : (x))
 #define ntfs_return_ptr(x)          return (ntfs_ended_with_error ? NULL : (x))

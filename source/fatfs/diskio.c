@@ -57,13 +57,12 @@ DRESULT ff_disk_read (
 	UINT count		/* Number of sectors to read */
 )
 {
-    UsbHsFsDriveContext *drive_ctx = NULL;
-    u8 lun_ctx_idx = 0;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
     
-    /* Get drive context and read logical blocks. */
-    drive_ctx = usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(pdrv, &lun_ctx_idx);
-    if (drive_ctx && usbHsFsScsiReadLogicalUnitBlocks(drive_ctx, lun_ctx_idx, buff, sector, count)) ret = RES_OK;
+    /* Get LUN context and read logical blocks. */
+    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
+    if (lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
     
     return ret;
 }
@@ -82,13 +81,12 @@ DRESULT ff_disk_write (
 	UINT count			/* Number of sectors to write */
 )
 {
-    UsbHsFsDriveContext *drive_ctx = NULL;
-    u8 lun_ctx_idx = 0;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
     
-    /* Get drive context and write logical blocks. */
-    drive_ctx = usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(pdrv, &lun_ctx_idx);
-    if (drive_ctx && usbHsFsScsiWriteLogicalUnitBlocks(drive_ctx, lun_ctx_idx, buff, sector, count)) ret = RES_OK;
+    /* Get LUN context and read logical blocks. */
+    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
+    if (lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
     
     return ret;
 }
@@ -106,18 +104,13 @@ DRESULT ff_disk_ioctl (
 	void *buff		/* Buffer to send/receive control data */
 )
 {
-    UsbHsFsDriveContext *drive_ctx = NULL;
-    u8 lun_ctx_idx = 0;
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
     
-    /* Get drive context. */
-    drive_ctx = usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(pdrv, &lun_ctx_idx);
-    if (drive_ctx)
+    /* Get LUN context. */
+    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
+    if (lun_ctx)
     {
-        /* Get LUN context. */
-        lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
-        
         /* Process control code. */
         switch(cmd)
         {

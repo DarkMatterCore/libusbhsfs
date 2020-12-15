@@ -31,14 +31,17 @@ do { \
 #define ff_declare_file_state       FIL *file = (FIL*)fd
 #define ff_declare_dir_state        DIR *dir = (DIR*)dirState->dirStruct
 #define ff_declare_fs_ctx           UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData
-#define ff_declare_drive_ctx        UsbHsFsDriveContext *drive_ctx = usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(&fs_ctx)
+#define ff_declare_lun_ctx          UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx
+#define ff_declare_drive_ctx        UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx
 #define ff_declare_vol_state        FATFS *fatfs = fs_ctx->fatfs
 
 #define ff_lock_drive_ctx           ff_declare_fs_ctx; \
+                                    ff_declare_lun_ctx; \
                                     ff_declare_drive_ctx; \
-                                    if (!drive_ctx) ff_set_error_and_exit(ENODEV);
+                                    bool drive_ctx_valid = usbHsFsManagerIsDriveContextPointerValid(drive_ctx); \
+                                    if (!drive_ctx_valid) ff_set_error_and_exit(ENODEV)
 
-#define ff_unlock_drive_ctx         if (drive_ctx) mutexUnlock(&(drive_ctx->mutex))
+#define ff_unlock_drive_ctx         if (drive_ctx_valid) mutexUnlock(&(drive_ctx->mutex))
 
 #define ff_return(x)                return (ff_ended_with_error ? -1 : (x))
 #define ff_return_ptr(x)            return (ff_ended_with_error ? NULL : (x))

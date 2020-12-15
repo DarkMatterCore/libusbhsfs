@@ -351,6 +351,16 @@ int usbMscThreadFunc(void *arg)
             /* Perform filesystem tests on current device. */
             usbMscFileSystemTest(device);
         }
+        
+        /* Unmount devices. */
+        for(u32 i = 0; i < listed_device_count; i++)
+        {
+            UsbHsFsDevice *device = &(g_usbDevices[i]);
+            usbHsFsUnmountDevice(device, false);
+        }
+        
+        printf("%u device(s) safely unmounted. You may now disconnect them from the console.\n\n", listed_device_count);
+        consoleUpdate(NULL);
     }
     
     /* Exit thread. */

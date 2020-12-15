@@ -169,7 +169,7 @@ Changelog
     * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using libusbhsfs, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
 * Library API:
     * `usbHsFsUnmountDevice()` is now provided as a way to manually/safely unmount UMS devices at runtime before disconnecting them.
-        * This is also automatically handled by `usbHsFsExit()` if there are any mounted UMS devices when the library interface is closed - so depending on what you need, you should only call `usbHsFsUnmountDevice()` when absolutely necessary.
+        * This has been always been automatically handled by `usbHsFsExit()` if there are any mounted UMS devices when the library interface is closed. So, depending on what you need, you should only call `usbHsFsUnmountDevice()` when absolutely necessary.
     * `usbHsFsGetFileSystemMountFlags()` and `usbHsFsSetFileSystemMountFlags()` are now provided as a way to get/set filesystem mount flags.
         * Please read `include/usbhsfs.h` for more information about these flags and what they do.
         * These flags only affect NTFS volume mounting at this moment, so they have no effect under ISC licensed builds of the library.
@@ -184,8 +184,15 @@ Changelog
     * Implemented proper caching into debug logging code, making debug builds a lot faster now.
 * SX OS:
     * The status change user-mode event is now signaled on every `usbfs` status change.
-* Improved safety checks in all internal devoptab functions.
-* Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.
+* Example test application:
+    * Updated to reflect all these changes.
+    * Added more filesystem tests.
+    * Rewrote input handling to match the new `pad` API from libnx.
+    * Now using usbHsFsUnmountDevice() to safely unmount any UMS devices that have already been tested.
+* Other:
+    * Improved safety checks in all internal devoptab functions.
+    * The logfile is now flushed each time a public API function that generates log messages is called.
+    * Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.
 
 **v0.0.3:**
 

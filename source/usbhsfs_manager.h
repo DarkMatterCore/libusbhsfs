@@ -14,18 +14,15 @@
 
 #include "usbhsfs_drive.h"
 
-/// Locks the drive manager mutex to prevent the background thread from updating drive contexts while working with them, then looks up the drive context for the provided filesystem context.
-/// If a drive context is found, its mutex is locked. The drive manager mutex is unlocked right before this function returns.
+/// Locks the drive manager mutex to prevent the background thread from updating drive contexts while working with them, then tries to find a match for the provided drive context in the pointer array.
+/// If a match is found, the drive context mutex is locked. The drive manager mutex is unlocked right before this function returns.
 /// This function is thread-safe.
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextByFileSystemContextAndAcquireLock(UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx);
+bool usbHsFsManagerIsDriveContextPointerValid(UsbHsFsDriveContext *drive_ctx);
 
-/// Returns a pointer to the parent drive context from the provided LUN context, or NULL if an error occurs.
-/// The drive manager mutex must have been locked beforehand to achieve thread-safety.
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextForLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx);
-
-/// Returns a pointer to the drive context that holds the LUN context that holds the FatFs filesystem context with the provided physical driver number, or NULL if an error occurs.
-/// If this function succeeds, the index to the LUN context that holds the FatFs filesystem context is saved to out_lun_ctx_idx.
-/// The drive manager mutex must have been locked beforehand to achieve thread-safety.
-UsbHsFsDriveContext *usbHsFsManagerGetDriveContextAndLogicalUnitContextIndexForFatFsDriveNumber(u8 pdrv, u8 *out_lun_ctx_idx);
+/// Locks the drive manager mutex to prevent the background thread from updating drive contexts while working with them.
+/// Then looks for a filesystem context with a FatFs object that holds a physical drive number matching the provided one. If a match is found, its parent LUN context is returned.
+/// Otherwise, this function returns NULL. The drive manager mutex is unlocked right before this function returns.
+/// This function is thread-safe.
+UsbHsFsDriveLogicalUnitContext *usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(u8 pdrv);
 
 #endif  /* __USBHSFS_MANAGER_H__ */
