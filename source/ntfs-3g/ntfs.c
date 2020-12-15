@@ -44,7 +44,7 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
     if (!formatted_str_len) return ret;
     
     /* Allocate buffer for the formatted string. */
-    formatted_str = calloc(formatted_str_len + 1, sizeof(char));
+    formatted_str = calloc(++formatted_str_len, sizeof(char));
     if (!formatted_str) return ret;
     
     /* Generate formatted string and save it to the logfile. */
@@ -69,7 +69,7 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
 
 ntfs_inode *ntfs_inode_open_from_path(ntfs_vd *vd, const char *path)
 {
-    return ntfs_inode_open_from_path_reparse(vd, path, 0);
+    return ntfs_inode_open_from_path_reparse(vd, path, 1);
 }
 
 ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const char *target)
@@ -240,7 +240,6 @@ int ntfs_inode_unlink(ntfs_vd *vd, const char *path)
     ntfs_inode *ni = NULL, *dir_ni = NULL;
     ntfschar *uname = NULL;
     int ret = -1, uname_len = 0;
-    bool reopen_root = false;
     
     /* Safety check. */
     if (!vd || !vd->vol || !vd->root || !path || !*path)
@@ -267,14 +266,14 @@ int ntfs_inode_unlink(ntfs_vd *vd, const char *path)
             goto end;
         }
         
-        /* Set parent directory inode. */
-        dir_ni = vd->root;
-        reopen_root = true;
+        /* Open root directory. */
+        dir_ni = ntfs_inode_open(vd->vol, FILE_root);
     } else {
         /* Open the parent directory. */
         dir_ni = ntfs_inode_open_from_path(vd, full_path.dir);
-        if (!dir_ni) goto end;
     }
+    
+    if (!dir_ni) goto end;
     
     /* Convert the entry name string from our current locale (UTF-8) into UTF-16LE. */
     uname_len = ntfs_mbstoucs(full_path.name, &uname);
@@ -293,13 +292,10 @@ int ntfs_inode_unlink(ntfs_vd *vd, const char *path)
     ni = NULL;
     dir_ni = NULL;
     
-    /* Reopen root directory inode. */
-    if (reopen_root) vd->root = ntfs_inode_open(vd->vol, FILE_root);
-    
 end:
     if (uname) free(uname);
     
-    if (dir_ni && dir_ni != vd->root) ntfs_inode_close(dir_ni);
+    if (dir_ni) ntfs_inode_close(dir_ni);
     
     if (ni) ntfs_inode_close(ni);
     
@@ -323,7 +319,7 @@ static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *pa
     char *target = NULL;
     
     /* Safety check. */
-    if (!vd || !vd->vol || !vd->root || !path || !*path || reparse_depth < 0 || reparse_depth > NTFS_MAX_SYMLINK_DEPTH)
+    if (!vd || !vd->vol || !vd->root || !path || !*path || reparse_depth <= 0 || reparse_depth > NTFS_MAX_SYMLINK_DEPTH)
     {
         errno = EINVAL;
         goto end;

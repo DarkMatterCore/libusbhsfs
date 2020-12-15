@@ -737,6 +737,8 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
     
     if (!dir->pos && !dir->first && !dir->current)
     {
+        USBHSFS_LOG("Directory %lu hasn't been read. Caching all entries first.", dir->ni->mft_no);
+        
         /* Read directory contents. */
         if (ntfs_readdir(dir->ni, &(dir->pos), dirState, ntfsdev_diropen_filldir)) ntfs_set_error_and_exit(errno);
         
@@ -749,6 +751,8 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
     
     /* Check if there's an entry waiting to be fetched (end of directory). */
     if (!dir->current || !dir->current->name) ntfs_set_error_and_exit(ENOENT);
+    
+    USBHSFS_LOG("Getting info from next directory %lu entry.", dir->ni->mft_no);
     
     /* Fetch current entry name. */
     strcpy(filename, dir->current->name);
@@ -1224,7 +1228,7 @@ static int ntfsdev_diropen_filldir(void *dirent, const ntfschar *name, const int
         if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->show_hidden_files) || ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->show_system_files)) ntfs_end;
     }
     
-    USBHSFS_LOG("Found entry with MREF %lu: \"%s\".", mref, entry_name);
+    USBHSFS_LOG("Found entry \"%s\" with MREF %lu.", entry_name, mref);
     
     /* Allocate a new directory entry. */
     entry = malloc(sizeof(ntfs_dir_entry));
