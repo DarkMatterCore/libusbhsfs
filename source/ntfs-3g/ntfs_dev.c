@@ -111,7 +111,7 @@ static bool ntfsdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogi
 
 static void ntfsdev_fill_stat(ntfs_vd *vd, ntfs_inode *ni, struct stat *st);
 
-static int ntfsdev_diropen_filldir(void *dirent, const ntfschar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type);
+static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type);
 
 /* Global variables. */
 
@@ -737,7 +737,7 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
         USBHSFS_LOG("Directory %lu hasn't been read. Caching all entries first.", dir->ni->mft_no);
         
         /* Read directory contents. */
-        if (ntfs_readdir(dir->ni, &(dir->pos), dirState, ntfsdev_diropen_filldir)) ntfs_set_error_and_exit(errno);
+        if (ntfs_readdir(dir->ni, &(dir->pos), dirState, ntfsdev_dirnext_filldir)) ntfs_set_error_and_exit(errno);
         
         /* Move to the first entry in the directory. */
         dir->current = dir->first;
@@ -1181,7 +1181,7 @@ static void ntfsdev_fill_stat(ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
     st->st_ctim = ntfs2timespec(ni->creation_time);
 }
 
-static int ntfsdev_diropen_filldir(void *dirent, const ntfschar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type)
+static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type)
 {
     (void)pos;
     (void)dt_type;
