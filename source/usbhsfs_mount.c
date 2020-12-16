@@ -884,14 +884,6 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
         goto end;
     }
     
-    /* Open the root directory node. */
-    fs_ctx->ntfs->root = ntfs_inode_open(fs_ctx->ntfs->vol, FILE_root);
-    if (!fs_ctx->ntfs->root)
-    {    
-        USBHSFS_LOG("Failed to open NTFS root directory! (%d) (interface %d, LUN %u, FS %u).", ntfs_volume_error(errno), lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
-        goto end;
-    }
-    
     /* Setup volume case sensitivity. */
 	if (flags & USB_MOUNT_IGNORE_CASE) ntfs_set_ignore_case(fs_ctx->ntfs->vol);
     
@@ -905,12 +897,6 @@ end:
     /* Free stuff if something went wrong. */
     if (!ret && fs_ctx->ntfs)
     {
-        if (fs_ctx->ntfs->root)
-        {
-            ntfs_inode_close(fs_ctx->ntfs->root);
-            fs_ctx->ntfs->root = NULL;
-        }
-        
         if (fs_ctx->ntfs->vol)
         {
             ntfs_umount(fs_ctx->ntfs->vol, true);
@@ -939,13 +925,6 @@ end:
 
 static void usbHsFsMountUnregisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    /* Close the root directory node. */
-    if (fs_ctx->ntfs->root)
-    {
-        ntfs_inode_close(fs_ctx->ntfs->root);
-        fs_ctx->ntfs->root = NULL;
-    }
-    
     /* Unmount NTFS volume. */
     /* We don't need to manually free the NTFS device handle - ntfs_umount() does it for us. */
     ntfs_umount(fs_ctx->ntfs->vol, true);

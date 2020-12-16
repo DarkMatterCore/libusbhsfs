@@ -161,7 +161,7 @@ Changelog
 
 **v0.1.0:**
 
-* Built using libnx commit `13716b5`.
+* Built using libnx commit `c51918a`.
 * Implemented partition table parsing (MBR/GPT/VBR). The library now takes care of looking for boot sectors and/or partition tables on its own, and just passes volume LBAs to filesystem libraries. This makes it possible to mount multiple partitions from the same logical unit as individual devoptab devices.
 * Implemented NTFS support. Big thanks to [Rhys Koedijk](https://github.com/rhyskoedijk)!
     * You must link your application against both libusbhsfs and NTFS-3G if you wish to use NTFS support. Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.

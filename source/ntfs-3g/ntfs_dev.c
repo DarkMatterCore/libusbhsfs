@@ -588,9 +588,6 @@ static int ntfsdev_rename(struct _reent *r, const char *oldName, const char *new
     /* Fix input paths. */
     if (!ntfsdev_fixpath(r, oldName, &fs_ctx, old_path) || !ntfsdev_fixpath(r, newName, &fs_ctx, new_path)) ntfs_end;
     
-    /* TO DO: check if both paths belong to the same device. */
-    //if (vd != ntfs_volume_from_pathname(newName)) ntfs_set_error_and_exit(EXDEV);
-    
     /* Check if there's an entry with the new name. */
     ni = ntfs_inode_open_from_path(vd, new_path);
     if (ni) 
@@ -764,7 +761,7 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
         filestat->st_mode = S_IFDIR;
     } else {
         /* Regular entry. */
-        ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, filename);
+        ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, dir->current->name);
         if (!ni)
         {
             /* Reached end of directory */

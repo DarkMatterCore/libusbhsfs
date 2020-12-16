@@ -48,7 +48,6 @@ typedef struct _ntfs_vd {
     struct _ntfs_dd *dd;        ///< NTFS device descriptor.
     struct ntfs_device *dev;    ///< NTFS device handle.
     ntfs_volume *vol;           ///< NTFS volume handle.
-    ntfs_inode *root;           ///< NTFS node handle for the root directory.
     u32 flags;                  ///< NTFS mount flags.
     s64 id;                     ///< Filesystem ID.
     u16 uid;                    ///< User ID for entry creation.
