@@ -81,10 +81,16 @@ Result usbHsFsInitialize(u8 event_idx)
     
     /* Setup NTFS-3G logging. */
     ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
-    ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_WARNING | \
-                        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_PROGRESS);
+    ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_VERBOSE | NTFS_LOG_LEVEL_PROGRESS | NTFS_LOG_LEVEL_WARNING | \
+                        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE);
 #else
     USBHSFS_LOG("Supported filesystem libraries: FatFs.");
+#endif  /* GPL_BUILD */
+#else   /* DEBUG */
+#ifdef GPL_BUILD
+    /* Disable NTFS-3G logging. */
+    ntfs_log_set_handler(ntfs_log_handler_null);
+    ntfs_log_set_levels(0);
 #endif  /* GPL_BUILD */
 #endif  /* DEBUG */
     
