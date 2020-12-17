@@ -167,6 +167,7 @@ Changelog
     * You must link your application against both libusbhsfs and NTFS-3G if you wish to use NTFS support. Please read the **How to build** section from the README to know how to build NTFS-3G and install it into the `portlibs` directory from devkitPro.
     * Certain limitations apply. Please read the **Limitations** section from the README for more information.
     * Dual licensing (ISC / GPLv2+) is now provided as a way to allow projects that don't comply with the GPLv2+ license from NTFS-3G to keep using libusbhsfs, albeit with FAT support only. Please read the **Licensing** section from the readme for more information.
+* Improved safety checks in all internal devoptab functions.
 * Library API:
     * `usbHsFsUnmountDevice()` is now provided as a way to manually/safely unmount UMS devices at runtime before disconnecting them.
         * This has been always been automatically handled by `usbHsFsExit()` if there are any mounted UMS devices when the library interface is closed. So, depending on what you need, you should only call `usbHsFsUnmountDevice()` when absolutely necessary.
@@ -182,6 +183,7 @@ Changelog
     * Fixed potential memory corruption issues that could have taken place due to not updating LUN/FS context references after reallocating their buffers.
 * Debug build:
     * Implemented proper caching into debug logging code, making debug builds a lot faster now.
+    * The logfile is now flushed each time a public API function that generates log messages is called.
 * SX OS:
     * The status change user-mode event is now signaled on every `usbfs` status change.
 * Example test application:
@@ -189,10 +191,6 @@ Changelog
     * Added more filesystem tests.
     * Rewrote input handling to match the new `pad` API from libnx.
     * Now using usbHsFsUnmountDevice() to safely unmount any UMS devices that have already been tested.
-* Other:
-    * Improved safety checks in all internal devoptab functions.
-    * The logfile is now flushed each time a public API function that generates log messages is called.
-    * Updated example test application to reflect all these changes. Also added more filesystem tests and rewrote input handling to match the new `pad` API from libnx.
 
 **v0.0.3:**
 
