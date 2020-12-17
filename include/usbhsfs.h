@@ -23,25 +23,6 @@ extern "C" {
 #define LIBUSBHSFS_VERSION_MINOR    1
 #define LIBUSBHSFS_VERSION_MICRO    0
 
-/// Filesystem mount flags.
-/// Not all supported filesystems are compatible with these flags.
-/// The default, not configured mount flags bitmask is `USB_MOUNT_UPDATE_ACCESS_TIMES | USB_MOUNT_SHOW_HIDDEN_FILES`.
-#define USB_MOUNT_DEFAULT               0x00000000  /* Default options, don't do anything special. */
-
-#define USB_MOUNT_IGNORE_CASE           0x00000001  /* Ignore case sensitivity. Everything will be lowercase (NTFS only). */
-#define USB_MOUNT_UPDATE_ACCESS_TIMES   0x00000002  /* Update file and directory access times (NTFS only). */
-#define USB_MOUNT_SHOW_HIDDEN_FILES     0x00000004  /* Display hidden files when enumerating directories (NTFS only). */
-#define USB_MOUNT_SHOW_SYSTEM_FILES     0x00000008  /* Display system files when enumerating directories (NTFS only). */
-#define USB_MOUNT_IGNORE_READ_ONLY_ATTR 0x00000010  /* Allow writing to files even if they are marked as read-only (NTFS only). */
-
-#define USB_MOUNT_READ_ONLY             0x00000100  /* Mount in read-only mode (NTFS only). */
-#define USB_MOUNT_RECOVER               0x00000200  /* Replay the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections) (NTFS only). */
-
-#define USB_MOUNT_IGNORE_HIBERNATION    0x00010000  /* Mount even if filesystem is hibernated (NTFS only). */
-
-#define USB_MOUNT_SU                    (USB_MOUNT_SHOW_HIDDEN_FILES | USB_MOUNT_SHOW_SYSTEM_FILES | USB_MOUNT_IGNORE_READ_ONLY_ATTR)
-#define USB_MOUNT_FORCE                 (USB_MOUNT_RECOVER | USB_MOUNT_IGNORE_HIBERNATION)
-
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
     UsbHsFsDeviceFileSystemType_Invalid = 0,
@@ -51,6 +32,25 @@ typedef enum {
     UsbHsFsDeviceFileSystemType_exFAT   = 4,
     UsbHsFsDeviceFileSystemType_NTFS    = 5     ///< Only returned by the GPL build of the library.
 } UsbHsFsDeviceFileSystemType;
+
+/// Filesystem mount flags.
+/// Not all supported filesystems are compatible with these flags.
+/// The default mount bitmask is `UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ShowHiddenFiles`. It can be overriden via usbHsFsSetFileSystemMountFlags() (see below).
+typedef enum {
+    UsbHsFsMountFlags_None                        = 0x00000000, ///< No special action is taken.
+    UsbHsFsMountFlags_IgnoreCaseSensitivity       = 0x00000001, ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
+    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS only. File/directory access times are updated after each successful R/W operation.
+    UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
+    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS only. Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
+    UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state.
+    
+    ///< Pre-generated bitmasks provided for convenience.
+    UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute),
+    UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation)
+} UsbHsFsMountFlags;
 
 /// Struct used to list mounted filesystems as devoptab devices.
 /// Everything but the vendor_id, product_id, product_revision and name fields is empty/zeroed-out under SX OS.

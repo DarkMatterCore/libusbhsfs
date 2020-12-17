@@ -184,7 +184,7 @@ static bool g_fatFsVolumeTable[FF_VOLUMES] = { false };
 static const u8 g_microsoftBasicDataPartitionGuid[0x10] = { 0xA2, 0xA0, 0xD0, 0xEB, 0xE5, 0xB9, 0x33, 0x44, 0x87, 0xC0, 0x68, 0xB6, 0xB7, 0x26, 0x99, 0xC7 };   /* EBD0A0A2-B9E5-4433-87C0-68B6B72699C7. */
 static const u8 g_linuxFilesystemDataGuid[0x10] = { 0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4 };           /* 0FC63DAF-8483-4772-8E79-3D69D8477DE4. */
 
-static u32 g_fileSystemMountFlags = (USB_MOUNT_UPDATE_ACCESS_TIMES | USB_MOUNT_SHOW_HIDDEN_FILES);
+static u32 g_fileSystemMountFlags = (UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ShowHiddenFiles);
 
 __thread char __usbhsfs_dev_path_buf[USB_MAX_PATH_LENGTH] = {0};
 
@@ -867,14 +867,14 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
     
     /* Setup NTFS volume descriptor. */
     fs_ctx->ntfs->id = fs_ctx->device_id;
-    fs_ctx->ntfs->atime = ((flags & USB_MOUNT_UPDATE_ACCESS_TIMES) ? ATIME_ENABLED : ATIME_DISABLED);
-    fs_ctx->ntfs->ignore_read_only_attr = (flags & USB_MOUNT_IGNORE_READ_ONLY_ATTR);
-    fs_ctx->ntfs->show_hidden_files = (flags & USB_MOUNT_SHOW_HIDDEN_FILES);
-    fs_ctx->ntfs->show_system_files = (flags & USB_MOUNT_SHOW_SYSTEM_FILES);
+    fs_ctx->ntfs->atime = ((flags & UsbHsFsMountFlags_UpdateAccessTimes) ? ATIME_ENABLED : ATIME_DISABLED);
+    fs_ctx->ntfs->ignore_read_only_attr = (flags & UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute);
+    fs_ctx->ntfs->show_hidden_files = (flags & UsbHsFsMountFlags_ShowHiddenFiles);
+    fs_ctx->ntfs->show_system_files = (flags & UsbHsFsMountFlags_ShowSystemFiles);
     
-    if ((flags & USB_MOUNT_READ_ONLY) || lun_ctx->write_protect) fs_ctx->ntfs->flags |= NTFS_MNT_RDONLY;
-    if (flags & USB_MOUNT_RECOVER) fs_ctx->ntfs->flags |= NTFS_MNT_RECOVER;
-    if (flags & USB_MOUNT_IGNORE_HIBERNATION) fs_ctx->ntfs->flags |= NTFS_MNT_IGNORE_HIBERFILE;
+    if ((flags & UsbHsFsMountFlags_ReadOnly) || lun_ctx->write_protect) fs_ctx->ntfs->flags |= NTFS_MNT_RDONLY;
+    if (flags & UsbHsFsMountFlags_ReplayJournal) fs_ctx->ntfs->flags |= NTFS_MNT_RECOVER;
+    if (flags & UsbHsFsMountFlags_IgnoreHibernation) fs_ctx->ntfs->flags |= NTFS_MNT_IGNORE_HIBERFILE;
     
     /* Try to mount NTFS volume. */
     fs_ctx->ntfs->vol = ntfs_device_mount(fs_ctx->ntfs->dev, fs_ctx->ntfs->flags);
@@ -885,7 +885,7 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
     }
     
     /* Setup volume case sensitivity. */
-	if (flags & USB_MOUNT_IGNORE_CASE) ntfs_set_ignore_case(fs_ctx->ntfs->vol);
+	if (flags & UsbHsFsMountFlags_IgnoreCaseSensitivity) ntfs_set_ignore_case(fs_ctx->ntfs->vol);
     
     /* Register devoptab device. */
     if (!usbHsFsMountRegisterDevoptabDevice(fs_ctx)) goto end;
