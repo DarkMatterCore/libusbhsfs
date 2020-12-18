@@ -1,0 +1,43 @@
+# Maintainer: DarkMatterCore <pabloacurielz@gmail.com>
+
+pkgname=switch-lwext4
+pkgver=733b2c40d7121900e339bee8784977467a9fe8c9
+pkgrel=1
+pkgdesc='ext2/ext3/ext4 filesystem library for microcontrollers'
+arch=('any')
+url='http://sourceforge.net/projects/lwext4/'
+license=('GPL')
+options=(!strip libtool staticlibs)
+source=("https://github.com/gkostka/lwext4/archive/${pkgver}.zip")
+sha256sums=('7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e')
+makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers' 'cmake' 'patch')
+groups=('switch-portlibs')
+
+prepare() {
+  cd lwext4-$pkgver
+  patch -Np1 -i "$srcdir/../lwext4-733b2c40d7121900e339bee8784977467a9fe8c9-makefile.patch"
+}
+
+build() {
+  cd lwext4-$pkgver
+
+  source /opt/devkitpro/switchvars.sh
+
+  make lib_only
+
+  cd build_lib_only
+  make
+}
+
+package() {
+  cd lwext4-$pkgver
+
+  install -Dm644 LICENSE "$pkgdir"/opt/devkitpro/portlibs/switch/licenses/$pkgname/LICENSE
+  cp -fr include "$pkgdir"/opt/devkitpro/portlibs/switch/include
+  chmod -R 644 "$pkgdir"/opt/devkitpro/portlibs/switch/include
+
+  cd build_lib_only
+
+  install -Dm644 include/generated/ext4_config.h "$pkgdir"/opt/devkitpro/portlibs/switch/include/generated/ext4_config.h
+  install -Dm644 src/liblwext4.a "$pkgdir"/opt/devkitpro/portlibs/switch/lib/liblwext4.a
+}

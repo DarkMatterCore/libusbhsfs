@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
+ * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -20,7 +21,7 @@ extern "C" {
 
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
-#define LIBUSBHSFS_VERSION_MINOR    1
+#define LIBUSBHSFS_VERSION_MINOR    2
 #define LIBUSBHSFS_VERSION_MICRO    0
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
@@ -30,7 +31,8 @@ typedef enum {
     UsbHsFsDeviceFileSystemType_FAT16   = 2,
     UsbHsFsDeviceFileSystemType_FAT32   = 3,
     UsbHsFsDeviceFileSystemType_exFAT   = 4,
-    UsbHsFsDeviceFileSystemType_NTFS    = 5     ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_NTFS    = 5,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT     = 6     ///< Only returned by the GPL build of the library.
 } UsbHsFsDeviceFileSystemType;
 
 /// Filesystem mount flags.

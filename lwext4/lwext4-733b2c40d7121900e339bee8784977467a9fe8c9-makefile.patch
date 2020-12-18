@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -65,7 +65,7 @@
+ lib_only:
+ 	rm -R -f build_lib_only
+ 	mkdir build_lib_only
+-	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE ..
++	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/switch.cmake ..
+ 
+ all: 
+ 	generic
