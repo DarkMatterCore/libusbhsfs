@@ -12,7 +12,7 @@
 /libntfs-3g/src
 /libntfs-3g/pkg
 /libntfs-3g/*.tar.*
-/lwext4/*.zip
-/lwext4/src
-/lwext4/pkg
-/lwext4/*.tar.*
+/liblwext4/*.zip
+/liblwext4/src
+/liblwext4/pkg
+/liblwext4/*.tar.*

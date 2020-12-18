@@ -155,8 +155,8 @@ dist-bin: all
 
 dist-src:
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
-	--exclude='lwext4/*.zip' --exclude='lwext4/*.tar.*' --exclude='lwext4/pkg' --exclude='lwext4/src' \
-	example include libntfs-3g lwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
+	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
+	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
 
 dist: dist-src dist-bin
 
