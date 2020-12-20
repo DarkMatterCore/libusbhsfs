@@ -36,11 +36,9 @@ Main features
         * Extended Boot Record (EBR).
         * GUID Partition Table (GPT) + protective MBR.
     * Supported filesystems:
-        * FAT12 (via FatFs).
-        * FAT16 (via FatFs).
-        * FAT32 (via FatFs).
-        * exFAT (via FatFs).
+        * FAT12/FAT16/FAT32/exFAT (via FatFs).
         * NTFS (via NTFS-3G).
+        * EXT2/3/4 (via lwext4).
         * Completely possible to add support for additional filesystems, as long as their libraries are ported over to Switch.
     * Uses devoptab virtual device interface to provide a way to use standard I/O calls from libc (e.g. `fopen()`, `opendir()`, etc.) on mounted filesystems from the available logical units.
 * Easy to use library interface:
@@ -63,12 +61,15 @@ Limitations
         * Security contexts are always ignored.
         * Only partial journaling is supported, so unexpected crashes or power loss can leave the a mounted NTFS volume in an inconsistent state. In cases where there has been heavy activity prior to the crash or power loss, it is recommended to plug the UMS device into a Windows PC and let it replay the journal properly before remounting with NTFS-3G, in order to prevent possible data loss and/or corruption.
         * Symbolic links are transparent. This means that when a symbolic link in encountered, its hard link will be used instead.
+    * lwext4:
+        * Up to 8 EXT volumes can be mounted at the same time across all available UMS devices. This is because lwext4 uses an internal, stack-based registry of mount points and block devices, and increasing the limit can potentially exhaust the stack memory from the thread libusbhsfs runs under.
+        * For the rest of the limitations, please take a look at the [README](https://github.com/gkostka/lwext4/blob/master/README.md) from the lwext4 repository.
 * Stack and/or heap memory consumption:
     * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
 * `usbfs` service from SX OS:
-    * Only a single FAT volume from a single drive can be mounted.
+    * Only a single FAT volume from a single drive can be mounted. No other filesystem types are supported.
     * Relative paths aren't supported.
     * `chdir()`, `rename()`, `dirreset()` and `utimes()` aren't supported.
     * There are probably other limitations we don't even know about, due to the closed-source nature of this CFW.
@@ -83,21 +84,22 @@ Dual licensing is provided for this project depending on the way it is built:
 * If the library is built using the `BUILD_TYPE=GPL` parameter with `make`, it is distributed under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version. You can find a copy of this license in the [LICENSE_GPLv2.md file](https://github.com/DarkMatterCore/libusbhsfs/blob/main/LICENSE_GPLv2.md). GPLv2+ licensed builds provide support for:
     * FAT filesystems via FatFs, which is licensed under the [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license).
     * NTFS via NTFS-3G, which is licensed under the [GPLv2+ license](https://sourceforge.net/p/ntfs-3g/ntfs-3g/ci/edge/tree/COPYING).
+    * EXT filesystems via lwext4, which is licensed under the [GPLv2 license](https://github.com/gkostka/lwext4/blob/master/LICENSE).
 
 How to build
 --------------
 
-This section assumes you've already installed both devkitA64 and libnx. If not, please follow the steps from the [devkitPro wiki](https://devkitpro.org/wiki/Getting_Started).
+This section assumes you've already installed devkitA64, libnx and devkitPro pacman. If not, please follow the steps from the [devkitPro wiki](https://devkitpro.org/wiki/Getting_Started).
 
 * **ISC licensed build**:
     1. Run `make BUILD_TYPE=ISC [all/release/debug]` on the root directory from the project.
 
-* **GPLv2+ licensed build**:
-    1. Enter the `libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
-        * If you're using Windows, you must use `msys2` for this step. You can either use the one provided by devkitPro (recommended) or install it on your own.
-    2. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
+* **GPLv2+ licensed build**: Please note that if you're running a Unix-like OS such as a Linux distro or MacOS, you may need to use `dkp-makepkg` instead of `makepkg` in the following steps.
+    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
+    2. Enter the `/liblwext4` directory from this project and run `makepkg -i --noconfirm`. This will build lwext4 for AArch64 and install it to the `portlibs` directory from devkitPro.
+    3. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
 
-A `lib` directory will be generated, which holds the built static library.
+Regardless of the build type you choose, a `lib` directory will be generated, which will hold the static library build for the target that was provided to the `make` command.
 
 How to use
 --------------
@@ -105,8 +107,8 @@ How to use
 This section assumes you've already built the library by following the steps from the previous section.
 
 * Update the `Makefile` from your homebrew application to reference the library.
-    * Two different builds are generated: a release build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
-    * If you're using a GPLv2+ licensed build, you'll also need to link your application against NTFS-3G: `-lusbhsfs -lntfs-3g`.
+    * Two different builds can be generated: a release build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
+    * If you're using a GPLv2+ licensed build, you'll also need to link your application against both NTFS-3G and lwext4: `-lusbhsfs -lntfs-3g -llwext4`.
     * In case you need to report any bugs, please make sure you're using the debug build and provide its logfile.
 * Include the `usbhsfs.h` header file somewhere in your code.
 * Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.
@@ -114,7 +116,7 @@ This section assumes you've already built the library by following the steps fro
 * Get the mounted device count with `usbHsFsGetMountedDeviceCount()`.
 * List mounted devices with `usbHsFsListMountedDevices()`.
 * Perform I/O operations using the returned mount names from the listed devices.
-* If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it, use `usbHsFsUnmountDevice()`.
+* If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it and without shutting down the whole library interface, use `usbHsFsUnmountDevice()`.
 * Close the USB Mass Storage Class Host interface with `usbHsFsExit()` when you're done.
 
 Please check both the header file located at `/include/usbhsfs.h` and the provided test application in `/example` for additional information.
@@ -158,6 +160,15 @@ Thanks to
 
 Changelog
 --------------
+
+**v0.2.0:**
+
+* Built using libnx v4.0.0.
+* Implemented EXT2/3/4 support (GPL build only).
+    * This means applications using GPL builds of the library must now be linked against libusbhsfs, NTFS-3G and lwext4. Please read the **How to build** section from the README to know how to build both NTFS-3G and lwext4 and install them into the `portlibs` directory from devkitPro.
+    * Certain limitations apply. Please read the **Limitations** section from the README for more information.
+* Minor code cleanup.
+* The example test application is now linked against lwext4 as well.
 
 **v0.1.0:**
 

@@ -41,12 +41,12 @@ typedef enum {
 typedef enum {
     UsbHsFsMountFlags_None                        = 0x00000000, ///< No special action is taken.
     UsbHsFsMountFlags_IgnoreCaseSensitivity       = 0x00000001, ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
-    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS only. File/directory access times are updated after each successful R/W operation.
+    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS and EXT only. File/directory access times are updated after each successful R/W operation.
     UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
     UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
     UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
-    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS only. Filesystem is mounted as read-only.
-    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
+    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS and EXT only. Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
     UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state.
     
     ///< Pre-generated bitmasks provided for convenience.

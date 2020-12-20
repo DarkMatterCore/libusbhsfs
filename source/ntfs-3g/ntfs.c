@@ -2,15 +2,11 @@
  * ntfs.c
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
-
-#include <sys/iosupport.h>
-#include <sys/param.h>
 
 #include "ntfs.h"
 
@@ -262,7 +258,7 @@ void ntfs_inode_update_times_filtered(ntfs_vd *vd, ntfs_inode *ni, ntfs_time_upd
     if (!vd || !ni) return;
     
     /* Run the access time update strategy against the volume settings first. */
-    if (vd->atime == ATIME_DISABLED) mask &= ~NTFS_UPDATE_ATIME;
+    if (!vd->update_access_times) mask &= ~NTFS_UPDATE_ATIME;
     
     /* Update entry times. */
     if (mask)

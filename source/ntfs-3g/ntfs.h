@@ -2,7 +2,6 @@
  * ntfs.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -16,6 +15,8 @@
 
 #include <ntfs-3g/config.h>
 #include <ntfs-3g/types.h>
+#include <ntfs-3g/bootsect.h>
+#include <ntfs-3g/layout.h>
 #include <ntfs-3g/device.h>
 #include <ntfs-3g/volume.h>
 #include <ntfs-3g/inode.h>
@@ -24,6 +25,8 @@
 #include <ntfs-3g/reparse.h>
 
 #include "../usbhsfs_utils.h"
+
+#include "ntfs_disk_io.h"
 
 /// NTFS errno values.
 #define ENOPART                 3000    /* No partition was found. */
@@ -37,12 +40,6 @@
 
 #define NTFS_MAX_SYMLINK_DEPTH  10      /* Maximum search depth when resolving symbolic links. */
 
-/// NTFS file access time update strategies.
-typedef enum {
-    ATIME_ENABLED,  ///< Update access times.
-    ATIME_DISABLED  ///< Don't update access times.
-} ntfs_atime_t;
-
 /// NTFS volume descriptor.
 typedef struct _ntfs_vd {
     struct _ntfs_dd *dd;        ///< NTFS device descriptor.
@@ -54,7 +51,7 @@ typedef struct _ntfs_vd {
     u16 gid;                    ///< Group ID for entry creation.
     u16 fmask;                  ///< Unix style permission mask for file creation.
     u16 dmask;                  ///< Unix style permission mask for directory creation.
-    ntfs_atime_t atime;         ///< Entry access time update strategy.
+    bool update_access_times;   ///< True if file/directory access times should be updated during I/O operations.
     bool ignore_read_only_attr; ///< True if read-only file attributes should be ignored (allows writing to read-only files).
     bool show_hidden_files;     ///< True if hidden files are shown when enumerating directories.
     bool show_system_files;     ///< True if system files are shown when enumerating directories.

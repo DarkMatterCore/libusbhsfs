@@ -1,0 +1,48 @@
+/*
+ * ext.h
+ *
+ * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ *
+ * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
+ */
+
+#pragma once
+
+#ifndef __EXT_H__
+#define __EXT_H__
+
+/// Override preprocessor definitions from lwext4.
+#define CONFIG_EXT4_BLOCKDEVS_COUNT     8
+#define CONFIG_EXT4_MOUNTPOINTS_COUNT   8
+
+#include <ext4.h>
+#include <ext4_super.h>
+#include <ext4_debug.h>
+
+#include "../usbhsfs_utils.h"
+
+#include "ext_disk_io.h"
+
+/// Make sure we successfully overrided lwext4 definitions.
+static_assert(CONFIG_EXT4_BLOCKDEVS_COUNT == 8, "Failed to override lwext4 max block device count!");
+static_assert(CONFIG_EXT4_MOUNTPOINTS_COUNT == 8, "Failed to override lwext4 max mount point count!");
+
+/// EXT volume descriptor.
+typedef struct _ext_vd {
+    struct ext4_blockdev *bdev;             ///< EXT block device handle.
+    char dev_name[CONFIG_EXT4_MAX_MP_NAME]; ///< Block device mount name.
+    u32 flags;                              ///< EXT mount flags.
+    s64 id;                                 ///< Filesystem ID.
+    u16 uid;                                ///< User ID for entry creation.
+    u16 gid;                                ///< Group ID for entry creation.
+    u16 fmask;                              ///< Unix style permission mask for file creation.
+    u16 dmask;                              ///< Unix style permission mask for directory creation.
+} ext_vd;
+
+/// Mounts an EXT volume using the provided volume descriptor.
+bool ext_mount(ext_vd *vd);
+
+/// Unmounts the EXT volume represented by the provided volume descriptor.
+void ext_umount(ext_vd *vd);
+
+#endif  /* __EXT_H__ */
