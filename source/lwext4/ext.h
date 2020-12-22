@@ -40,4 +40,7 @@ bool ext_mount(ext_vd *vd);
 /// Unmounts the EXT volume represented by the provided volume descriptor.
 void ext_umount(ext_vd *vd);
 
+/// Returns a UsbHsFsDeviceFileSystemType_EXT* value to identify the EXT version used by the provided EXT volume descriptor.
+u8 ext_get_version(ext_vd *vd);
+
 #endif  /* __EXT_H__ */

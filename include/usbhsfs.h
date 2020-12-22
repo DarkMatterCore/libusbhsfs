@@ -32,7 +32,9 @@ typedef enum {
     UsbHsFsDeviceFileSystemType_FAT32   = 3,
     UsbHsFsDeviceFileSystemType_exFAT   = 4,
     UsbHsFsDeviceFileSystemType_NTFS    = 5,    ///< Only returned by the GPL build of the library.
-    UsbHsFsDeviceFileSystemType_EXT     = 6     ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT2    = 6,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT3    = 7,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT4    = 8     ///< Only returned by the GPL build of the library.
 } UsbHsFsDeviceFileSystemType;
 
 /// Filesystem mount flags.

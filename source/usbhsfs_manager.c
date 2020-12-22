@@ -1020,7 +1020,7 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
             device->fs_type = UsbHsFsDeviceFileSystemType_NTFS;
             break;
         case UsbHsFsDriveLogicalUnitFileSystemType_EXT:
-            device->fs_type = UsbHsFsDeviceFileSystemType_EXT;
+            device->fs_type = ext_get_version(fs_ctx->ext);
             break;
 #endif
         

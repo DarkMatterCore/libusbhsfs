@@ -150,6 +150,7 @@ Thanks to
 
 * ChaN, for the [FatFs module](http://elm-chan.org/fsw/ff/00index_e.html).
 * Tuxera and NTFS-3G contributors, for the [NTFS-3G library](https://sourceforge.net/projects/ntfs-3g).
+* Grzegorz Kostka and lwext4 contributors, for the [lwext4 library](https://github.com/gkostka/lwext4).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
 * [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
 * [Whovian9369](https://github.com/Whovian9369). I literally would have dropped Switch homebrew development altogether some months ago, if not for you. Thanks, mate.

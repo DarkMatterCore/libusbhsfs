@@ -11,6 +11,18 @@
 #include "usbhsfs.h"
 #include "../usbhsfs_drive.h"
 
+#define EXT2_FINCOM_SUPPORTED   (EXT4_FINCOM_FILETYPE | EXT4_FINCOM_META_BG)
+#define EXT2_FINCOM_UNSUPPORTED ~EXT2_FINCOM_SUPPORTED
+
+#define EXT2_FRO_SUPPORTED      (EXT4_FRO_COM_SPARSE_SUPER | EXT4_FRO_COM_LARGE_FILE | EXT4_FRO_COM_BTREE_DIR)
+#define EXT2_FRO_UNSUPPORTED    ~EXT2_FRO_SUPPORTED
+
+#define EXT3_FINCOM_SUPPORTED   (EXT2_FINCOM_SUPPORTED | EXT4_FINCOM_RECOVER)
+#define EXT3_FINCOM_UNSUPPORTED ~EXT3_FINCOM_SUPPORTED
+
+#define EXT3_FRO_SUPPORTED      EXT2_FRO_SUPPORTED
+#define EXT3_FRO_UNSUPPORTED    ~EXT3_FRO_SUPPORTED
+
 bool ext_mount(ext_vd *vd)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
@@ -104,4 +116,28 @@ void ext_umount(ext_vd *vd)
     /* Do not check for errors in this call - it always returns ENOENT. */
     res = ext4_device_unregister(vd->dev_name);
     //if (res) USBHSFS_LOG("Failed to unregister EXT block device \"%s\"! (%d).", vd->dev_name, res);
+}
+
+u8 ext_get_version(ext_vd *vd)
+{
+    u32 fincom = 0, fro = 0;
+    struct ext4_sblock *sblock = &(vd->bdev->fs->sb);
+    u8 ret = 0;
+    
+    /* Get features_incompatible. */
+    fincom = ext4_get32(sblock, features_incompatible);
+    
+    /* Get features_read_only. */
+    fro = ext4_get32(sblock, features_read_only);
+    
+    /* Check EXT4 features. */
+    if ((fincom & EXT3_FINCOM_UNSUPPORTED) || (fro & EXT3_FRO_UNSUPPORTED)) ret = UsbHsFsDeviceFileSystemType_EXT4;
+    
+    /* Check EXT3 features. */
+    if (!(fincom & EXT3_FINCOM_UNSUPPORTED) && !(fro & EXT3_FRO_UNSUPPORTED)) ret = UsbHsFsDeviceFileSystemType_EXT3;
+    
+    /* Check EXT2 features. */
+    if (!(fincom & EXT2_FINCOM_UNSUPPORTED) && !(fro & EXT2_FRO_UNSUPPORTED)) ret = UsbHsFsDeviceFileSystemType_EXT2;
+    
+    return ret;
 }
