@@ -101,6 +101,7 @@ void ext_umount(ext_vd *vd)
     if (res) USBHSFS_LOG("Failed to unmount EXT volume \"%s\"! (%d).", mount_point, res);
     
     /* Unregister EXT block device. */
+    /* Do not check for errors in this call - it always returns ENOENT. */
     res = ext4_device_unregister(vd->dev_name);
-    if (res) USBHSFS_LOG("Failed to unregister EXT block device \"%s\"! (%d).", vd->dev_name, res);
+    //if (res) USBHSFS_LOG("Failed to unregister EXT block device \"%s\"! (%d).", vd->dev_name, res);
 }

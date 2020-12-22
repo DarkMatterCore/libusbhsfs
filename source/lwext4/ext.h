@@ -11,21 +11,16 @@
 #ifndef __EXT_H__
 #define __EXT_H__
 
-/// Override preprocessor definitions from lwext4.
-#define CONFIG_EXT4_BLOCKDEVS_COUNT     8
-#define CONFIG_EXT4_MOUNTPOINTS_COUNT   8
-
-#include <ext4.h>
-#include <ext4_super.h>
-#include <ext4_debug.h>
+#include <lwext4/ext4.h>
+#include <lwext4/ext4_super.h>
+#include <lwext4/ext4_debug.h>
+#include <lwext4/ext4_fs.h>
+#include <lwext4/ext4_inode.h>
+#include <lwext4/ext4_journal.h>
 
 #include "../usbhsfs_utils.h"
 
 #include "ext_disk_io.h"
-
-/// Make sure we successfully overrided lwext4 definitions.
-static_assert(CONFIG_EXT4_BLOCKDEVS_COUNT == 8, "Failed to override lwext4 max block device count!");
-static_assert(CONFIG_EXT4_MOUNTPOINTS_COUNT == 8, "Failed to override lwext4 max mount point count!");
 
 /// EXT volume descriptor.
 typedef struct _ext_vd {

@@ -12,7 +12,6 @@
 #include <sys/param.h>
 #include <fcntl.h>
 
-#include "../usbhsfs_utils.h"
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_mount.h"
 
@@ -626,7 +625,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
     buf->f_files = 0;
     buf->f_ffree = 0;
     buf->f_favail = 0;
-    buf->f_fsid = 0;
+    buf->f_fsid = fs_ctx->device_id;
     buf->f_flag = ST_NOSUID;
     buf->f_namemax = FF_LFN_BUF;
     

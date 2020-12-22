@@ -86,7 +86,7 @@ Result usbHsFsInitialize(u8 event_idx)
                         NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE);
     
     /* Setup lwext4 logging. */
-    ext4_dmask_set(DEBUG_ALL);
+    ext4_dmask_set(DEBUG_ALL & ~DEBUG_NOPREFIX);
 #else
     USBHSFS_LOG("Build type: ISC.");
 #endif  /* GPL_BUILD */

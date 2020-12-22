@@ -5,7 +5,8 @@
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
+ *
+ * Based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
 
 #include "ntfs.h"

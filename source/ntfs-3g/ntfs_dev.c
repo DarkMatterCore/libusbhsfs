@@ -5,13 +5,12 @@
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
+ *
+ * Based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii). Also loosely based on fs_dev.c from libnx, et al.
  */
 
 #include <sys/param.h>
 #include <fcntl.h>
-
-#include "ntfs.h"
 
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_mount.h"

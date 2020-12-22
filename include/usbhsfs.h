@@ -41,7 +41,7 @@ typedef enum {
 typedef enum {
     UsbHsFsMountFlags_None                        = 0x00000000, ///< No special action is taken.
     UsbHsFsMountFlags_IgnoreCaseSensitivity       = 0x00000001, ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
-    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS and EXT only. File/directory access times are updated after each successful R/W operation.
+    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS only. File/directory access times are updated after each successful R/W operation.
     UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
     UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
     UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.

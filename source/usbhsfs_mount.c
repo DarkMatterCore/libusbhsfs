@@ -17,7 +17,7 @@
 
 #ifdef GPL_BUILD
 #include "ntfs-3g/ntfs_dev.h"
-//#include "lwext4/ext_dev.h"
+#include "lwext4/ext_dev.h"
 #endif
 
 #define MOUNT_NAME_PREFIX      "ums"
@@ -1167,7 +1167,7 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystem
             fs_device = ntfsdev_get_devoptab();
             break;
         case UsbHsFsDriveLogicalUnitFileSystemType_EXT:     /* EXT2/3/4. */
-            //fs_device = extdev_get_devoptab();
+            fs_device = extdev_get_devoptab();
             break;
 #endif
         default:
