@@ -97,7 +97,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
 			-I$(CURDIR)/$(BUILD)
 
-.PHONY: clean all release release-dir debug debug-dir lib-dir
+.PHONY: clean all release release-dir debug debug-dir lib-dir example
 
 #---------------------------------------------------------------------------------
 LIB_BRANCH := $(shell git symbolic-ref --short HEAD)
@@ -134,6 +134,9 @@ debug-dir:
 lib-dir:
 	@mkdir -p lib
 
+example: all
+	@$(MAKE) --no-print-directory -C example
+
 lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
@@ -150,8 +153,10 @@ lib/lib$(TARGET)d.a : debug-dir lib-dir $(SOURCES) $(INCLUDES)
 	--no-print-directory -C debug \
 	-f $(CURDIR)/Makefile
 
-dist-bin: all
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md
+dist-bin: example
+	@cp example/libusbhsfs-example.nro libusbhsfs-example.nro
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md libusbhsfs-example.nro
+	@rm libusbhsfs-example.nro
 
 dist-src:
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
@@ -164,6 +169,8 @@ dist: dist-src dist-bin
 clean:
 	@echo clean ...
 	@rm -fr release debug lib *.bz2
+	@$(MAKE) --no-print-directory -C example clean
+    
 
 #---------------------------------------------------------------------------------
 else
