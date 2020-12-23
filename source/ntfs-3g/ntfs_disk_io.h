@@ -2,24 +2,17 @@
  * ntfs_disk_io.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
+ *
+ * Based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
 
 #pragma once
 
 #ifndef __NTFS_DISK_IO_H__
 #define __NTFS_DISK_IO_H__
-
-#include <ntfs-3g/config.h>
-#include <ntfs-3g/types.h>
-#include <ntfs-3g/bootsect.h>
-#include <ntfs-3g/layout.h>
-
-#include "../usbhsfs_utils.h"
 
 /// NTFS device descriptor.
 typedef struct _ntfs_dd {

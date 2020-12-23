@@ -2,11 +2,11 @@
  * ntfs_disk_io.c
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
- * This file is based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
+ *
+ * Based on work from libntfs-wii (https://github.com/rhyskoedijk/libntfs-wii).
  */
 
 #include <math.h>
@@ -14,7 +14,6 @@
 
 #include "ntfs.h"
 
-#include "../usbhsfs_manager.h"
 #include "../usbhsfs_scsi.h"
 
 /* Function prototypes. */

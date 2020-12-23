@@ -16,7 +16,8 @@
 
 #if defined(DEBUG) && defined(GPL_BUILD)
 #include "ntfs-3g/ntfs.h"
-#endif 
+#include "lwext4/ext.h"
+#endif
 
 #define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06
 #define USB_PROTOCOL_BULK_ONLY_TRANSPORT        0x50
@@ -77,20 +78,26 @@ Result usbHsFsInitialize(u8 event_idx)
     usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 #ifdef GPL_BUILD
-    USBHSFS_LOG("Supported filesystem libraries: FatFs, NTFS-3G.");
+    USBHSFS_LOG("Build type: GPL.");
     
     /* Setup NTFS-3G logging. */
     ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
     ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_VERBOSE | NTFS_LOG_LEVEL_PROGRESS | NTFS_LOG_LEVEL_WARNING | \
                         NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE);
+    
+    /* Setup lwext4 logging. */
+    ext4_dmask_set(DEBUG_ALL & ~DEBUG_NOPREFIX);
 #else
-    USBHSFS_LOG("Supported filesystem libraries: FatFs.");
+    USBHSFS_LOG("Build type: ISC.");
 #endif  /* GPL_BUILD */
 #else   /* DEBUG */
 #ifdef GPL_BUILD
     /* Disable NTFS-3G logging. */
     ntfs_log_set_handler(ntfs_log_handler_null);
     ntfs_log_set_levels(0);
+    
+    /* Disable lwext4 logging. */
+    ext4_dmask_set(0);
 #endif  /* GPL_BUILD */
 #endif  /* DEBUG */
     
@@ -1011,6 +1018,9 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
 #ifdef GPL_BUILD
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
             device->fs_type = UsbHsFsDeviceFileSystemType_NTFS;
+            break;
+        case UsbHsFsDriveLogicalUnitFileSystemType_EXT:
+            device->fs_type = ext_get_version(fs_ctx->ext);
             break;
 #endif
         

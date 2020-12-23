@@ -67,7 +67,7 @@ ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 # Use -lusbhsfsd instead of -lusbhsfs to use the library build with debug logging enabled
-LIBS	:=  -lusbhsfs -lntfs-3g -lnx
+LIBS	:=  -lusbhsfs -lntfs-3g -llwext4 -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

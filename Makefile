@@ -42,7 +42,7 @@ ifeq ($(filter $(MAKECMDGOALS),clean dist-src),)
             ifeq (${BUILD_TYPE},GPL)
                 # Update sources, set GPL_BUILD definition
                 # We'll just assume the user has already installed the necessary libraries
-                SOURCES	+=	source/ntfs-3g
+                SOURCES	+=	source/ntfs-3g source/lwext4
                 CFLAGS	+=	-DGPL_BUILD
             else
                 $(error Invalid value for BUILD_TYPE flag. Expected ISC or GPL)
@@ -154,8 +154,9 @@ dist-bin: all
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md
 
 dist-src:
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.xz' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
-	example include libntfs-3g source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
+	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
+	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
 
 dist: dist-src dist-bin
 

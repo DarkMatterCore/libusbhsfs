@@ -28,6 +28,9 @@
 #define USB_MOUNT_NAME_LENGTH   32
 #define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
 
+#define USB_MIN_BLOCK_SIZE      512
+#define USB_MAX_BLOCK_SIZE      4096
+
 #ifdef DEBUG
 #define USBHSFS_LOG(fmt, ...)   usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
 

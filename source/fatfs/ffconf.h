@@ -1,3 +1,5 @@
+#include "../usbhsfs_utils.h"
+
 /*---------------------------------------------------------------------------/
 /  FatFs Functional Configurations
 /---------------------------------------------------------------------------*/
@@ -154,8 +156,8 @@
 /* Number of volumes (logical drives) to be used. (1-100) */
 
 
-#define FF_MIN_SS		512
-#define FF_MAX_SS		4096
+#define FF_MIN_SS		USB_MIN_BLOCK_SIZE
+#define FF_MAX_SS		USB_MAX_BLOCK_SIZE
 /* This set of options configures the range of sector size to be supported. (512,
 /  1024, 2048 or 4096) Always set both 512 for most systems, generic memory card and
 /  harddisk. But a larger value may be required for on-board flash memory and some

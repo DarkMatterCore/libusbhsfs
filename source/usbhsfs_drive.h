@@ -18,7 +18,7 @@
 
 #ifdef GPL_BUILD
 #include "ntfs-3g/ntfs.h"
-#include "ntfs-3g/ntfs_disk_io.h"
+#include "lwext4/ext.h"
 #endif
 
 #define USB_BOT_MAX_LUN 16  /* Max returned value is actually a zero-based index to the highest LUN. */
@@ -29,7 +29,7 @@ typedef enum {
     UsbHsFsDriveLogicalUnitFileSystemType_Unsupported = 1,  ///< Valid boot signature, unsupported FS.
     UsbHsFsDriveLogicalUnitFileSystemType_FAT         = 2,  ///< FAT filesystem (FAT12, FAT16, FAT32, exFAT).
     UsbHsFsDriveLogicalUnitFileSystemType_NTFS        = 3,  ///< NTFS filesystem.
-    UsbHsFsDriveLogicalUnitFileSystemType_EXT         = 4   ///< EXT* filesystem.
+    UsbHsFsDriveLogicalUnitFileSystemType_EXT         = 4   ///< EXT* filesystem (EXT2, EXT3, EXT4).
 } UsbHsFsDriveLogicalUnitFileSystemType;
 
 /// Used to handle filesystems from LUNs.
@@ -40,6 +40,7 @@ typedef struct {
     FATFS *fatfs;       ///< Pointer to a dynamically allocated FatFs object. Only used if fs_type == UsbHsFsFileSystemType_FAT.
 #ifdef GPL_BUILD
     ntfs_vd *ntfs;      ///< Pointer to a dynamically allocated ntfs_vd object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
+    ext_vd *ext;        ///< Pointer to a dynamically allocated ext_vd object. Only used if fs_type == UsbHsFsFileSystemType_EXT.
 #endif
     
     /// TO DO: add more FS objects here after implementing support for other filesystems.
@@ -122,6 +123,9 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
 #ifdef GPL_BUILD
             case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:
                 fs_valid = (fs_ctx->ntfs != NULL);
+                break;
+            case UsbHsFsDriveLogicalUnitFileSystemType_EXT:
+                fs_valid = (fs_ctx->ext != NULL);
                 break;
 #endif
             default:

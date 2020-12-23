@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020, XorTroll.
+ * Copyright (c) 2020, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -20,7 +21,7 @@ extern "C" {
 
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
-#define LIBUSBHSFS_VERSION_MINOR    1
+#define LIBUSBHSFS_VERSION_MINOR    2
 #define LIBUSBHSFS_VERSION_MICRO    0
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
@@ -30,7 +31,10 @@ typedef enum {
     UsbHsFsDeviceFileSystemType_FAT16   = 2,
     UsbHsFsDeviceFileSystemType_FAT32   = 3,
     UsbHsFsDeviceFileSystemType_exFAT   = 4,
-    UsbHsFsDeviceFileSystemType_NTFS    = 5     ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_NTFS    = 5,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT2    = 6,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT3    = 7,    ///< Only returned by the GPL build of the library.
+    UsbHsFsDeviceFileSystemType_EXT4    = 8     ///< Only returned by the GPL build of the library.
 } UsbHsFsDeviceFileSystemType;
 
 /// Filesystem mount flags.
@@ -43,8 +47,8 @@ typedef enum {
     UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
     UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
     UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
-    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS only. Filesystem is mounted as read-only.
-    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
+    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS and EXT only. Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
     UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state.
     
     ///< Pre-generated bitmasks provided for convenience.

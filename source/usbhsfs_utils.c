@@ -16,7 +16,7 @@ static bool usbHsFsUtilsCheckRunningServiceByName(const char *name);
 #ifdef DEBUG
 #define LOG_PATH        "/" LIB_TITLE ".log"
 #define LOG_BUF_SIZE    0x400000                /* 4 MiB. */
-#define LOG_FORCE_FLUSH                         /* Forces a log buffer flush each time usbHsFsUtilsWriteMessageToLogFile() and usbHsFsUtilsWriteLogBufferToLogFile() are called. */
+//#define LOG_FORCE_FLUSH                         /* Forces a log buffer flush each time usbHsFsUtilsWriteMessageToLogFile() and usbHsFsUtilsWriteLogBufferToLogFile() are called. */
 
 /* Global variables. */
 

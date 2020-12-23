@@ -164,7 +164,14 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
                     fs_ctx->lun_ctx = lun_ctx;
                     
 #ifdef GPL_BUILD
-                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_NTFS) fs_ctx->ntfs->dd->lun_ctx = lun_ctx;
+                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_NTFS)
+                    {
+                        fs_ctx->ntfs->dd->lun_ctx = lun_ctx;
+                    } else
+                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_EXT)
+                    {
+                        fs_ctx->ext->bdev->bdif->p_user = lun_ctx;
+                    }
 #endif
                 }
             }
