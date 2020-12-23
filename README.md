@@ -59,7 +59,7 @@ Limitations
     * NTFS-3G:
         * Crypto operations aren't supported.
         * Security contexts are always ignored.
-        * Only partial journaling is supported, so unexpected crashes or power loss can leave the a mounted NTFS volume in an inconsistent state. In cases where there has been heavy activity prior to the crash or power loss, it is recommended to plug the UMS device into a Windows PC and let it replay the journal properly before remounting with NTFS-3G, in order to prevent possible data loss and/or corruption.
+        * Only partial journaling is supported, so unexpected crashes or power loss can leave the mounted NTFS volume in an inconsistent state. In cases where there has been heavy activity prior to the crash or power loss, it is recommended to plug the UMS device into a Windows PC and let it replay the journal properly before remounting with NTFS-3G, in order to prevent possible data loss and/or corruption.
         * Symbolic links are transparent. This means that when a symbolic link in encountered, its hard link will be used instead.
     * lwext4:
         * Up to 8 EXT volumes can be mounted at the same time across all available UMS devices. This is because lwext4 uses an internal, stack-based registry of mount points and block devices, and increasing the limit can potentially exhaust the stack memory from the thread libusbhsfs runs under.

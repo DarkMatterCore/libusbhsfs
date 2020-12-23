@@ -10,7 +10,7 @@ license=('GPL')
 options=(!strip libtool staticlibs)
 source=("https://github.com/gkostka/lwext4/archive/${pkgver}.zip")
 sha256sums=('7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e')
-makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers' 'cmake' 'patch')
+makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers' 'cmake')
 groups=('switch-portlibs')
 
 prepare() {
