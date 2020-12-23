@@ -94,7 +94,7 @@ This section assumes you've already installed devkitA64, libnx and devkitPro pac
 * **ISC licensed build**:
     1. Run `make BUILD_TYPE=ISC [all/release/debug]` on the root directory from the project.
 
-* **GPLv2+ licensed build**: Please note that if you're running a Unix-like OS such as a Linux distro or MacOS, you may need to use `dkp-makepkg` instead of `makepkg` in the following steps.
+* **GPLv2+ licensed build**: go to the last step if you have already installed both NTFS-3G and lwext4. Please note that if you're running a Unix-like OS such as a Linux distro or MacOS, you may need to use `dkp-makepkg` instead of `makepkg` in the following steps. Windows users may need to install `patch` and `cmake` packages beforehand.
     1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
     2. Enter the `/liblwext4` directory from this project and run `makepkg -i --noconfirm`. This will build lwext4 for AArch64 and install it to the `portlibs` directory from devkitPro.
     3. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
