@@ -730,7 +730,7 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
     /* Sanity check. */
     if (!dir->vd || !dir->ni) ntfs_set_error_and_exit(EINVAL);
     
-    if (!dir->pos && !dir->first && !dir->current)
+    if (!dir->pos && !dir->first)
     {
         USBHSFS_LOG("Directory %lu hasn't been read. Caching all entries first.", dir->ni->mft_no);
         
@@ -749,29 +749,18 @@ static int ntfsdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename,
     
     USBHSFS_LOG("Getting info from next directory %lu entry.", dir->ni->mft_no);
     
-    /* Fetch current entry name. */
+    /* Retrieve inode for the fetched entry. */
+    ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, dir->current->name);
+    if (!ni) ntfs_set_error_and_exit(errno);
+    
+    /* Copy entry name. */
     strcpy(filename, dir->current->name);
     
-    if (!strcmp(dir->current->name, NTFS_ENTRY_NAME_SELF) || !strcmp(dir->current->name, NTFS_ENTRY_NAME_PARENT))
-    {
-        /* Current/parent directory alias. */
-        memset(filestat, 0, sizeof(struct stat));
-        filestat->st_mode = S_IFDIR;
-    } else {
-        /* Regular entry. */
-        ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, dir->current->name);
-        if (!ni)
-        {
-            /* Reached end of directory */
-            dir->current = NULL;
-            ntfs_set_error_and_exit(errno);
-        }
-        
-        /* Get entry stats. */
-        ntfsdev_fill_stat(dir->vd, ni, filestat);
-        
-        ntfs_inode_close(ni);
-    }
+    /* Get entry stats. */
+    ntfsdev_fill_stat(dir->vd, ni, filestat);
+    
+    /* Close inode, we don't need it anymore. */
+    ntfs_inode_close(ni);
     
     /* Move to the next entry in the directory. */
     dir->current = dir->current->next;
@@ -1089,13 +1078,13 @@ static bool ntfsdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogi
             while(*p == '/') p++;
         }
         
-        if (!strcmp(segment, NTFS_ENTRY_NAME_SELF))
+        if (!strcmp(segment, "."))
         {
             /* We're dealing with a current directory dot entry alias. */
             /* We'll simply remove it from the fixed path. */
             outptr[--i] = '\0';
         } else
-        if (!strcmp(segment, NTFS_ENTRY_NAME_PARENT))
+        if (!strcmp(segment, ".."))
         {
             /* We're dealing with a parent directory dot entry alias. */
             /* First check if we aren't currently at the root directory. */
@@ -1188,6 +1177,7 @@ static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int
     ntfs_inode *ni = NULL;
     ntfs_dir_entry *entry = NULL;
     char *entry_name = NULL;
+    bool cleanup = false;
     
     ntfs_declare_error_state;
     ntfs_declare_dir_state;
@@ -1205,22 +1195,26 @@ static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int
         ntfs_end;
     }
     
-    /* Skip parent directory entry if we're currently at the root directory. */
-    if (dir->first && dir->first->mref == FILE_root && MREF(mref) == FILE_root && !strcmp(entry_name, NTFS_ENTRY_NAME_PARENT)) ntfs_end;
-    
-    /* Check if this isn't the current/parent directory entry. */
-    if (strcmp(entry_name, NTFS_ENTRY_NAME_SELF) != 0 && strcmp(entry_name, NTFS_ENTRY_NAME_PARENT) != 0)
+    /* Skip parent and current directory entries (dot entries). */
+    if (!strcmp(entry_name, ".") || !strcmp(entry_name, ".."))
     {
-        /* Open entry. */
-        ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, entry_name);
-        if (!ni)
-        {
-            _errno = errno;
-            ntfs_end;
-        }
-        
-        /* Skip system/hidden files depending on the mount flags. */
-        if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->show_hidden_files) || ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->show_system_files)) ntfs_end;
+        cleanup = true;
+        ntfs_end;
+    }
+    
+    /* Open entry. */
+    ni = ntfs_pathname_to_inode(dir->vd->vol, dir->ni, entry_name);
+    if (!ni)
+    {
+        _errno = errno;
+        ntfs_end;
+    }
+    
+    /* Skip system/hidden files depending on the mount flags. */
+    if (((ni->flags & FILE_ATTR_HIDDEN) && !dir->vd->show_hidden_files) || ((ni->flags & FILE_ATTR_SYSTEM) && !dir->vd->show_system_files))
+    {
+        cleanup = true;
+        ntfs_end;
     }
     
     USBHSFS_LOG("Found entry \"%s\" with MREF %lu.", entry_name, mref);
@@ -1251,8 +1245,8 @@ static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int
 end:
     if (ni) ntfs_inode_close(ni);
     
-    /* Cleanup if we failed to enumerate the entry. */
-    if (ntfs_ended_with_error)
+    /* Cleanup if we failed to enumerate the entry or if it is meant to be skipped. */
+    if (ntfs_ended_with_error || cleanup)
     {
         if (entry_name) free(entry_name);
         if (entry) free(entry);

@@ -35,10 +35,6 @@
 #define EDIRTY                  3002    /* Volume is dirty and NTFS_RECOVER was not specified during mount. */
 #define EHIBERNATED             3003    /* Volume is hibernated and NTFS_IGNORE_HIBERFILE was not specified during mount. */
 
-/// NTFS directory aliases.
-#define NTFS_ENTRY_NAME_SELF    "."     /* Current directory. */
-#define NTFS_ENTRY_NAME_PARENT  ".."    /* Parent directory. */
-
 #define NTFS_MAX_SYMLINK_DEPTH  10      /* Maximum search depth when resolving symbolic links. */
 
 /// NTFS volume descriptor.

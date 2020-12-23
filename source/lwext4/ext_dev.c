@@ -510,10 +510,21 @@ static int extdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
     
     USBHSFS_LOG("Getting info from next entry in directory %u.", dir->f.inode);
     
-    do {
+    while(true)
+    {
         /* Read directory. */
         entry = ext4_dir_entry_next(dir);
-    } while(entry != NULL && entry->inode_type != EXT4_DE_REG_FILE && entry->inode_type != EXT4_DE_DIR && entry->inode_type != EXT4_DE_SYMLINK);
+        if (!entry) break;
+        
+        /* Filter entry types. */
+        if (entry->inode_type != EXT4_DE_REG_FILE && entry->inode_type != EXT4_DE_DIR && entry->inode_type != EXT4_DE_SYMLINK) continue;
+        
+        /* Filter dot directory entries. */
+        if (entry->inode_type == EXT4_DE_DIR && (!strcmp((char*)entry->name, ".") || !strcmp((char*)entry->name, ".."))) continue;
+        
+        /* Jackpot. */
+        break;
+    }
     
     if (!entry) ext_set_error_and_exit(ENOENT); /* ENOENT signals EOD. */
     

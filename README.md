@@ -166,8 +166,9 @@ Changelog
 
 * Built using libnx v4.0.0.
 * Implemented EXT2/3/4 support (GPL build only).
-    * This means applications using GPL builds of the library must now be linked against libusbhsfs, NTFS-3G and lwext4. Please read the **How to build** section from the README to know how to build both NTFS-3G and lwext4 and install them into the `portlibs` directory from devkitPro.
+    * This means applications using the GPL build of the library must now be linked against libusbhsfs, NTFS-3G and lwext4. Please read the **How to build** section from the README to know how to build both NTFS-3G and lwext4 and install them into the `portlibs` directory from devkitPro.
     * Certain limitations apply. Please read the **Limitations** section from the README for more information.
+* Dot directory entries "." and ".." and now filtered in NTFS volumes. They are no longer displayed as part of the output from readdir().
 * Minor code cleanup.
 * The example test application is now linked against lwext4 as well.
 
