@@ -162,6 +162,12 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.1:**
+
+* Bugfix: mount name IDs are now properly freed while destroying filesystem contexts.
+* Library API: added a helper preprocessor macro to generate strings based on the supported filesystem type values.
+* Makefile: branch name is now retrieved using `rev-parse` instead of `symbolic-ref`. Fixes `ref HEAD is not a symbolic ref` errors while building the library when the repository is used as a git submodule.
+
 **v0.2.0:**
 
 * Built using libnx v4.0.0.

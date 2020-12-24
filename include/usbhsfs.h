@@ -22,7 +22,12 @@ extern "C" {
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    2
-#define LIBUSBHSFS_VERSION_MICRO    0
+#define LIBUSBHSFS_VERSION_MICRO    1
+
+/// Helper macro to generate a string based on a filesystem type value.
+#define LIBUSBHSFS_FS_TYPE_STR(x)   ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \
+                                    ((x) == UsbHsFsDeviceFileSystemType_exFAT ? "exFAT" : ((x) == UsbHsFsDeviceFileSystemType_NTFS  ? "NTFS"  : ((x) == UsbHsFsDeviceFileSystemType_EXT2  ? "EXT2"  : \
+                                    ((x) == UsbHsFsDeviceFileSystemType_EXT3  ? "EXT3"  : ((x) == UsbHsFsDeviceFileSystemType_EXT4  ? "EXT4"  : "Invalid"))))))))
 
 /// Used to identify the filesystem type from a mounted filesystem (e.g. filesize limitations, etc.).
 typedef enum {
