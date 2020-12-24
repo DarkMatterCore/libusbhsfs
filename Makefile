@@ -100,7 +100,7 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 .PHONY: clean all release release-dir debug debug-dir lib-dir example
 
 #---------------------------------------------------------------------------------
-LIB_BRANCH := $(shell git symbolic-ref --short HEAD)
+LIB_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 LIB_HASH := $(shell git rev-parse --short HEAD)
 LIB_REV := $(LIB_BRANCH)-$(LIB_HASH)
 
