@@ -310,7 +310,9 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
     /* Locate device ID in devoptab device ID buffer and remove it. */
     for(u32 i = 0; i < g_devoptabDeviceCount; i++)
     {
-        if (i != fs_ctx->device_id) continue;
+        if (g_devoptabDeviceIds[i] != fs_ctx->device_id) continue;
+        
+        USBHSFS_LOG("Found device ID %u at index %u.", fs_ctx->device_id, i);
         
         if (g_devoptabDeviceCount > 1)
         {
@@ -1133,7 +1135,7 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystem
     }
     
     fs_ctx->device_id = usbHsFsMountGetAvailableDevoptabDeviceId();
-    USBHSFS_LOG("Available device ID: %u (interface %d, LUN %u, FS %u).", ret, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+    USBHSFS_LOG("Available device ID: %u (interface %d, LUN %u, FS %u).", fs_ctx->device_id, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
     
     sprintf(fs_ctx->name, MOUNT_NAME_PREFIX "%u", fs_ctx->device_id);
     sprintf(name, "%s:", fs_ctx->name); /* Will be used if something goes wrong and we end up having to remove the devoptab device. */
