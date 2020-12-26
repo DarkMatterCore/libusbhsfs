@@ -162,6 +162,12 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.2:**
+
+* By popular demand, the NTFS journal is now rebuilt by default for NTFS volumes that have not been properly unmounted, which lets the library mount them right away without having to use a Windows PC. Please bear in mind this process may cause inconsistencies - always try to safely remove your storage devices.
+    * Nonetheless, this should be a relatively safe operation - default behaviour in NTFS-3G changed [some years ago](https://linux.die.net/man/8/mount.ntfs-3g).
+    * This change also affects EXT volume mounting. The EXT journal will now always try be recovered - if the process fails, the EXT volume won't be mounted.
+
 **v0.2.1:**
 
 * Bugfix: mount name IDs are now properly freed while destroying filesystem contexts.
@@ -174,7 +180,7 @@ Changelog
 * Implemented EXT2/3/4 support (GPL build only).
     * This means applications using the GPL build of the library must now be linked against libusbhsfs, NTFS-3G and lwext4. Please read the **How to build** section from the README to know how to build both NTFS-3G and lwext4 and install them into the `portlibs` directory from devkitPro.
     * Certain limitations apply. Please read the **Limitations** section from the README for more information.
-* Dot directory entries "." and ".." and now filtered in NTFS volumes. They are no longer displayed as part of the output from readdir().
+* Dot directory entries "." and ".." are now filtered in NTFS volumes. They are no longer displayed as part of the output from readdir().
 * Minor code cleanup.
 * The example test application is now linked against lwext4 as well.
 
