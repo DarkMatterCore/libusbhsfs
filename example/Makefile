@@ -38,36 +38,57 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
 
-VERSION_MAJOR := 0
-VERSION_MINOR := 0
-VERSION_MICRO := 1
+VERSION_MAJOR	:=	0
+VERSION_MINOR	:=	0
+VERSION_MICRO	:=	1
 
-APP_TITLE	:=	libusbhsfs-example
-APP_AUTHOR	:=	DarkMatterCore, XorTroll, Rhys Koedijk
-APP_VERSION	:=  ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
+APP_TITLE		:=	libusbhsfs-example
+APP_AUTHOR		:=	DarkMatterCore, XorTroll, Rhys Koedijk
+APP_VERSION		:=	${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
 
-TARGET		:=	${APP_TITLE}
-BUILD		:=	build
-SOURCES		:=	source
-DATA		:=	data
-INCLUDES	:=	include
-#ROMFS	:=	romfs
+TARGET			:=	${APP_TITLE}
+BUILD			:=	build
+SOURCES			:=	source
+DATA			:=	data
+INCLUDES		:=	include
+#ROMFS			:=	romfs
 
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
+ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
-CFLAGS	:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES) $(INCLUDE) -D__SWITCH__
-CFLAGS	+=	-DAPP_TITLE=\"${APP_TITLE}\"
+CFLAGS		:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES) $(INCLUDE) -D__SWITCH__
+CFLAGS		+=	-DAPP_TITLE=\"${APP_TITLE}\"
 
-CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
+CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
-ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+ASFLAGS		:=	-g $(ARCH)
+LDFLAGS		=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 # Use -lusbhsfsd instead of -lusbhsfs to use the library build with debug logging enabled
-LIBS	:=  -lusbhsfs -lntfs-3g -llwext4 -lnx
+LIBS		:=	-lusbhsfs
+
+ifeq ($(filter $(MAKECMDGOALS),clean),)
+    # Check BUILD_TYPE flag
+    ifneq ($(origin BUILD_TYPE),undefined)
+        ifeq (${BUILD_TYPE},ISC)
+            # Do nothing
+        else
+            ifeq (${BUILD_TYPE},GPL)
+                # Update libs
+                # We'll just assume the user has already installed the necessary libraries
+                LIBS	+=	-lntfs-3g -llwext4
+            else
+                $(error Invalid value for BUILD_TYPE flag. Expected ISC or GPL)
+            endif
+        endif
+    else
+        $(error BUILD_TYPE flag not set)
+    endif
+endif
+
+LIBS		+=	-lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

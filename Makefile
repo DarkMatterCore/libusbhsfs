@@ -24,14 +24,14 @@ INCLUDES	:=	include
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
+ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
-CFLAGS	:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS	+=	-DLIB_TITLE=\"lib${LIB_TITLE}\"
+CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
+CFLAGS		+=	-DLIB_TITLE=\"lib${LIB_TITLE}\"
 
-CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
+CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
-ASFLAGS	:=	-g $(ARCH)
+ASFLAGS		:=	-g $(ARCH)
 
 ifeq ($(filter $(MAKECMDGOALS),clean dist-src),)
     # Check BUILD_TYPE flag
@@ -135,7 +135,7 @@ lib-dir:
 	@mkdir -p lib
 
 example: all
-	@$(MAKE) --no-print-directory -C example
+	@$(MAKE) BUILD_TYPE=${BUILD_TYPE} --no-print-directory -C example
 
 lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
@@ -158,19 +158,17 @@ dist-bin: example
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md libusbhsfs-example.nro
 	@rm libusbhsfs-example.nro
 
-dist-src:
+clean:
+	@echo clean ...
+	@rm -fr release debug lib *.bz2
+	@$(MAKE) --no-print-directory -C example clean
+
+dist-src: clean
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
 	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
 	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
 
 dist: dist-src dist-bin
-
-#---------------------------------------------------------------------------------
-clean:
-	@echo clean ...
-	@rm -fr release debug lib *.bz2
-	@$(MAKE) --no-print-directory -C example clean
-    
 
 #---------------------------------------------------------------------------------
 else
