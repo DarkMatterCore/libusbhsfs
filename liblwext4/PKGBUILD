@@ -39,7 +39,7 @@ package() {
   install -Dm644 LICENSE "$pkgdir"/opt/devkitpro/portlibs/switch/licenses/$pkgname/LICENSE
 
   cp -fr include "$pkgdir"/opt/devkitpro/portlibs/switch/include
-  chmod -R 0644 "$pkgdir"/opt/devkitpro/portlibs/switch/include
+  chmod -R u=rwX,go=rX "$pkgdir"/opt/devkitpro/portlibs/switch/include
 
   install -Dm644 build_lib_only/src/liblwext4.a "$pkgdir"/opt/devkitpro/portlibs/switch/lib/liblwext4.a
 }
