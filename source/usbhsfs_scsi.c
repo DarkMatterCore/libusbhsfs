@@ -463,6 +463,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
         block_length = __builtin_bswap32(read_capacity_10_data.block_length);
     }
     
+    /* Verify block length. */
+    if (!block_length || (block_length % USB_MIN_BLOCK_SIZE) != 0 || block_length > USB_MAX_BLOCK_SIZE)
+    {
+        USBHSFS_LOG("Invalid block length! (0x%lX) (interface %d, LUN %u).", block_length, drive_ctx->usb_if_id, lun);
+        goto end;
+    }
+    
     /* Calculate LUN capacity. */
     capacity = (block_count * block_length);
     if (!capacity)
