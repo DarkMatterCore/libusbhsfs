@@ -35,9 +35,9 @@ enum usb_bot_request {
     USB_REQUEST_BOT_RESET       = 0xFF
 };
 
-void *usbHsFsRequestAllocateCtrlXferBuffer(void)
+void *usbHsFsRequestAllocateXferBuffer(void)
 {
-    return memalign(USB_XFER_BUF_ALIGNMENT, USB_CTRL_XFER_BUFFER_SIZE);
+    return memalign(USB_XFER_BUF_ALIGNMENT, USB_XFER_BUF_SIZE);
 }
 
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 7). */
@@ -58,7 +58,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx)
     if_num = usb_if_session->inf.inf.interface_desc.bInterfaceNumber;
     drive_ctx->max_lun = 1; /* Default value. */
     
-    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_GET_MAX_LUN, 0, if_num, 1, drive_ctx->ctrl_xfer_buf, &xfer_size);
+    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_GET_MAX_LUN, 0, if_num, 1, drive_ctx->xfer_buf, &xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
@@ -73,7 +73,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx)
         goto end;
     }
     
-    drive_ctx->max_lun = (*(drive_ctx->ctrl_xfer_buf) + 1);
+    drive_ctx->max_lun = (*(drive_ctx->xfer_buf) + 1);
     if (drive_ctx->max_lun > USB_BOT_MAX_LUN) drive_ctx->max_lun = 1;
     
 end:
@@ -122,7 +122,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsFsDriveContext *drive_ctx, bool out_
     UsbHsClientEpSession *usb_ep_session = (out_ep ? &(drive_ctx->usb_out_ep_session) : &(drive_ctx->usb_in_ep_session));
     ep_addr = usb_ep_session->desc.bEndpointAddress;
     
-    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_GET_STATUS, 0, ep_addr, 2, drive_ctx->ctrl_xfer_buf, &xfer_size);
+    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_GET_STATUS, 0, ep_addr, 2, drive_ctx->xfer_buf, &xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsIfCtrlXfer failed for %s endpoint! (0x%08X).", out_ep ? "output" : "input", rc);
@@ -136,7 +136,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsFsDriveContext *drive_ctx, bool out_
         goto end;
     }
     
-    *out_status = ((*((u16*)drive_ctx->ctrl_xfer_buf) & 0x01) != 0);
+    *out_status = ((*((u16*)drive_ctx->xfer_buf) & 0x01) != 0);
     
 end:
     return rc;

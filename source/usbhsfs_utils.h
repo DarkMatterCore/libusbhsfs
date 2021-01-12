@@ -23,16 +23,19 @@
 #include <assert.h>
 #include <switch.h>
 
-#define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
+#define ALIGN_DOWN(x, y)            ((x) & ~((y) - 1))
 
-#define USB_MOUNT_NAME_LENGTH   32
-#define USB_MAX_PATH_LENGTH     (FS_MAX_PATH + 1)
+#define USB_MOUNT_NAME_LENGTH       32
+#define USB_MAX_PATH_LENGTH         (FS_MAX_PATH + 1)
 
-#define USB_MIN_BLOCK_SIZE      512
-#define USB_MAX_BLOCK_SIZE      4096
+#define USB_MIN_BLOCK_SIZE          512
+#define USB_MAX_BLOCK_SIZE          4096
+
+#define USB_XFER_BUF_ALIGNMENT      0x1000      /* 4 KiB. */
+#define USB_XFER_BUF_SIZE           0x800000    /* 8 MiB. */
 
 #ifdef DEBUG
-#define USBHSFS_LOG(fmt, ...)   usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
+#define USBHSFS_LOG(fmt, ...)       usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
 
 /// Logfile management functions.
 void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, ...);

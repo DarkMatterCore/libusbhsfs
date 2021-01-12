@@ -34,11 +34,11 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     /* Copy USB interface ID. */
     drive_ctx->usb_if_id = usb_if->inf.ID;
     
-    /* Allocate memory for the USB control transfer buffer. */
-    drive_ctx->ctrl_xfer_buf = usbHsFsRequestAllocateCtrlXferBuffer();
-    if (!drive_ctx->ctrl_xfer_buf)
+    /* Allocate memory for the USB transfer buffer. */
+    drive_ctx->xfer_buf = usbHsFsRequestAllocateXferBuffer();
+    if (!drive_ctx->xfer_buf)
     {
-        USBHSFS_LOG("Failed to allocate USB control transfer buffer! (interface %d).", drive_ctx->usb_if_id);
+        USBHSFS_LOG("Failed to allocate USB transfer buffer! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
     
@@ -211,11 +211,11 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     if (serviceIsActive(&(usb_in_ep_session->s))) usbHsEpClose(usb_in_ep_session);
     if (usbHsIfIsActive(usb_if_session)) usbHsIfClose(usb_if_session);
     
-    /* Free dedicated USB control transfer buffer. */
-    if (drive_ctx->ctrl_xfer_buf)
+    /* Free dedicated USB transfer buffer. */
+    if (drive_ctx->xfer_buf)
     {
-        free(drive_ctx->ctrl_xfer_buf);
-        drive_ctx->ctrl_xfer_buf = NULL;
+        free(drive_ctx->xfer_buf);
+        drive_ctx->xfer_buf = NULL;
     }
 }
 

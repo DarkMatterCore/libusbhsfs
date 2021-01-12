@@ -540,7 +540,7 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
     UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx;
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
-    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
+    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_XFER_BUF_SIZE / block_length), max_block_count_per_loop = 0;
     bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
     
     /* Set max block count per Read command. */
@@ -578,7 +578,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx;
     u8 lun = lun_ctx->lun, *data_buf = (u8*)buf;
     u64 cur_block_addr = block_addr, data_transferred = 0;
-    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_CTRL_XFER_BUFFER_SIZE / block_length), max_block_count_per_loop = 0;
+    u32 block_length = lun_ctx->block_length, cmd_max_block_count = 0, buf_block_count = (USB_XFER_BUF_SIZE / block_length), max_block_count_per_loop = 0;
     bool fua = lun_ctx->fua_supported, long_lba = lun_ctx->long_lba, cmd = false;
     
     /* Make sure write protection is disabled. */
@@ -892,7 +892,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     
     Result rc = 0;
     u8 *data_buf = (u8*)buf;
-    u32 blksize = USB_CTRL_XFER_BUFFER_SIZE;
+    u32 blksize = USB_XFER_BUF_SIZE;
     u32 data_size = cbw->dCBWDataTransferLength, data_transferred = 0;
     
     ScsiCommandStatusWrapper csw = {0};
@@ -913,11 +913,11 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         u32 rest_size = (data_size - data_transferred);
         u32 xfer_size = (rest_size > blksize ? blksize : rest_size);
         
-        /* If we're sending data, copy it to the USB control transfer buffer. */
-        if (!receive) memcpy(drive_ctx->ctrl_xfer_buf, data_buf + data_transferred, xfer_size);
+        /* If we're sending data, copy it to the USB transfer buffer. */
+        if (!receive) memcpy(drive_ctx->xfer_buf, data_buf + data_transferred, xfer_size);
         
         /* Transfer data. */
-        rc = usbHsFsRequestPostBuffer(drive_ctx, !receive, drive_ctx->ctrl_xfer_buf, xfer_size, &rest_size, false);
+        rc = usbHsFsRequestPostBuffer(drive_ctx, !receive, drive_ctx->xfer_buf, xfer_size, &rest_size, false);
         if (R_FAILED(rc))
         {
             USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
@@ -932,7 +932,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
             /* Check if we received an unexpected CSW. */
             if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
             {
-                memcpy(&csw, drive_ctx->ctrl_xfer_buf, sizeof(ScsiCommandStatusWrapper));
+                memcpy(&csw, drive_ctx->xfer_buf, sizeof(ScsiCommandStatusWrapper));
                 if (csw.dCSWSignature == __builtin_bswap32(SCSI_CSW_SIGNATURE) && csw.dCSWTag == cbw->dCBWTag)
                 {
 #ifdef DEBUG
@@ -957,7 +957,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         }
         
         /* If we're receiving data, copy it to the provided buffer. */
-        if (receive) memcpy(data_buf + data_transferred, drive_ctx->ctrl_xfer_buf, xfer_size);
+        if (receive) memcpy(data_buf + data_transferred, drive_ctx->xfer_buf, xfer_size);
         
         /* Update transferred data size. */
         data_transferred += xfer_size;
@@ -1038,13 +1038,13 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     USBHSFS_LOG("Data from CBW to send (interface %d, LUN %u):\r\n%s", drive_ctx->usb_if_id, cbw->bCBWLUN, hexdump);
 #endif
     
-    /* Copy current CBW to the USB control transfer buffer. */
-    memcpy(drive_ctx->ctrl_xfer_buf, cbw, sizeof(ScsiCommandBlockWrapper));
+    /* Copy current CBW to the USB transfer buffer. */
+    memcpy(drive_ctx->xfer_buf, cbw, sizeof(ScsiCommandBlockWrapper));
     
     /* Send CBW. */
     /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled exactly the same as CSW or data stage transfers. */
     /* A reset recovery must be performed if something goes wrong and the output endpoint is STALLed by the device. */
-    rc = usbHsEpPostBuffer(&(drive_ctx->usb_out_ep_session), drive_ctx->ctrl_xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
+    rc = usbHsEpPostBuffer(&(drive_ctx->usb_out_ep_session), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
@@ -1088,7 +1088,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     Result rc = 0;
     u32 xfer_size = 0;
     bool ret = false, valid_csw = false;
-    ScsiCommandStatusWrapper *csw = (ScsiCommandStatusWrapper*)drive_ctx->ctrl_xfer_buf;
+    ScsiCommandStatusWrapper *csw = (ScsiCommandStatusWrapper*)drive_ctx->xfer_buf;
     
     /* Receive CSW. */
     rc = usbHsFsRequestPostBuffer(drive_ctx, false, csw, sizeof(ScsiCommandStatusWrapper), &xfer_size, true);
@@ -1125,7 +1125,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
         goto end;
     }
     
-    /* Copy CSW from the USB control transfer buffer. */
+    /* Copy CSW from the USB transfer buffer. */
     memcpy(out_csw, csw, sizeof(ScsiCommandStatusWrapper));
     
     /* Update return value. */

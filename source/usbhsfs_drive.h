@@ -75,7 +75,7 @@ typedef struct {
 typedef struct {
     Mutex mutex;                                ///< Drive mutex.
     s32 usb_if_id;                              ///< USB interface ID. Exactly the same as usb_if_session.ID / usb_if_session.inf.inf.ID. Placed here for convenience.
-    u8 *ctrl_xfer_buf;                          ///< Dedicated control transfer buffer for this drive.
+    u8 *xfer_buf;                               ///< Dedicated transfer buffer for this drive.
     UsbHsClientIfSession usb_if_session;        ///< Interface session.
     UsbHsClientEpSession usb_in_ep_session;     ///< Input endpoint session (device to host).
     UsbHsClientEpSession usb_out_ep_session;    ///< Output endpoint session (host to device).
@@ -95,7 +95,7 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun);
 /// Checks if the provided drive context is valid.
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *drive_ctx)
 {
-    return (drive_ctx && drive_ctx->ctrl_xfer_buf && usbHsIfIsActive(&(drive_ctx->usb_if_session)) && serviceIsActive(&(drive_ctx->usb_in_ep_session.s)) && \
+    return (drive_ctx && drive_ctx->xfer_buf && usbHsIfIsActive(&(drive_ctx->usb_if_session)) && serviceIsActive(&(drive_ctx->usb_in_ep_session.s)) && \
             serviceIsActive(&(drive_ctx->usb_out_ep_session.s)));
 }
 

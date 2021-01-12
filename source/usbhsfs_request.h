@@ -14,13 +14,10 @@
 
 #include "usbhsfs_drive.h"
 
-#define USB_XFER_BUF_ALIGNMENT      0x1000      /* 4 KiB. */
-#define USB_CTRL_XFER_BUFFER_SIZE   0x800000    /* 8 MiB. */
-
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 
-/// Returns a pointer to a dynamic, memory-aligned buffer suitable for USB control transfers.
-void *usbHsFsRequestAllocateCtrlXferBuffer(void);
+/// Returns a pointer to a dynamic, memory-aligned buffer suitable for USB transfers.
+void *usbHsFsRequestAllocateXferBuffer(void);
 
 /// Performs a get max logical units class-specific request.
 Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx);
