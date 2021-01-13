@@ -2,7 +2,6 @@
  * usbhsfs_utils.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -23,6 +22,8 @@
 #include <assert.h>
 #include <switch.h>
 
+#include "usbhs_ext.h"
+
 #define ALIGN_DOWN(x, y)            ((x) & ~((y) - 1))
 
 #define USB_MOUNT_NAME_LENGTH       32
@@ -31,8 +32,10 @@
 #define USB_MIN_BLOCK_SIZE          512
 #define USB_MAX_BLOCK_SIZE          4096
 
-#define USB_XFER_BUF_ALIGNMENT      0x1000      /* 4 KiB. */
-#define USB_XFER_BUF_SIZE           0x800000    /* 8 MiB. */
+#define USB_XFER_BUF_ALIGNMENT      0x1000              /* 4 KiB. */
+#define USB_XFER_BUF_SIZE           0x800000            /* 8 MiB. */
+
+#define USB_POSTBUFFER_TIMEOUT      (u64)5000000000     /* 5 seconds. */
 
 #ifdef DEBUG
 #define USBHSFS_LOG(fmt, ...)       usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)

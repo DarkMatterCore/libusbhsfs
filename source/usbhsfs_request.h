@@ -2,7 +2,6 @@
  * usbhsfs_request.h
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -37,7 +36,7 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsFsDriveContext *drive_ctx, bo
 /// Performs a data transfer on an endpoint from the provided drive context.
 /// If out_ep is true, the output endpoint will be used. Otherwise, the input endpoint is used.
 /// If an error occurs, a STALL status check is performed on the target endpoint. If its present, the STALL status is cleared and the transfer is retried one more time (if retry == true).
-/// This is essentially a nice usbHsEpPostBuffer() wrapper to use for data transfer stages and CSW transfers from SCSI commands.
+/// This is essentially a nice wrapper for usbHsEpPostBufferWithTimeout(), which can be used in data transfer stages and CSW transfers from SCSI commands.
 Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, void *buf, u32 size, u32 *xfer_size, bool retry);
 
 /// Small wrapper for usbHsFsRequestClearEndpointHaltFeature() that clears a possible STALL status from both endpoints.

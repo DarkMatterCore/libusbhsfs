@@ -1044,7 +1044,7 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     /* Send CBW. */
     /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled exactly the same as CSW or data stage transfers. */
     /* A reset recovery must be performed if something goes wrong and the output endpoint is STALLed by the device. */
-    rc = usbHsEpPostBuffer(&(drive_ctx->usb_out_ep_session), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
+    rc = usbHsEpPostBufferWithTimeout(&(drive_ctx->usb_out_ep_session), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), USB_POSTBUFFER_TIMEOUT, &xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);

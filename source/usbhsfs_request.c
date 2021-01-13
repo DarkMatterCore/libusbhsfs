@@ -2,7 +2,6 @@
  * usbhsfs_request.c
  *
  * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -182,7 +181,7 @@ Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, voi
     
     UsbHsClientEpSession *usb_ep_session = (out_ep ? &(drive_ctx->usb_out_ep_session) : &(drive_ctx->usb_in_ep_session));
     
-    rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
+    rc = usbHsEpPostBufferWithTimeout(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT, xfer_size);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (0x%08X). Attempting to clear possible STALL status from both endpoints.", out_ep ? "output" : "input", rc);
@@ -195,7 +194,7 @@ Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, voi
         /* Retry the transfer if needed. */
         if (R_SUCCEEDED(rc) && retry)
         {
-            rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
+            rc = usbHsEpPostBufferWithTimeout(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT, xfer_size);
             if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (retry) (0x%08X).", out_ep ? "output" : "input", rc);
         }
     }
