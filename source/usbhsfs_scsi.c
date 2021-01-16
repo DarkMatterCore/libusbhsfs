@@ -413,8 +413,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
             write_protect = (mode_parameter_header_10.wp == 1);
             fua_supported = (mode_parameter_header_10.dpofua == 1);
         } else {
+            /* Nothing else to do - Mode Sense commands most likely aren't supported at all. */
             USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-            goto end;
         }
     }
     
@@ -921,6 +921,16 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         if (R_FAILED(rc))
         {
             USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            
+            /* Try to receive a CSW. */
+            if (usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw))
+            {
+                /* Update unexpected CSW flag and jump straight to the Request Sense section. */
+                unexpected_csw = true;
+                goto req_sense;
+            }
+            
+            /* Nothing else to do. */
             goto end;
         }
         
