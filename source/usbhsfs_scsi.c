@@ -384,7 +384,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     }
     
     /* Send Mode Sense (6) SCSI command. */
-    /* We'll only request the mode parameter header to determine if the FUA feature is supported. */
+    /* We'll only request the mode parameter header to determine if there's write protection in place and if the FUA feature is supported. */
     if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
                                          &mode_parameter_header_6))
     {
