@@ -439,7 +439,7 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
     
     /* Rename entry. */
-    res = ff_rename(old_path, new_path);
+    res = ff_rename_(old_path, new_path);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
     
 end:
