@@ -1,7 +1,9 @@
 /debug
 /release
 /lib
-*.tar.bz2
+*.tar*
+*.tgz
+*.zip
 *.log
 *.bin
 *.pcapng
@@ -9,11 +11,7 @@
 /example/*.elf
 /example/*.nacp
 /example/*.nro
-/libntfs-3g/*.tgz
 /libntfs-3g/src
 /libntfs-3g/pkg
-/libntfs-3g/*.tar.*
-/liblwext4/*.zip
 /liblwext4/src
 /liblwext4/pkg
-/liblwext4/*.tar.*

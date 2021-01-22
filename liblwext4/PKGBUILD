@@ -4,42 +4,42 @@ pkgname=switch-lwext4
 pkgver=733b2c40d7121900e339bee8784977467a9fe8c9
 pkgrel=1
 pkgdesc='ext2/ext3/ext4 filesystem library for microcontrollers'
-arch=('any')
-url='http://sourceforge.net/projects/lwext4/'
+url='https://github.com/gkostka/lwext4'
 license=('GPL')
+arch=('any')
 options=(!strip libtool staticlibs)
-source=("https://github.com/gkostka/lwext4/archive/${pkgver}.zip")
-sha256sums=('7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e')
 makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
 groups=('switch-portlibs')
+source=("${url}/archive/${pkgver}.zip")
+sha256sums=('7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e')
 
 prepare() {
-  cd lwext4-$pkgver
-
-  patch -Np1 -i "$srcdir/../lwext4-$pkgver.patch"
-
-  mv include lwext4
-  mkdir include
-  mv lwext4 include/lwext4
+  cd "lwext4-$pkgver"
 
   source /opt/devkitpro/switchvars.sh
+
+  patch -Np1 -i "${srcdir}/../lwext4-${pkgver}.patch"
+
+  mv include lwext4
+  mkdir -p include
+  mv lwext4 include/lwext4
+
   make lib_only
 
   cp -fr build_lib_only/include/lwext4/generated include/lwext4/generated
 }
 
 build() {
-  cd lwext4-$pkgver
+  cd "lwext4-${pkgver}"
   make -C build_lib_only
 }
 
 package() {
-  cd lwext4-$pkgver
+  cd "lwext4-${pkgver}"
 
-  install -Dm644 LICENSE "$pkgdir"/opt/devkitpro/portlibs/switch/licenses/$pkgname/LICENSE
+  install -Dm644 build_lib_only/src/liblwext4.a "${pkgdir}${PORTLIBS_PREFIX}/lib/liblwext4.a"
+  install -Dm644 LICENSE "${pkgdir}${PORTLIBS_PREFIX}/licenses/${pkgname}/LICENSE"
 
-  cp -fr include "$pkgdir"/opt/devkitpro/portlibs/switch/include
-  chmod -R u=rwX,go=rX "$pkgdir"/opt/devkitpro/portlibs/switch/include
-
-  install -Dm644 build_lib_only/src/liblwext4.a "$pkgdir"/opt/devkitpro/portlibs/switch/lib/liblwext4.a
+  cp -fr include "${pkgdir}${PORTLIBS_PREFIX}/include"
+  chmod -R u=rwX,go=rX "${pkgdir}${PORTLIBS_PREFIX}/include"
 }

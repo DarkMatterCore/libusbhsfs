@@ -1,28 +1,28 @@
 # Maintainer: Rhys Koedijk <rhys@koedijk.co.nz>
+# Maintainer: DarkMatterCore <pabloacurielz@gmail.com>
 
 pkgname=switch-libntfs-3g
 pkgver=2017.3.23
-pkgrel=2
+pkgrel=1
 pkgdesc='Read-Write NTFS Driver'
-arch=('any')
-url='https://www.tuxera.com/community/open-source-ntfs-3g/'
+baseurl='https://www.tuxera.com'
+url="${baseurl}/community/open-source-ntfs-3g/"
 license=('GPL')
+arch=('any')
 options=(!strip libtool staticlibs)
-source=("https://tuxera.com/opensource/ntfs-3g_ntfsprogs-${pkgver}.tgz")
-sha256sums=('3e5a021d7b761261836dcb305370af299793eedbded731df3d6943802e1262d5')
 makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
 groups=('switch-portlibs')
+source=("${baseurl}/opensource/ntfs-3g_ntfsprogs-${pkgver}.tgz")
+sha256sums=('3e5a021d7b761261836dcb305370af299793eedbded731df3d6943802e1262d5')
 
 prepare() {
-  cd ntfs-3g_ntfsprogs-$pkgver
-  patch -Np1 -i "$srcdir/../ntfs-3g_ntfsprogs-2017.3.23-fix_syslog_include.patch"
-  patch -Np1 -i "$srcdir/../ntfs-3g_ntfsprogs-2017.3.23-timespec_already_defined.patch"
-  patch -Np1 -i "$srcdir/../ntfs-3g_ntfsprogs-2017.3.23-define_dev_major_minor.patch"
-  patch -Np1 -i "$srcdir/../ntfs-3g_ntfsprogs-2017.3.23-remove_install_exec_hook_target.patch"
+  cd "ntfs-3g_ntfsprogs-${pkgver}"
+
+  patch -Np1 -i "${srcdir}/../ntfs-3g_ntfsprogs-${pkgver}.patch"
 }
 
 build() {
-  cd ntfs-3g_ntfsprogs-$pkgver
+  cd "ntfs-3g_ntfsprogs-${pkgver}"
 
   source /opt/devkitpro/switchvars.sh
 
@@ -35,11 +35,12 @@ build() {
 }
 
 package() {
-  cd ntfs-3g_ntfsprogs-$pkgver
+  cd "ntfs-3g_ntfsprogs-${pkgver}"
 
-  make DESTDIR="$pkgdir" install
-  
-  install -Dm644 COPYING.LIB "$pkgdir"/opt/devkitpro/portlibs/switch/licenses/$pkgname/COPYING
-  install -Dm644 config.h "$pkgdir"/opt/devkitpro/portlibs/switch/include/ntfs-3g/config.h
-  rm -r "$pkgdir"/opt/devkitpro/portlibs/switch/share
+  source /opt/devkitpro/switchvars.sh
+
+  make DESTDIR="${pkgdir}" install
+
+  install -Dm644 COPYING "${pkgdir}${PORTLIBS_PREFIX}/licenses/${pkgname}/LICENSE"
+  install -Dm644 config.h "${pkgdir}${PORTLIBS_PREFIX}/include/ntfs-3g/config.h"
 }
