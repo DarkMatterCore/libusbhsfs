@@ -50,9 +50,11 @@ typedef enum {
     ScsiCommandOperationCode_ReadCapacity10            = 0x25,
     ScsiCommandOperationCode_Read10                    = 0x28,
     ScsiCommandOperationCode_Write10                   = 0x2A,
+    ScsiCommandOperationCode_SynchronizeCache10        = 0x35,
     ScsiCommandOperationCode_ModeSense10               = 0x5A,
     ScsiCommandOperationCode_Read16                    = 0x88,
     ScsiCommandOperationCode_Write16                   = 0x8A,
+    ScsiCommandOperationCode_SynchronizeCache16        = 0x91,
     ScsiCommandOperationCode_ServiceActionIn           = 0x9E
 } ScsiCommandOperationCode;
 
@@ -298,9 +300,11 @@ static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext 
 static bool usbHsFsScsiSendReadCapacity10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiReadCapacity10Data *read_capacity_10_data);
 static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua);
 static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u32 block_addr, u16 block_count, u32 block_length, bool fua);
+static bool usbHsFsScsiSendSynchronizeCache10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u32 block_addr, u16 block_count);
 static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, bool long_lba, u8 page_control, u8 page_code, u8 subpage_code, u16 allocation_length, void *buf);
 static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua);
 static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, void *buf, u64 block_addr, u32 block_count, u32 block_length, bool fua);
+static bool usbHsFsScsiSendSynchronizeCache16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u64 block_addr, u32 block_count);
 static bool usbHsFsScsiSendReadCapacity16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiReadCapacity16Data *read_capacity_16_data);
 
 static void usbHsFsScsiPrepareCommandBlockWrapper(ScsiCommandBlockWrapper *cbw, u32 data_size, bool data_in, u8 lun, u8 cb_size);
@@ -785,6 +789,28 @@ static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 227). */
+static bool usbHsFsScsiSendSynchronizeCache10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u32 block_addr, u16 block_count)
+{
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, 0, false, lun, 10);
+    
+    /* Byteswap data. */
+    block_addr = __builtin_bswap32(block_addr);
+    block_count = __builtin_bswap16(block_count);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_SynchronizeCache10; /* Operation code. */
+    cbw.CBWCB[1] = 0;                                           /* Always clear Immediate bit. */
+    memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u32));          /* LBA (big endian). */
+    memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16));         /* Transfer length (big endian). */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
+}
+
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 114). */
 static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8 lun, bool long_lba, u8 page_control, u8 page_code, u8 subpage_code, u16 allocation_length, void *buf)
 {
@@ -849,6 +875,28 @@ static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     /* Send command. */
     USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
+}
+
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 229). */
+static bool usbHsFsScsiSendSynchronizeCache16Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u64 block_addr, u32 block_count)
+{
+    /* Prepare CBW. */
+    ScsiCommandBlockWrapper cbw = {0};
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, 0, false, lun, 16);
+    
+    /* Byteswap data. */
+    block_addr = __builtin_bswap64(block_addr);
+    block_count = __builtin_bswap32(block_count);
+    
+    /* Prepare CB. */
+    cbw.CBWCB[0] = ScsiCommandOperationCode_SynchronizeCache16; /* Operation code. */
+    cbw.CBWCB[1] = 0;                                           /* Always clear Immediate bit. */
+    memcpy(&(cbw.CBWCB[2]), &block_addr, sizeof(u64));          /* LBA (big endian). */
+    memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));        /* Transfer length (big endian). */
+    
+    /* Send command. */
+    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 157). */
