@@ -284,7 +284,7 @@ FRESULT ff_findfirst (DIR* dp, FILINFO* fno, const TCHAR* path, const TCHAR* pat
 FRESULT ff_findnext (DIR* dp, FILINFO* fno);							/* Find next file */
 FRESULT ff_mkdir (const TCHAR* path);								/* Create a sub directory */
 FRESULT ff_unlink (const TCHAR* path);								/* Delete an existing file or directory */
-FRESULT ff_rename (const TCHAR* path_old, const TCHAR* path_new);	/* Rename/Move a file or directory */
+FRESULT _ff_rename (const TCHAR* path_old, const TCHAR* path_new);	/* Rename/Move a file or directory */
 FRESULT ff_stat (const TCHAR* path, FILINFO* fno);					/* Get file status */
 FRESULT ff_chmod (const TCHAR* path, BYTE attr, BYTE mask);			/* Change attribute of a file/dir */
 FRESULT ff_utime (const TCHAR* path, const FILINFO* fno);			/* Change timestamp of a file/dir */
