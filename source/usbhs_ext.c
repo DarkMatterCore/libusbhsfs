@@ -23,6 +23,8 @@ Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 s
     u32 xferId = 0, count = 0;
     UsbHsXferReport report = {0};
     
+    *transferredSize = 0;
+    
     if (hosversionBefore(2,0,0))
     {
         rc = __usbHsEpSubmitRequest(s, buffer, size, 0, transferredSize);
@@ -60,8 +62,14 @@ Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 s
         goto end;
     }
     
-    *transferredSize = report.transferredSize;
     rc = report.res;
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("__usbHsEpGetXferReport returned a failure report! (0x%08X) (0x%X, 0x%X).", rc, report.requestedSize, report.transferredSize);
+        goto end;
+    }
+    
+    *transferredSize = report.transferredSize;
     
 end:
     return rc;

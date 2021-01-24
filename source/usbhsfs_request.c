@@ -184,7 +184,7 @@ Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, voi
     rc = usbHsEpPostBufferWithTimeout(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT, xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (0x%08X).", out_ep ? "output" : "input", rc);
+        USBHSFS_LOG("usbHsEpPostBufferWithTimeout failed for %s endpoint! (0x%08X).", out_ep ? "output" : "input", rc);
         
         /* Attempt to clear this endpoint if it was STALLed. */
         rc_halt = usbHsFsRequestGetEndpointStatus(drive_ctx, out_ep, &status);
@@ -198,7 +198,7 @@ Result usbHsFsRequestPostBuffer(UsbHsFsDriveContext *drive_ctx, bool out_ep, voi
         if (R_SUCCEEDED(rc_halt) && retry)
         {
             rc = usbHsEpPostBufferWithTimeout(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT, xfer_size);
-            if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBuffer failed for %s endpoint! (retry) (0x%08X).", out_ep ? "output" : "input", rc);
+            if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBufferWithTimeout failed for %s endpoint! (retry) (0x%08X).", out_ep ? "output" : "input", rc);
         }
     }
     

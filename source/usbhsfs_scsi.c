@@ -968,7 +968,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         rc = usbHsFsRequestPostBuffer(drive_ctx, !receive, drive_ctx->xfer_buf, xfer_size, &rest_size, false);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            USBHSFS_LOG("usbHsFsRequestPostBuffer failed to %s 0x%lX byte-long block! (0x%08X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
             
             /* Try to receive a CSW. */
             if (usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw))
@@ -1105,14 +1105,14 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     rc = usbHsEpPostBufferWithTimeout(&(drive_ctx->usb_out_ep_session), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), USB_POSTBUFFER_TIMEOUT, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG("usbHsEpPostBufferWithTimeout failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
     
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandBlockWrapper))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG("usbHsEpPostBufferWithTimeout transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
     
