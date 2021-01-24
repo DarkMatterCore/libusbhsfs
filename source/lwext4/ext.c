@@ -27,6 +27,7 @@ bool ext_mount(ext_vd *vd)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     char mount_point[CONFIG_EXT4_MAX_MP_NAME + 3] = {0};
+    struct ext4_sblock *sblock = NULL;
     bool ret = false, bdev_reg = false, vol_mounted = false, read_only = false;
     int res = 0;
     
@@ -62,7 +63,11 @@ bool ext_mount(ext_vd *vd)
     
     vol_mounted = true;
     
-    if (!read_only)
+    /* Update EXT superblock pointer. */
+    sblock = &(vd->bdev->fs->sb);
+    
+    /* Perform EXT journal operations if needed. */
+    if (!read_only && ext4_sb_feature_com(sblock, EXT4_FCOM_HAS_JOURNAL))
     {
         /* Replay EXT journal depending on the mount flags. */
         if ((vd->flags & UsbHsFsMountFlags_ReplayJournal) && (res = ext4_recover(mount_point)))
