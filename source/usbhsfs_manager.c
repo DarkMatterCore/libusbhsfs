@@ -8,7 +8,6 @@
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
-#include "usbhsfs.h"
 #include "usbhsfs_utils.h"
 #include "usbhsfs_manager.h"
 #include "usbhsfs_mount.h"
@@ -1020,7 +1019,7 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
             device->fs_type = UsbHsFsDeviceFileSystemType_NTFS;
             break;
         case UsbHsFsDriveLogicalUnitFileSystemType_EXT:
-            device->fs_type = ext_get_version(fs_ctx->ext);
+            device->fs_type = fs_ctx->ext->version;
             break;
 #endif
         

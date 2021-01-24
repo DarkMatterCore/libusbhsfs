@@ -23,6 +23,7 @@
 #include <switch.h>
 
 #include "usbhs_ext.h"
+#include "usbhsfs.h"
 
 #define ALIGN_DOWN(x, y)            ((x) & ~((y) - 1))
 

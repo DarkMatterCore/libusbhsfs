@@ -8,7 +8,6 @@
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
-#include "usbhsfs.h"
 #include "usbhsfs_utils.h"
 #include "usbhsfs_manager.h"
 #include "usbhsfs_mount.h"

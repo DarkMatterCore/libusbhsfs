@@ -32,6 +32,7 @@ typedef struct _ext_vd {
     u16 gid;                                ///< Group ID for entry creation.
     u16 fmask;                              ///< Unix style permission mask for file creation.
     u16 dmask;                              ///< Unix style permission mask for directory creation.
+    u8 version;                             ///< UsbHsFsDeviceFileSystemType_EXT* value to identify the EXT version.
 } ext_vd;
 
 /// Mounts an EXT volume using the provided volume descriptor.
@@ -39,8 +40,5 @@ bool ext_mount(ext_vd *vd);
 
 /// Unmounts the EXT volume represented by the provided volume descriptor.
 void ext_umount(ext_vd *vd);
-
-/// Returns a UsbHsFsDeviceFileSystemType_EXT* value to identify the EXT version used by the provided EXT volume descriptor.
-u8 ext_get_version(ext_vd *vd);
 
 #endif  /* __EXT_H__ */
