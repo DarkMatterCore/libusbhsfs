@@ -165,6 +165,15 @@ typedef enum {
     ScsiPeripheralDeviceType_Unknown                  = 0x1F
 } ScsiPeripheralDeviceType;
 
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 97).
+typedef enum {
+    ScsiInquirySPCVersion_SPC  = 0x03,
+    ScsiInquirySPCVersion_SPC2 = 0x04,
+    ScsiInquirySPCVersion_SPC3 = 0x05,
+    ScsiInquirySPCVersion_SPC4 = 0x06,
+    ScsiInquirySPCVersion_SPC5 = 0x07
+} ScsiInquirySPCVersion;
+
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 94).
 /// Truncated at the product revision level field to just request the bare minimum - we don't need anything else past that point.
 typedef struct {
@@ -176,7 +185,7 @@ typedef struct {
         u8 reserved_1 : 7;
         u8 rmb        : 1;              ///< Removable Media Bit.
     };
-    u8 version;
+    u8 version;                         ///< ScsiInquirySPCVersion.
     struct {
         u8 response_data_format : 4;
         u8 hisup                : 1;    ///< Hierarchical Addressing Support.
@@ -362,6 +371,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     if (inquiry_data.peripheral_qualifier != ScsiPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiPeripheralDeviceType_DirectAccessBlock)
     {
         USBHSFS_LOG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
+        goto end;
+    }
+    
+    /* Check if the SPC standard version is valid. */
+    if (inquiry_data.version < ScsiInquirySPCVersion_SPC || inquiry_data.version > ScsiInquirySPCVersion_SPC5)
+    {
+        USBHSFS_LOG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
         goto end;
     }
     
