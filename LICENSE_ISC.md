@@ -1,6 +1,6 @@
-Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
-Copyright (c) 2020, XorTroll.
-Copyright (c) 2020, Rhys Koedijk.
+Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
+Copyright (c) 2020-2021, XorTroll.
+Copyright (c) 2020-2021, Rhys Koedijk.
 
 Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
 

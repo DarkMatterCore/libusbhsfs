@@ -1,7 +1,7 @@
 /*
  * usbfs_dev.h
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2018, Team Xecuter.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).

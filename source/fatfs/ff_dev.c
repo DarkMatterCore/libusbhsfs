@@ -1,8 +1,8 @@
 /*
  * ff_dev.c
  *
- * Copyright (c) 2020, DarkMatterCore <pabloacurielz@gmail.com>.
- * Copyright (c) 2020, XorTroll.
+ * Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2021, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  *
