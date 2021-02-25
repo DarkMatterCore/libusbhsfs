@@ -134,7 +134,7 @@ debug-dir:
 lib-dir:
 	@mkdir -p lib
 
-example: all
+example:
 	@$(MAKE) BUILD_TYPE=${BUILD_TYPE} --no-print-directory -C example
 
 lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)

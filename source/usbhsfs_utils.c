@@ -301,17 +301,13 @@ static bool usbHsFsUtilsCheckRunningServiceByName(const char *name)
 {
     if (!name || !*name) return false;
     
+    u8 val = 0;
     Result rc = 0;
-    Handle handle = INVALID_HANDLE;
     SmServiceName service_name = smEncodeName(name);
-    bool running = false;
     
-    rc = smRegisterService(&handle, service_name, false, 1);
-    if (R_FAILED(rc)) USBHSFS_LOG("smRegisterService failed for \"%s\"! (0x%08X).", name, rc);
-    running = R_FAILED(rc);
+    /* Use the AtmosphereHasService extension to check if a specific service is running. */
+    rc = serviceDispatchInOut(smGetServiceSession(), 65100, service_name, val);
+    if (R_FAILED(rc)) USBHSFS_LOG("AtmosphereHasService failed for \"%s\"! (0x%08X).", name, rc);
     
-    if (handle != INVALID_HANDLE) svcCloseHandle(handle);
-    if (!running) smUnregisterService(service_name);
-    
-    return running;
+    return (R_SUCCEEDED(rc) && val);
 }
