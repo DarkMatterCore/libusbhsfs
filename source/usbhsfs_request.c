@@ -10,10 +10,11 @@
 #include "usbhsfs_request.h"
 
 #define USB_FEATURE_ENDPOINT_HALT   0x00
+#define USB_DT_STRING_MAXLEN        0x7E
 
 /* Type definitions. */
 
-/// Imported from libusb, with changed names.
+/// Imported from libusb, with some adjustments.
 enum usb_request_type {
     USB_REQUEST_TYPE_STANDARD = (0x00 << 5),
     USB_REQUEST_TYPE_CLASS    = (0x01 << 5),
@@ -21,7 +22,7 @@ enum usb_request_type {
     USB_REQUEST_TYPE_RESERVED = (0x03 << 5),
 };
 
-/// Imported from libusb, with changed names.
+/// Imported from libusb, with some adjustments.
 enum usb_request_recipient {
     USB_RECIPIENT_DEVICE    = 0x00,
     USB_RECIPIENT_INTERFACE = 0x01,
@@ -32,6 +33,13 @@ enum usb_request_recipient {
 enum usb_bot_request {
     USB_REQUEST_BOT_GET_MAX_LUN = 0xFE,
     USB_REQUEST_BOT_RESET       = 0xFF
+};
+
+/// Imported from libusb, with some adjustments.
+struct _usb_string_descriptor {
+    u8 bLength;
+    u8 bDescriptorType;                 ///< Must match USB_DT_STRING.
+    u16 wData[USB_DT_STRING_MAXLEN];
 };
 
 void *usbHsFsRequestAllocateXferBuffer(void)
@@ -98,6 +106,165 @@ Result usbHsFsRequestMassStorageReset(UsbHsFsDriveContext *drive_ctx)
     
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_RESET, 0, if_num, 0, NULL, &xfer_size);
     if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
+    
+end:
+    return rc;
+}
+
+/* Reference: https://www.beyondlogic.org/usbnutshell/usb6.shtml. */
+Result usbHsFsRequestGetConfigurationDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, u8 **out_buf, u32 *out_buf_size)
+{
+    Result rc = 0;
+    u16 desc = ((USB_DT_CONFIG << 8) | idx);
+    u16 len = sizeof(struct usb_config_descriptor);
+    u32 xfer_size = 0;
+    
+    UsbHsClientIfSession *usb_if_session = NULL;
+    struct usb_config_descriptor *config_desc = NULL;
+    u8 *buf = NULL;
+    
+    if (!drive_ctx || !usbHsIfIsActive(&(drive_ctx->usb_if_session)) || !drive_ctx->xfer_buf || idx >= drive_ctx->usb_if_session.inf.device_desc.bNumConfigurations || !out_buf || !out_buf_size)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+        goto end;
+    }
+    
+    usb_if_session = &(drive_ctx->usb_if_session);
+    config_desc = (struct usb_config_descriptor*)drive_ctx->xfer_buf;
+    
+    /* Get minimal configuration descriptor. */
+    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, len, config_desc, &xfer_size);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (minimal).", rc);
+        goto end;
+    }
+    
+    if (xfer_size != len)
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (minimal).", xfer_size, len);
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
+        goto end;
+    }
+    
+    USBHSFS_LOG_DATA(config_desc, len, "Minimal configuration descriptor data:");
+    
+    /* Verify configuration descriptor. */
+    if (config_desc->bLength != len || config_desc->bDescriptorType != USB_DT_CONFIG || config_desc->wTotalLength <= config_desc->bLength)
+    {
+        USBHSFS_LOG("Invalid configuration descriptor! (minimal).");
+        rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
+        goto end;
+    }
+    
+    /* Allocate memory for the full configuration descriptor. */
+    buf = memalign(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength);
+    if (!buf)
+    {
+        USBHSFS_LOG("Failed to allocate 0x%X bytes for the full configuration descriptor!", config_desc->wTotalLength);
+        rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
+        goto end;
+    }
+    
+    /* Get full configuration descriptor. */
+    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, config_desc->wTotalLength, buf, &xfer_size);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (full).", rc);
+        goto end;
+    }
+    
+    if (xfer_size != config_desc->wTotalLength)
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (full).", xfer_size, config_desc->wTotalLength);
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
+        goto end;
+    }
+    
+    USBHSFS_LOG_DATA(buf, config_desc->wTotalLength, "Full configuration descriptor data:");
+    
+    /* Verify configuration descriptor. */
+    struct usb_config_descriptor *full_config_desc = (struct usb_config_descriptor*)buf;
+    if (memcmp(config_desc, full_config_desc, len) != 0)
+    {
+        USBHSFS_LOG("Invalid configuration descriptor! (full).");
+        rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
+        goto end;
+    }
+    
+    /* Update output. */
+    *out_buf = buf;
+    *out_buf_size = config_desc->wTotalLength;
+    
+end:
+    if (R_FAILED(rc) && buf) free(buf);
+    
+    return rc;
+}
+
+/* Reference: https://www.beyondlogic.org/usbnutshell/usb6.shtml. */
+Result usbHsFsRequestGetStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, u16 lang_id, u16 **out_buf, u32 *out_buf_size)
+{
+    Result rc = 0;
+    u16 desc = ((USB_DT_STRING << 8) | idx);
+    u16 len = sizeof(struct _usb_string_descriptor);
+    u32 xfer_size = 0, string_data_size = 0;
+    
+    UsbHsClientIfSession *usb_if_session = NULL;
+    struct _usb_string_descriptor *string_desc = NULL;
+    u16 *buf = NULL;
+    
+    if (!drive_ctx || !usbHsIfIsActive(&(drive_ctx->usb_if_session)) || !drive_ctx->xfer_buf || !out_buf || !out_buf_size)
+    {
+        USBHSFS_LOG("Invalid parameters!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+        goto end;
+    }
+    
+    usb_if_session = &(drive_ctx->usb_if_session);
+    string_desc = (struct _usb_string_descriptor*)drive_ctx->xfer_buf;
+    
+    /* Get string descriptor. */
+    rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, lang_id, len, string_desc, &xfer_size);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X).", rc);
+        goto end;
+    }
+    
+    if (xfer_size <= 2 || ((string_data_size = (xfer_size - 2)) % 2) != 0)
+    {
+        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s)!", xfer_size, len);
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
+        goto end;
+    }
+    
+    USBHSFS_LOG_DATA(string_desc, len, "String descriptor data:");
+    
+    /* Verify string descriptor. */
+    if (string_desc->bLength != xfer_size || string_desc->bDescriptorType != USB_DT_STRING)
+    {
+        USBHSFS_LOG("Invalid string descriptor!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
+        goto end;
+    }
+    
+    /* Allocate memory for the string descriptor data. */
+    buf = malloc(string_data_size);
+    if (!buf)
+    {
+        USBHSFS_LOG("Failed to allocate 0x%X bytes for the string descriptor data!", string_data_size);
+        rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
+        goto end;
+    }
+    
+    /* Copy string descriptor data. */
+    memcpy(buf, string_desc->wData, string_data_size);
+    
+    /* Update output. */
+    *out_buf = buf;
+    *out_buf_size = string_data_size;
     
 end:
     return rc;

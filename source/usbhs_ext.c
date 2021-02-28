@@ -39,7 +39,7 @@ Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 s
         goto end;
     }
     
-    rc = eventWait(&s->eventXfer, timeout);
+    rc = eventWait(&(s->eventXfer), timeout);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("eventWait failed! (0x%08X).", rc);
@@ -55,7 +55,7 @@ Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 s
         goto end;
     }
     
-    if (count < 1)
+    if (count != 1)
     {
         USBHSFS_LOG("__usbHsEpGetXferReport returned an invalid report count! (%u).", count);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);

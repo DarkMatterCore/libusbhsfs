@@ -18,10 +18,7 @@
 #include "lwext4/ext.h"
 #endif
 
-#define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06
-#define USB_PROTOCOL_BULK_ONLY_TRANSPORT        0x50
-
-#define MAX_USB_INTERFACES                      0x20
+#define MAX_USB_INTERFACES  0x20
 
 /* Global variables. */
 
@@ -86,7 +83,7 @@ Result usbHsFsInitialize(u8 event_idx)
     
     /* Setup lwext4 logging. */
     ext4_dmask_set(DEBUG_ALL & ~DEBUG_NOPREFIX);
-#else
+#else   /* GPL_BUILD */
     USBHSFS_LOG("Build type: ISC.");
 #endif  /* GPL_BUILD */
 #else   /* DEBUG */
@@ -787,10 +784,6 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
     s32 usb_if_count = 0;
     u32 ctx_count = 0;
     
-#ifdef DEBUG
-    char hexdump[0x600] = {0};
-#endif
-    
     /* Clear USB interfaces buffer. */
     memset(g_usbInterfaces, 0, g_usbInterfacesMaxSize);
     
@@ -858,10 +851,7 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
         {
             UsbHsInterface *usb_if = &(g_usbInterfaces[i]);
             
-#ifdef DEBUG
-            usbHsFsUtilsGenerateHexStringFromData(hexdump, sizeof(hexdump), usb_if, sizeof(UsbHsInterface));
-            USBHSFS_LOG("Interface #%d (%d) data:\r\n%s", i, usb_if->inf.ID, hexdump);
-#endif
+            USBHSFS_LOG_DATA(usb_if, sizeof(UsbHsInterface), "Interface #%d (%d) data:", i, usb_if->inf.ID);
             
             /* Add current interface to the drive context list. */
             if (usbHsFsAddDriveContextToList(usb_if))

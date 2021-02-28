@@ -25,30 +25,36 @@
 #include "usbhs_ext.h"
 #include "usbhsfs.h"
 
-#define ALIGN_DOWN(x, y)            ((x) & ~((y) - 1))
+#define ALIGN_DOWN(x, y)                            ((x) & ~((y) - 1))
 
-#define USB_MOUNT_NAME_LENGTH       32
-#define USB_MAX_PATH_LENGTH         (FS_MAX_PATH + 1)
+#define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET       0x06
+#define USB_PROTOCOL_BULK_ONLY_TRANSPORT            0x50
+#define USB_PROTOCOL_USB_ATTACHED_SCSI              0x62
 
-#define USB_MIN_BLOCK_SIZE          512
-#define USB_MAX_BLOCK_SIZE          4096
+#define USB_MOUNT_NAME_LENGTH                       32
+#define USB_MAX_PATH_LENGTH                         (FS_MAX_PATH + 1)
 
-#define USB_XFER_BUF_ALIGNMENT      0x1000              /* 4 KiB. */
-#define USB_XFER_BUF_SIZE           0x800000            /* 8 MiB. */
+#define USB_MIN_BLOCK_SIZE                          512
+#define USB_MAX_BLOCK_SIZE                          4096
 
-#define USB_POSTBUFFER_TIMEOUT      (u64)5000000000     /* 5 seconds. */
+#define USB_XFER_BUF_ALIGNMENT                      0x1000              /* 4 KiB. */
+#define USB_XFER_BUF_SIZE                           0x800000            /* 8 MiB. */
+
+#define USB_POSTBUFFER_TIMEOUT                      (u64)5000000000     /* 5 seconds. */
 
 #ifdef DEBUG
-#define USBHSFS_LOG(fmt, ...)       usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
+#define USBHSFS_LOG(fmt, ...)                       usbHsFsUtilsWriteMessageToLogFile(__func__, fmt, ##__VA_ARGS__)
+#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) usbHsFsUtilsWriteBinaryDataToLogFile(data, data_size, __func__, fmt, ##__VA_ARGS__)
 
 /// Logfile management functions.
 void usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, ...);
 void usbHsFsUtilsWriteLogBufferToLogFile(const char *src);
+void usbHsFsUtilsWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *func_name, const char *fmt, ...);
 void usbHsFsUtilsFlushLogFile(void);
 void usbHsFsUtilsCloseLogFile(void);
-void usbHsFsUtilsGenerateHexStringFromData(char *dst, size_t dst_size, const void *src, size_t src_size);
 #else
-#define USBHSFS_LOG(fmt, ...)   do {} while(0)
+#define USBHSFS_LOG(fmt, ...)                       do {} while(0)
+#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) do {} while(0)
 #endif
 
 /// Returns true if the we're running under SX OS.

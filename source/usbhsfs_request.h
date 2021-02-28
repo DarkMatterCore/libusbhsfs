@@ -24,6 +24,16 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsFsDriveContext *drive_ctx);
 /// Performs a bulk-only mass storage reset class-specific request.
 Result usbHsFsRequestMassStorageReset(UsbHsFsDriveContext *drive_ctx);
 
+/// Performs a GET_ENDPOINT request on the device pointed to by the provided drive context to retrieve the full configuration descriptor for the provided zero-based index.
+/// If the call succeeds, both 'out_buf' and 'out_buf_size' pointers will be updated.
+/// The pointer to the dynamically allocated buffer stored in 'out_buf' must be freed by the user.
+Result usbHsFsRequestGetConfigurationDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, u8 **out_buf, u32 *out_buf_size);
+
+/// Performs a GET_ENDPOINT request on the device pointed to by the provided drive context to retrieve the string descriptor for the provided index and language ID.
+/// If the call succeeds, both 'out_buf' and 'out_buf_size' pointers will be updated.
+/// The pointer to the dynamically allocated buffer stored in 'out_buf' must be freed by the user.
+Result usbHsFsRequestGetStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, u16 lang_id, u16 **out_buf, u32 *out_buf_size);
+
 /// Performs a GET_STATUS request on an endpoint from the provided drive context.
 /// If out_ep is true, the output endpoint will be used. Otherwise, the input endpoint is used.
 /// If the call succeeds, the current STALL status from the selected endpoint is saved to out_status.
