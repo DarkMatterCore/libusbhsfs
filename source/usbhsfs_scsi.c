@@ -368,7 +368,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     }
     
     /* Check if the SPC standard version is valid. */
-    if (inquiry_data.version < ScsiInquirySPCVersion_SPC || inquiry_data.version > ScsiInquirySPCVersion_SPC5)
+    if (inquiry_data.version > ScsiInquirySPCVersion_SPC5)
     {
         USBHSFS_LOG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
         goto end;
