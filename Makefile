@@ -14,9 +14,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
 #---------------------------------------------------------------------------------
-LIB_TITLE	:=	usbhsfs
-
-TARGET		:=	${LIB_TITLE}
+TARGET		:=	usbhsfs
 SOURCES		:=	source source/fatfs source/sxos
 DATA		:=	data
 INCLUDES	:=	include
@@ -27,7 +25,7 @@ INCLUDES	:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS		+=	-DLIB_TITLE=\"lib${LIB_TITLE}\"
+CFLAGS		+=	-DLIB_TITLE=\"lib$(TARGET)\"
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 

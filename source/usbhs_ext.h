@@ -12,6 +12,7 @@
 #define __USBHS_EXT_H__
 
 /// Reimplementation of usbHsEpPostBuffer() with a user-definable timeout (in nanoseconds).
+/// A timeout value of zero means the function will wait indefinitely until a data transfer takes place.
 Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 size, u64 timeout, u32 *transferredSize);
 
 #endif  /* __USBHS_EXT_H__ */

@@ -14,7 +14,7 @@
 
 static Result __usbHsEpSubmitRequest(UsbHsClientEpSession *s, void *buffer, u32 size, u32 timeoutInMs, u32 *transferredSize);
 static Result __usbHsEpGetXferReport(UsbHsClientEpSession *s, UsbHsXferReport *reports, u32 max_reports, u32 *count);
-static Result __usbHsEpPostBufferAsync(UsbHsClientEpSession *s, void *buffer, u32 size, u64 unk, u32 *xferId);
+static Result __usbHsEpPostBufferAsync(UsbHsClientEpSession *s, void *buffer, u32 size, u64 timeout, u32 *xferId);
 //static Result __usbHsEpPostBufferMultiAsync(UsbHsClientEpSession *s, void *buffer, u32 urbCount, const u32 *urbSizes, u32 unk1, u32 unk2, u64 unk3, u32 *xferId);
 
 Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 size, u64 timeout, u32 *transferredSize)
@@ -32,14 +32,14 @@ Result usbHsEpPostBufferWithTimeout(UsbHsClientEpSession *s, void *buffer, u32 s
         goto end;
     }
     
-    rc = __usbHsEpPostBufferAsync(s, buffer, size, 0, &xferId);
+    rc = __usbHsEpPostBufferAsync(s, buffer, size, timeout, &xferId);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("__usbHsEpPostBufferAsync failed! (0x%08X).", rc);
         goto end;
     }
     
-    rc = eventWait(&(s->eventXfer), timeout);
+    rc = eventWait(&(s->eventXfer), UINT64_MAX);
     if (R_FAILED(rc))
     {
         USBHSFS_LOG("eventWait failed! (0x%08X).", rc);
@@ -107,14 +107,14 @@ static Result __usbHsEpGetXferReport(UsbHsClientEpSession *s, UsbHsXferReport *r
                                 .buffers = { { reports, max_reports * sizeof(UsbHsXferReport) } });
 }
 
-static Result __usbHsEpPostBufferAsync(UsbHsClientEpSession *s, void *buffer, u32 size, u64 unk, u32 *xferId)
+static Result __usbHsEpPostBufferAsync(UsbHsClientEpSession *s, void *buffer, u32 size, u64 timeout, u32 *xferId)
 {
     const struct {
         u32 size;
         u32 pad;
         u64 buffer;
-        u64 unk;
-    } in = { size, 0, (u64)buffer, unk };
+        u64 timeout;
+    } in = { size, 0, (u64)buffer, timeout };
     
     serviceAssumeDomain(&(s->s));
     

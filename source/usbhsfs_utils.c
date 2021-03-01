@@ -28,7 +28,7 @@ static s64 g_logFileOffset = 0;
 static char *g_logBuffer = NULL;
 static size_t g_logBufferLength = 0;
 
-static const char *g_logStrFormat = "%d-%02d-%02d %02d:%02d:%02d -> %s: ";
+static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%lu] %s: ";
 
 static bool usbHsFsUtilsGetSdCardFileSystem(void)
 {
@@ -84,6 +84,8 @@ end:
 
 static void _usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char *fmt, va_list args, bool lock)
 {
+    if (!func_name || !*func_name || !fmt || !*fmt) return;
+    
     if (lock) mutexLock(&g_logMutex);
     
     Result rc = 0;
@@ -92,15 +94,16 @@ static void _usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char
     char *tmp_str = NULL;
     size_t tmp_len = 0;
     
-    time_t now = time(NULL);
-    struct tm *ts = localtime(&now);
+    struct timespec now = {0};
+    clock_gettime(CLOCK_REALTIME, &now);
     
-    if (!func_name || !*func_name || !fmt || !*fmt || !usbHsFsUtilsOpenLogFile() || !usbHsFsUtilsAllocateLogBuffer()) goto end;
-    
+    struct tm *ts = localtime(&(now.tv_sec));
     ts->tm_year += 1900;
     ts->tm_mon++;
     
-    str1_len = snprintf(NULL, 0, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+    if (!usbHsFsUtilsOpenLogFile() || !usbHsFsUtilsAllocateLogBuffer()) goto end;
+    
+    str1_len = snprintf(NULL, 0, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
     str2_len = vsnprintf(NULL, 0, fmt, args);
     log_str_len = (str1_len + str2_len + 2);
     
@@ -112,7 +115,7 @@ static void _usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char
             if (g_logBufferLength) goto end;
         }
         
-        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
         vsprintf(g_logBuffer + g_logBufferLength + str1_len, fmt, args);
         strcat(g_logBuffer, "\r\n");
         g_logBufferLength += log_str_len;
@@ -123,7 +126,7 @@ static void _usbHsFsUtilsWriteMessageToLogFile(const char *func_name, const char
         tmp_str = calloc(log_str_len + 1, sizeof(char));
         if (!tmp_str) goto end;
         
-        sprintf(tmp_str, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, func_name);
+        sprintf(tmp_str, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
         vsprintf(tmp_str + str1_len, fmt, args);
         strcat(tmp_str, "\r\n");
         
