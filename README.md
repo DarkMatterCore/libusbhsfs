@@ -86,20 +86,16 @@ Dual licensing is provided for this project depending on the way it is built:
     * NTFS via NTFS-3G, which is licensed under the [GPLv2+ license](https://sourceforge.net/p/ntfs-3g/ntfs-3g/ci/edge/tree/COPYING).
     * EXT filesystems via lwext4, which is licensed under the [GPLv2 license](https://github.com/gkostka/lwext4/blob/master/LICENSE).
 
-How to build
+How to install
 --------------
 
 This section assumes you've already installed devkitA64, libnx and devkitPro pacman. If not, please follow the steps from the [devkitPro wiki](https://devkitpro.org/wiki/Getting_Started).
 
-* **ISC licensed build**:
-    1. Run `make BUILD_TYPE=ISC [all/release/debug]` on the root directory from the project.
+* **ISC licensed build**: run `make BUILD_TYPE=ISC install` on the root directory from the project.
 
-* **GPLv2+ licensed build**: go to the last step if you have already installed both NTFS-3G and lwext4. Please note that if you're running a Unix-like OS such as a Linux distro or MacOS, you may need to use `dkp-makepkg` instead of `makepkg` in the following steps. Windows users may need to install `patch` and `cmake` packages beforehand.
-    1. Enter the `/libntfs-3g` directory from this project and run `makepkg -i --noconfirm`. This will build NTFS-3G for AArch64 and install it to the `portlibs` directory from devkitPro.
-    2. Enter the `/liblwext4` directory from this project and run `makepkg -i --noconfirm`. This will build lwext4 for AArch64 and install it to the `portlibs` directory from devkitPro.
-    3. Go back to the root directory from the project and run `make BUILD_TYPE=GPL [all/release/debug]`.
+* **GPLv2+ licensed build**: run `make BUILD_TYPE=GPL install` on the root directory from the project.
 
-Regardless of the build type you choose, a `lib` directory will be generated, which will hold the static library build for the target that was provided to the `make` command.
+Regardless of the build type you choose, libusbhsfs will be installed to the `portlibs` directory from devkitPro, and it'll be ready to use by any homebrew application. If you choose to install the GPLv2+ licensed build, both NTFS-3G and lwext4 will be installed to the `portlibs` directory as well.
 
 How to use
 --------------

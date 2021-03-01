@@ -98,12 +98,12 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 .PHONY: clean all release release-dir debug debug-dir lib-dir example
 
 #---------------------------------------------------------------------------------
-LIB_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
-LIB_HASH := $(shell git rev-parse --short HEAD)
-LIB_REV := $(LIB_BRANCH)-$(LIB_HASH)
+LIB_BRANCH	:=	$(shell git rev-parse --abbrev-ref HEAD)
+LIB_HASH	:=	$(shell git rev-parse --short HEAD)
+LIB_REV		:=	$(LIB_BRANCH)-$(LIB_HASH)
 
 ifneq (, $(strip $(shell git status --porcelain 2>/dev/null)))
-    LIB_REV := $(LIB_REV)-dirty
+LIB_REV	:=	$(LIB_REV)-dirty
 endif
 
 $(eval LIB_VERSION_MAJOR = $(shell grep 'define LIBUSBHSFS_VERSION_MAJOR\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
@@ -112,9 +112,13 @@ $(eval LIB_VERSION_MICRO = $(shell grep 'define LIBUSBHSFS_VERSION_MICRO\b' incl
 $(eval LIB_VERSION = $(LIB_VERSION_MAJOR).$(LIB_VERSION_MINOR).$(LIB_VERSION_MICRO)-$(LIB_REV))
 
 ifeq (${BUILD_TYPE},ISC)
-    LIB_LICENSE	:=	ISC
+LIB_LICENSE	:=	ISC
 else
-    LIB_LICENSE	:=	GPLv2
+LIB_LICENSE	:=	GPLv2
+ifeq ($(MAKECMDGOALS),install)
+lib/lib$(TARGET).a: fs-libs
+lib/lib$(TARGET)d.a: fs-libs
+endif
 endif
 
 all: release debug
@@ -132,10 +136,17 @@ debug-dir:
 lib-dir:
 	@mkdir -p lib
 
-example:
+example: all
 	@$(MAKE) BUILD_TYPE=${BUILD_TYPE} --no-print-directory -C example
 
-lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)
+fs-libs:
+	@echo Installing ntfs-3g
+	@$(MAKE) -C libntfs-3g
+	
+	@echo Installing lwext4
+	@$(MAKE) -C liblwext4
+
+lib/lib$(TARGET).a: release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
@@ -143,7 +154,7 @@ lib/lib$(TARGET).a : release-dir lib-dir $(SOURCES) $(INCLUDES)
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile
 
-lib/lib$(TARGET)d.a : debug-dir lib-dir $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET)d.a: debug-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo debug
 	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DDEBUG=1 -Og" \
@@ -161,12 +172,17 @@ clean:
 	@rm -fr release debug lib *.bz2
 	@$(MAKE) --no-print-directory -C example clean
 
-dist-src: clean
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 --exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
+dist-src:
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 \
+	--exclude='example/build' --exclude='example/*.elf' --exclude='example/*.nacp' --exclude='example/*.nro' \
+	--exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
 	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
 	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
 
 dist: dist-src dist-bin
+
+install: dist-bin
+	@bzip2 -cd lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 | tar -xf - -C $(PORTLIBS) --exclude='*.md' --exclude='*.nro'
 
 #---------------------------------------------------------------------------------
 else
