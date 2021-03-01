@@ -16,6 +16,9 @@
 
 static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun);
 
+static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx);
+static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, char **out_buf);
+
 bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterface *usb_if)
 {
     if (!drive_ctx || !usb_if)
@@ -25,10 +28,13 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     }
     
     Result rc = 0;
+    
     UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
     UsbHsClientEpSession *usb_in_ep_session = &(drive_ctx->usb_in_ep_session);
     UsbHsClientEpSession *usb_out_ep_session = &(drive_ctx->usb_out_ep_session);
+    
     UsbHsFsDriveLogicalUnitContext *tmp_lun_ctx = NULL;
+    
     bool ret = false, ep_open = false;
     
     /* Copy USB interface ID. */
@@ -92,6 +98,11 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     }
     
     if (!ep_open) goto end;
+    
+    /* Fill extra device data. */
+    drive_ctx->vid = usb_if_session->inf.device_desc.idVendor;
+    drive_ctx->pid = usb_if_session->inf.device_desc.idProduct;
+    usbHsFsDriveGetDeviceStrings(drive_ctx);
     
     /* Retrieve max supported logical units from this storage device. */
     usbHsFsRequestGetMaxLogicalUnits(drive_ctx);
@@ -206,6 +217,25 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
         drive_ctx->lun_ctx = NULL;
     }
     
+    /* Free device strings. */
+    if (drive_ctx->manufacturer)
+    {
+        free(drive_ctx->manufacturer);
+        drive_ctx->manufacturer = NULL;
+    }
+    
+    if (drive_ctx->product_name)
+    {
+        free(drive_ctx->product_name);
+        drive_ctx->product_name = NULL;
+    }
+    
+    if (drive_ctx->serial_number)
+    {
+        free(drive_ctx->serial_number);
+        drive_ctx->serial_number = NULL;
+    }
+    
     /* Close USB interface and endpoint sessions. */
     if (serviceIsActive(&(usb_out_ep_session->s))) usbHsEpClose(usb_out_ep_session);
     if (serviceIsActive(&(usb_in_ep_session->s))) usbHsEpClose(usb_in_ep_session);
@@ -235,4 +265,109 @@ static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext
     
     /* Stop current LUN. */
     if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx);
+}
+
+static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx)
+{
+    if (!drive_ctx) return;
+    
+    Result rc = 0;
+    
+    u16 *lang_ids = NULL, cur_lang_id = 0;
+    u32 lang_ids_count = 0;
+    
+    drive_ctx->lang_id = USB_LANGID_ENUS;
+    
+    /* Retrieve string descriptor indexes. Bail out if none of them are valid. */
+    u8 manufacturer = drive_ctx->usb_if_session.inf.device_desc.iManufacturer;
+    u8 product_name = drive_ctx->usb_if_session.inf.device_desc.iProduct;
+    u8 serial_number = drive_ctx->usb_if_session.inf.device_desc.iSerialNumber;
+    
+    if (!manufacturer && !product_name && !serial_number) return;
+    
+    /* Get supported language IDs. */
+    rc = usbHsFsRequestGetStringDescriptor(drive_ctx, 0, 0, &lang_ids, &lang_ids_count);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("Unable to retrieve supported language IDs! (0x%08X) (interface %d).", rc, drive_ctx->usb_if_id);
+        return;
+    }
+    
+    /* Check if English (US) is supported. Otherwise, just default to the last valid language ID. */
+    lang_ids_count /= sizeof(u16);
+    for(u32 i = 0; i < lang_ids_count; i++)
+    {
+        if (!lang_ids[i]) continue;
+        
+        cur_lang_id = lang_ids[i];
+        if (cur_lang_id == USB_LANGID_ENUS) break;
+        
+        if ((i + 1) == lang_ids_count)
+        {
+            drive_ctx->lang_id = cur_lang_id;
+            break;
+        }
+    }
+    
+    free(lang_ids);
+    
+    /* Retrieve string descriptors. */
+    usbHsFsDriveGetUtf8StringFromStringDescriptor(drive_ctx, manufacturer, &(drive_ctx->manufacturer));
+    usbHsFsDriveGetUtf8StringFromStringDescriptor(drive_ctx, product_name, &(drive_ctx->product_name));
+    usbHsFsDriveGetUtf8StringFromStringDescriptor(drive_ctx, serial_number, &(drive_ctx->serial_number));
+}
+
+static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, char **out_buf)
+{
+    if (!drive_ctx || !drive_ctx->lang_id || !idx || !out_buf) return;
+    
+    Result rc = 0;
+    
+    u16 *string_data = NULL;
+    u32 string_data_size = 0;
+    
+    ssize_t units = 0;
+    char *utf8_str = NULL;
+    
+    /* Get string descriptor. */
+    rc = usbHsFsRequestGetStringDescriptor(drive_ctx, idx, drive_ctx->lang_id, &string_data, &string_data_size);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("Failed to retrieve string descriptor for index %u and language ID 0x%04X! (interface %d).", idx, drive_ctx->lang_id, drive_ctx->usb_if_id);
+        goto end;
+    }
+    
+    /* Get UTF-8 string size. */
+    units = utf16_to_utf8(NULL, string_data, 0);
+    if (units <= 0)
+    {
+        USBHSFS_LOG("Failed to get UTF-8 string size for string descriptor with index %u and language ID 0x%04X! (interface %d).", idx, drive_ctx->lang_id, drive_ctx->usb_if_id);
+        goto end;
+    }
+    
+    /* Allocate memory for the UTF-8 string. */
+    utf8_str = calloc(units + 1, sizeof(char));
+    if (!utf8_str)
+    {
+        USBHSFS_LOG("Failed to allocate 0x%X byte-long UTF-8 buffer for string descriptor with index %u and language ID 0x%04X! (interface %d).", idx, drive_ctx->lang_id, drive_ctx->usb_if_id);
+        goto end;
+    }
+    
+    /* Perform UTF-16 to UTF-8 conversion. */
+    units = utf16_to_utf8((u8*)utf8_str, string_data, (size_t)units);
+    if (units <= 0)
+    {
+        USBHSFS_LOG("UTF-16 to UTF-8 conversion failed for string descriptor with index %u and language ID 0x%04X! (interface %d).", idx, drive_ctx->lang_id, drive_ctx->usb_if_id);
+        goto end;
+    }
+    
+    USBHSFS_LOG("Converted string: \"%s\" (interface %d, index %u, language ID 0x%04X).", utf8_str, drive_ctx->usb_if_id, idx, drive_ctx->lang_id);
+    
+    /* Update output. */
+    *out_buf = utf8_str;
+    
+end:
+    if ((R_FAILED(rc) || units <= 0) && utf8_str) free(utf8_str);
+    
+    if (string_data) free(string_data);
 }

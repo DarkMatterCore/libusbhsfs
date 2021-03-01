@@ -37,6 +37,7 @@ typedef struct {
     void *lun_ctx;      ///< Pointer to the LUN context this filesystem belongs to.
     u32 fs_idx;         ///< Filesystem index within the fs_ctx array from the LUN context.
     u8 fs_type;         ///< UsbHsFsDriveLogicalUnitFileSystemType.
+    u32 flags;          ///< UsbHsFsMountFlags bitmask used at mount time.
     FATFS *fatfs;       ///< Pointer to a dynamically allocated FatFs object. Only used if fs_type == UsbHsFsFileSystemType_FAT.
 #ifdef GPL_BUILD
     ntfs_vd *ntfs;      ///< Pointer to a dynamically allocated ntfs_vd object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
@@ -62,7 +63,6 @@ typedef struct {
     bool fua_supported;                                 ///< Set to true if the Force Unit Access feature is supported.
     char vendor_id[0x9];                                ///< Vendor identification string. Retrieved via Inquiry SCSI command. May be empty.
     char product_id[0x11];                              ///< Product identification string. Retrieved via Inquiry SCSI command. May be empty.
-    char product_revision[0x5];                         ///< Product revision string. Retrieved via Inquiry SCSI command. May be empty.
     bool long_lba;                                      ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
     u64 block_count;                                    ///< Logical block count. Retrieved via Read Capacity SCSI command. Must be non-zero.
     u32 block_length;                                   ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
@@ -79,6 +79,12 @@ typedef struct {
     UsbHsClientIfSession usb_if_session;        ///< Interface session.
     UsbHsClientEpSession usb_in_ep_session;     ///< Input endpoint session (device to host).
     UsbHsClientEpSession usb_out_ep_session;    ///< Output endpoint session (host to device).
+    u16 vid;                                    ///< Vendor ID. Retrieved from the device descriptor. Placed here for convenience.
+    u16 pid;                                    ///< Product ID. Retrieved from the device descriptor. Placed here for convenience.
+    u16 lang_id;                                ///< Language ID used to retrieve string descriptors.
+    char *manufacturer;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
+    char *product_name;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
+    char *serial_number;                        ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
     u8 max_lun;                                 ///< Max LUNs supported by this drive. Must be at least 1.
     u8 lun_count;                               ///< Initialized LUN count. May differ from the max LUN count.
     UsbHsFsDriveLogicalUnitContext *lun_ctx;    ///< Dynamically allocated array of lun_count LUN contexts.

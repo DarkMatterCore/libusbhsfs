@@ -22,7 +22,7 @@ extern "C" {
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    2
-#define LIBUSBHSFS_VERSION_MICRO    2
+#define LIBUSBHSFS_VERSION_MICRO    3
 
 /// Helper macro to generate a string based on a filesystem type value.
 #define LIBUSBHSFS_FS_TYPE_STR(x)   ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \
@@ -63,18 +63,21 @@ typedef enum {
 } UsbHsFsMountFlags;
 
 /// Struct used to list mounted filesystems as devoptab devices.
-/// Everything but the vendor_id, product_id, product_revision and name fields is empty/zeroed-out under SX OS.
+/// Everything but the manufacturer, product_name and name fields is empty/zeroed-out under SX OS.
 typedef struct {
-    s32 usb_if_id;              ///< USB interface ID. Internal use. May be shared with other UsbHsFsDevice entries.
-    u8 lun;                     ///< Logical unit. Internal use. May be shared with other UsbHsFsDevice entries.
-    u32 fs_idx;                 ///< Filesystem index. Internal use. Exclusive for this UsbHsFsDevice entry.
-    bool write_protect;         ///< Set to true if the logical unit is protected against write operations.
-    char vendor_id[0x10];       ///< Vendor identification string. May be empty. May be shared with other UsbHsFsDevice entries.
-    char product_id[0x12];      ///< Product identification string. May be empty. May be shared with other UsbHsFsDevice entries.
-    char product_revision[0x6]; ///< Product revision string. May be empty. May be shared with other UsbHsFsDevice entries.
-    u64 capacity;               ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
-    char name[32];              ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
-    u8 fs_type;                 ///< UsbHsFsDeviceFileSystemType.
+    s32 usb_if_id;          ///< USB interface ID. Internal use.
+    u8 lun;                 ///< Logical unit. Internal use.
+    u32 fs_idx;             ///< Filesystem index. Internal use.
+    bool write_protect;     ///< Set to true if the logical unit is protected against write operations.
+    u16 vid;                ///< Vendor ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
+    u16 pid;                ///< Product ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
+    char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
+    char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
+    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from the device descriptor. May be empty.
+    u64 capacity;           ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
+    char name[32];          ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
+    u8 fs_type;             ///< UsbHsFsDeviceFileSystemType.
+    u32 flags;              ///< UsbHsFsMountFlags bitmask used at mount time.
 } UsbHsFsDevice;
 
 /// Initializes the USB Mass Storage Host interface.

@@ -493,9 +493,6 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     memcpy(lun_ctx->product_id, inquiry_data.product_id, sizeof(inquiry_data.product_id));
     usbHsFsUtilsTrimString(lun_ctx->product_id);
     
-    memcpy(lun_ctx->product_revision, inquiry_data.product_revision, sizeof(inquiry_data.product_revision));
-    usbHsFsUtilsTrimString(lun_ctx->product_revision);
-    
     lun_ctx->long_lba = long_lba;
     lun_ctx->block_count = block_count;
     lun_ctx->block_length = block_length;

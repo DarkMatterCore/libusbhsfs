@@ -320,28 +320,34 @@ int usbMscThreadFunc(void *arg)
             UsbHsFsDevice *device = &(g_usbDevices[i]);
             
             printf("Device #%u:\n" \
-                          "\t- USB interface ID: %d.\n" \
-                          "\t- Logical Unit Number: %u.\n" \
-                          "\t- Filesystem index: %u.\n" \
-                          "\t- Write protected: %s.\n" \
-                          "\t- Vendor ID String: \"%s\".\n" \
-                          "\t- Product ID String: \"%s\".\n" \
-                          "\t- Product Revision String: \"%s\".\n" \
-                          "\t- Logical Unit Capacity: 0x%lX bytes.\n" \
-                          "\t- Mount name: \"%s\".\n" \
-                          "\t- Filesystem type: %s.\n" \
-                          "\t- Filesystem tests:\n", \
-                          i + 1, \
-                          device->usb_if_id, \
-                          device->lun, \
-                          device->fs_idx, \
-                          device->write_protect ? "yes" : "no", \
-                          device->vendor_id, \
-                          device->product_id, \
-                          device->product_revision, \
-                          device->capacity, \
-                          device->name, \
-                          LIBUSBHSFS_FS_TYPE_STR(device->fs_type));
+                        "\t- USB interface ID: %d.\n" \
+                        "\t- Logical Unit Number: %u.\n" \
+                        "\t- Filesystem index: %u.\n" \
+                        "\t- Write protected: %s.\n" \
+                        "\t- Vendor ID: 0x%04X.\n" \
+                        "\t- Product ID: 0x%04X.\n" \
+                        "\t- Manufacturer: \"%s\".\n" \
+                        "\t- Product Name: \"%s\".\n" \
+                        "\t- Serial Number: \"%s\".\n" \
+                        "\t- Logical Unit Capacity: 0x%lX bytes.\n" \
+                        "\t- Mount name: \"%s\".\n" \
+                        "\t- Filesystem type: %s.\n" \
+                        "\t- Mount flags: 0x%08X.\n" \
+                        "\t- Filesystem tests:\n", \
+                        i + 1, \
+                        device->usb_if_id, \
+                        device->lun, \
+                        device->fs_idx, \
+                        device->write_protect ? "yes" : "no", \
+                        device->vid, \
+                        device->pid, \
+                        device->manufacturer, \
+                        device->product_name, \
+                        device->serial_number, \
+                        device->capacity, \
+                        device->name, \
+                        LIBUSBHSFS_FS_TYPE_STR(device->fs_type), \
+                        device->flags);
             
             consoleUpdate(NULL);
             

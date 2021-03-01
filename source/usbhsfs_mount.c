@@ -780,6 +780,7 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     tmp_fs_ctx->lun_ctx = lun_ctx;
     tmp_fs_ctx->fs_idx = (lun_ctx->fs_count - 1);
     tmp_fs_ctx->fs_type = fs_type;
+    tmp_fs_ctx->flags = g_fileSystemMountFlags;
     
     /* Mount and register filesystem. */
     switch(fs_type)
@@ -921,7 +922,7 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
     char name[USB_MOUNT_NAME_LENGTH] = {0};
-    u32 flags = g_fileSystemMountFlags;
+    u32 flags = fs_ctx->flags;
     bool ret = false;
     
     /* Allocate memory for the NTFS volume descriptor. */
@@ -1060,7 +1061,7 @@ static bool usbHsFsMountRegisterExtVolume(UsbHsFsDriveLogicalUnitFileSystemConte
     
     /* Setup EXT volume descriptor. */
     sprintf(fs_ctx->ext->dev_name, MOUNT_NAME_PREFIX "%u", fs_ctx->device_id);
-    fs_ctx->ext->flags = g_fileSystemMountFlags;
+    fs_ctx->ext->flags = fs_ctx->flags;
     fs_ctx->ext->id = fs_ctx->device_id;
     
     /* Try to mount EXT volume. */

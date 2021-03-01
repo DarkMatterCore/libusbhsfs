@@ -209,7 +209,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx,
     Result rc = 0;
     u16 desc = ((USB_DT_STRING << 8) | idx);
     u16 len = sizeof(struct _usb_string_descriptor);
-    u32 xfer_size = 0, string_data_size = 0;
+    u32 xfer_size = 0;
     
     UsbHsClientIfSession *usb_if_session = NULL;
     struct _usb_string_descriptor *string_desc = NULL;
@@ -233,14 +233,14 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx,
         goto end;
     }
     
-    if (xfer_size <= 2 || ((string_data_size = (xfer_size - 2)) % 2) != 0)
+    if (!xfer_size || (xfer_size % 2) != 0)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s)!", xfer_size, len);
+        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s)!", xfer_size);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
     
-    USBHSFS_LOG_DATA(string_desc, len, "String descriptor data:");
+    USBHSFS_LOG_DATA(string_desc, xfer_size, "String descriptor data:");
     
     /* Verify string descriptor. */
     if (string_desc->bLength != xfer_size || string_desc->bDescriptorType != USB_DT_STRING)
@@ -250,21 +250,22 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx,
         goto end;
     }
     
-    /* Allocate memory for the string descriptor data. */
-    buf = malloc(string_data_size);
+    /* Allocate memory for the string descriptor data. Two extra bytes are reserved for a NULL terminator, but they're not reflected in the returned size. */
+    /* This is useful for UTF-16 to UTF-8 conversions. */
+    buf = calloc(1, xfer_size);
     if (!buf)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for the string descriptor data!", string_data_size);
+        USBHSFS_LOG("Failed to allocate 0x%X bytes for the string descriptor data!", xfer_size);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
     
     /* Copy string descriptor data. */
-    memcpy(buf, string_desc->wData, string_data_size);
+    memcpy(buf, string_desc->wData, xfer_size - 2);
     
     /* Update output. */
     *out_buf = buf;
-    *out_buf_size = string_data_size;
+    *out_buf_size = (xfer_size - 2);
     
 end:
     return rc;

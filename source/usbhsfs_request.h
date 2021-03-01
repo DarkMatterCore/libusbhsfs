@@ -13,6 +13,8 @@
 
 #include "usbhsfs_drive.h"
 
+#define USB_LANGID_ENUS 0x0409
+
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 
 /// Returns a pointer to a dynamic, memory-aligned buffer suitable for USB transfers.
