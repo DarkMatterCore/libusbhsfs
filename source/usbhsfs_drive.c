@@ -14,10 +14,12 @@
 
 /* Function prototypes. */
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun);
+static void usbHsFsDriveSetAlternateInterfaceDescriptor(UsbHsFsDriveContext *drive_ctx);
 
 static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx);
 static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsFsDriveContext *drive_ctx, u8 idx, char **out_buf);
+
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun);
 
 bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterface *usb_if)
 {
@@ -37,14 +39,11 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     
     bool ret = false, ep_open = false;
     
-    /* Copy USB interface ID. */
-    drive_ctx->usb_if_id = usb_if->inf.ID;
-    
     /* Allocate memory for the USB transfer buffer. */
     drive_ctx->xfer_buf = usbHsFsRequestAllocateXferBuffer();
     if (!drive_ctx->xfer_buf)
     {
-        USBHSFS_LOG("Failed to allocate USB transfer buffer! (interface %d).", drive_ctx->usb_if_id);
+        USBHSFS_LOG("Failed to allocate USB transfer buffer! (interface %d).", usb_if->inf.ID);
         goto end;
     }
     
@@ -52,13 +51,16 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     rc = usbHsAcquireUsbIf(usb_if_session, usb_if);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, drive_ctx->usb_if_id);
+        USBHSFS_LOG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
         goto end;
     }
     
-    /* TO DO: Add support for interfaces with alternate settings? */
-    //struct usb_config_descriptor *usb_config_desc = &(usb_if_session->inf.config_desc);
-    //struct usb_interface_descriptor *usb_interface_desc = &(usb_if_session->inf.inf.interface_desc);
+    /* Set an alternate interface descriptor. */
+    //usbHsFsDriveSetAlternateInterfaceDescriptor(drive_ctx);
+    if (usb_if_session->inf.inf.interface_desc.bInterfaceProtocol == USB_PROTOCOL_USB_ATTACHED_SCSI) goto end;
+    
+    /* Copy USB interface ID. */
+    drive_ctx->usb_if_id = usb_if_session->ID;
     
     /* Open input endpoint. */
     for(u8 i = 0; i < 15; i++)
@@ -249,22 +251,104 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     }
 }
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun)
+static void usbHsFsDriveSetAlternateInterfaceDescriptor(UsbHsFsDriveContext *drive_ctx)
 {
-    if (!lun_ctx || !usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) || lun_ctx->lun >= USB_BOT_MAX_LUN) return;
+    Result rc = 0;
     
-    if (lun_ctx->fs_ctx)
+    UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
+    
+    struct usb_interface_descriptor orig_interface_desc = {0}, *new_interface_desc = NULL;
+    
+    u32 config_desc_size = 0;
+    u8 *config_desc_start = NULL, *config_desc_end = NULL, *config_desc_ptr = NULL;
+    
+    bool success = false, oob_desc = false;
+    
+    /* Copy interface descriptor provided by UsbHsInterface. */
+    /* We'll use this to skip this descriptor when we find it within the full configuration descriptor. */
+    memcpy(&orig_interface_desc, &(usb_if_session->inf.inf.interface_desc), sizeof(struct usb_interface_descriptor));
+    
+    /* Do not proceed if we already have a USB Attached SCSI interface descriptor. */
+    if (orig_interface_desc.bInterfaceProtocol == USB_PROTOCOL_USB_ATTACHED_SCSI)
     {
-        /* Destroy filesystem contexts. */
-        for(u32 i = 0; i < lun_ctx->fs_count; i++) usbHsFsMountDestroyLogicalUnitFileSystemContext(&(lun_ctx->fs_ctx[i]));
-        
-        /* Free filesystem context buffer. */
-        free(lun_ctx->fs_ctx);
-        lun_ctx->fs_ctx = NULL;
+        USBHSFS_LOG("Already using a UASP interface - proceeding as-is (interface %d).", usb_if_session->ID);
+        return;
     }
     
-    /* Stop current LUN. */
-    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx);
+    /* Get full configuration descriptor. The one provided by UsbHsInterface is truncated. */
+    /* To simplify things, we won't look beyond index #0. */
+    rc = usbHsFsRequestGetConfigurationDescriptor(drive_ctx, 0, &config_desc_start, &config_desc_size);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG("usbHsFsRequestGetConfigurationDescriptor failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        return;
+    }
+    
+    /* Do not proceed if the configuration descriptor is too small to hold a USB Attached SCSI interface. */
+    if (config_desc_size < (sizeof(struct usb_config_descriptor) + sizeof(struct usb_interface_descriptor) + (sizeof(struct usb_endpoint_descriptor) * 4)))
+    {
+        USBHSFS_LOG("Configuration descriptor is too small to hold a UASP interface - proceeding as-is (interface %d).", usb_if_session->ID);
+        goto end;
+    }
+    
+    /* Update configuration descriptor pointers. */
+    config_desc_end = (config_desc_start + config_desc_size);
+    config_desc_ptr = config_desc_start;
+    
+    /* Parse configuration descriptor. */
+    while(config_desc_ptr < config_desc_end)
+    {
+        /* Retrieve current bLength and bDescriptorType fields. */
+        u8 cur_desc_size = *config_desc_ptr;
+        u8 cur_desc_type = *(config_desc_ptr + 1);
+        
+        /* Check descriptor size. We definitely not want to go out of bounds. */
+        u64 config_desc_offset = (u64)(config_desc_ptr - config_desc_start);
+        if ((config_desc_offset + cur_desc_size) > config_desc_size)
+        {
+            USBHSFS_LOG("Descriptor 0x%02X at offset 0x%lX exceeds configuration descriptor size! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
+            oob_desc = true;
+            break;
+        }
+        
+        /* Check if this isn't an interface descriptor, if it has a valid size, if it's not the original interface descriptor and if it's not a USB Attached SCSI interface descriptor. */
+        if (cur_desc_type != USB_DT_INTERFACE || cur_desc_size != sizeof(struct usb_interface_descriptor) || \
+            !memcmp(config_desc_ptr, &orig_interface_desc, sizeof(struct usb_interface_descriptor)) || *(config_desc_ptr + 7) != USB_PROTOCOL_USB_ATTACHED_SCSI)
+        {
+            config_desc_ptr += cur_desc_size;
+            continue;
+        }
+        
+        /* Good, we found a USB Attached SCSI descriptor. Let's update our pointer. */
+        new_interface_desc = (struct usb_interface_descriptor*)config_desc_ptr;
+        USBHSFS_LOG_DATA(new_interface_desc, sizeof(struct usb_interface_descriptor), "Found UASP interface descriptor at offset 0x%lX (interface %d):", config_desc_offset, usb_if_session->ID);
+        
+        /* Update configuration descriptor pointer. */
+        config_desc_ptr += cur_desc_size;
+        
+        /* Let's try to set our new interface descriptor. */
+        /* If the interface number is different than the one from the original interface, we must set a new one altogether. */
+        /* Otherwise, this means we're just dealing with an alternate interface. */
+        if (new_interface_desc->bInterfaceNumber != orig_interface_desc.bInterfaceNumber)
+        {
+            rc = usbHsIfSetInterface(usb_if_session, NULL, new_interface_desc->bInterfaceNumber);
+            if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        } else {
+            rc = usbHsIfGetAlternateInterface(usb_if_session, NULL, new_interface_desc->bAlternateSetting);
+            if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfGetAlternateInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        }
+        
+        if (R_FAILED(rc)) continue;
+        
+        /* Jackpot. */
+        success = true;
+        break;
+    }
+    
+    if (!success && !oob_desc) USBHSFS_LOG("Unable to find and/or set a UASP interface descriptor - proceeding with BOT protocol (interface %d).", usb_if_session->ID);
+    
+end:
+    if (config_desc_start) free(config_desc_start);
 }
 
 static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx)
@@ -370,4 +454,22 @@ end:
     if ((R_FAILED(rc) || units <= 0) && utf8_str) free(utf8_str);
     
     if (string_data) free(string_data);
+}
+
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun)
+{
+    if (!lun_ctx || !usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) || lun_ctx->lun >= USB_BOT_MAX_LUN) return;
+    
+    if (lun_ctx->fs_ctx)
+    {
+        /* Destroy filesystem contexts. */
+        for(u32 i = 0; i < lun_ctx->fs_count; i++) usbHsFsMountDestroyLogicalUnitFileSystemContext(&(lun_ctx->fs_ctx[i]));
+        
+        /* Free filesystem context buffer. */
+        free(lun_ctx->fs_ctx);
+        lun_ctx->fs_ctx = NULL;
+    }
+    
+    /* Stop current LUN. */
+    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx);
 }

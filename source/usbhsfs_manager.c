@@ -141,10 +141,9 @@ Result usbHsFsInitialize(u8 event_idx)
         usbhs_init = true;
         
         /* Fill USB interface filter. */
-        g_usbInterfaceFilter.Flags = (UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass | UsbHsInterfaceFilterFlags_bInterfaceProtocol);
+        g_usbInterfaceFilter.Flags = (UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass);
         g_usbInterfaceFilter.bInterfaceClass = USB_CLASS_MASS_STORAGE;
         g_usbInterfaceFilter.bInterfaceSubClass = USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET;
-        g_usbInterfaceFilter.bInterfaceProtocol = USB_PROTOCOL_BULK_ONLY_TRANSPORT;
         
         /* Create USB interface available event for our filter. */
         /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
@@ -753,6 +752,13 @@ static void usbHsFsResetDrives(void)
         UsbHsInterface *usb_if = &(g_usbInterfaces[i]);
         memset(&usb_if_session, 0, sizeof(UsbHsClientIfSession));
         
+        /* Filter interface protocol. */
+        if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+        {
+            USBHSFS_LOG("Interface #%d (%d) discarded.", i, usb_if->inf.ID);
+            continue;
+        }
+        
         USBHSFS_LOG("Resetting USB Mass Storage device with interface %d.", usb_if->inf.ID);
         
         /* Open current interface. */
@@ -851,6 +857,13 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
             UsbHsInterface *usb_if = &(g_usbInterfaces[i]);
             
             USBHSFS_LOG_DATA(usb_if, sizeof(UsbHsInterface), "Interface #%d (%d) data:", i, usb_if->inf.ID);
+            
+            /* Filter interface protocol. */
+            if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+            {
+                USBHSFS_LOG("Interface #%d (%d) discarded.", i, usb_if->inf.ID);
+                continue;
+            }
             
             /* Add current interface to the drive context list. */
             if (usbHsFsAddDriveContextToList(usb_if))

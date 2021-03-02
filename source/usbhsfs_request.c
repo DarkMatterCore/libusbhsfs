@@ -159,7 +159,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsFsDriveContext *drive_ctx, 
     }
     
     /* Allocate memory for the full configuration descriptor. */
-    buf = memalign(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength);
+    buf = memalign(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength + 1);
     if (!buf)
     {
         USBHSFS_LOG("Failed to allocate 0x%X bytes for the full configuration descriptor!", config_desc->wTotalLength);
