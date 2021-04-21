@@ -1,9 +1,10 @@
 # Maintainer: Rhys Koedijk <rhys@koedijk.co.nz>
 # Maintainer: DarkMatterCore <pabloacurielz@gmail.com>
 
+pkgbasename=ntfs-3g_ntfsprogs
 pkgname=switch-libntfs-3g
 pkgver=2017.3.23
-pkgrel=1
+pkgrel=2
 pkgdesc='Read-Write NTFS Driver'
 baseurl='https://www.tuxera.com'
 url="${baseurl}/community/open-source-ntfs-3g/"
@@ -12,19 +13,24 @@ arch=('any')
 options=(!strip libtool staticlibs)
 makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
 groups=('switch-portlibs')
-source=("${baseurl}/opensource/ntfs-3g_ntfsprogs-${pkgver}.tgz")
-sha256sums=('3e5a021d7b761261836dcb305370af299793eedbded731df3d6943802e1262d5')
+source=(
+  "${baseurl}/opensource/${pkgbasename}-${pkgver}.tgz"
+  "${pkgname}-${pkgver}.patch"
+)
+sha256sums=(
+  '3e5a021d7b761261836dcb305370af299793eedbded731df3d6943802e1262d5'
+  '77fea18e209b8c3a9f7a82a1a9acb0b10ba73ef9ac77e7a50a6752c2db8877a2'
+)
 
 prepare() {
-  cd "ntfs-3g_ntfsprogs-${pkgver}"
+  cd "${pkgbasename}-${pkgver}"
+  patch -Np1 -i "${srcdir}/${pkgname}-${pkgver}.patch"
 
-  patch -Np1 -i "${srcdir}/../ntfs-3g_ntfsprogs-${pkgver}.patch"
+  source /opt/devkitpro/switchvars.sh
 }
 
 build() {
-  cd "ntfs-3g_ntfsprogs-${pkgver}"
-
-  source /opt/devkitpro/switchvars.sh
+  cd "${pkgbasename}-${pkgver}"
 
   ./configure --prefix="${PORTLIBS_PREFIX}" --libdir="${PORTLIBS_PREFIX}/lib" --host=aarch64-none-elf \
     --disable-shared --enable-static --disable-device-default-io-ops \
@@ -35,9 +41,7 @@ build() {
 }
 
 package() {
-  cd "ntfs-3g_ntfsprogs-${pkgver}"
-
-  source /opt/devkitpro/switchvars.sh
+  cd "${pkgbasename}-${pkgver}"
 
   make DESTDIR="${pkgdir}" install
 

@@ -1,8 +1,9 @@
 # Maintainer: DarkMatterCore <pabloacurielz@gmail.com>
 
-pkgname=switch-lwext4
+pkgbasename=lwext4
+pkgname=switch-${pkgbasename}
 pkgver=733b2c40d7121900e339bee8784977467a9fe8c9
-pkgrel=1
+pkgrel=2
 pkgdesc='ext2/ext3/ext4 filesystem library for microcontrollers'
 url='https://github.com/gkostka/lwext4'
 license=('GPL')
@@ -10,15 +11,20 @@ arch=('any')
 options=(!strip libtool staticlibs)
 makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
 groups=('switch-portlibs')
-source=("${url}/archive/${pkgver}.zip")
-sha256sums=('7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e')
+source=(
+  "${url}/archive/${pkgver}.zip"
+  "${pkgname}-${pkgver}.patch"
+)
+sha256sums=(
+  '7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e'
+  '6fce1278a51537a616d7cb757eb95a56082763a854c1d5b9588cad1f2e246d31'
+)
 
 prepare() {
-  cd "lwext4-$pkgver"
+  cd "${pkgbasename}-${pkgver}"
+  patch -Np1 -i "${srcdir}/${pkgname}-${pkgver}.patch"
 
   source /opt/devkitpro/switchvars.sh
-
-  patch -Np1 -i "${srcdir}/../lwext4-${pkgver}.patch"
 
   mv include lwext4
   mkdir -p include
@@ -30,12 +36,12 @@ prepare() {
 }
 
 build() {
-  cd "lwext4-${pkgver}"
+  cd "${pkgbasename}-${pkgver}"
   make -C build_lib_only
 }
 
 package() {
-  cd "lwext4-${pkgver}"
+  cd "${pkgbasename}-${pkgver}"
 
   install -Dm644 build_lib_only/src/liblwext4.a "${pkgdir}${PORTLIBS_PREFIX}/lib/liblwext4.a"
   install -Dm644 LICENSE "${pkgdir}${PORTLIBS_PREFIX}/licenses/${pkgname}/LICENSE"
