@@ -158,6 +158,36 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.3:**
+
+* Improvements to the USB manager:
+    * Refactored USB control request functions to work with libnx USB datatypes instead of drive / logical unit contexts.
+    * Implemented `GET_DESCRIPTOR` control requests for configuration and string descriptors.
+* Improvements to the BOT driver:
+    * If `usbHsEpPostBuffer()` fails, only the endpoint the library is currently working with will be cleared. Furthermore, the result from this operation no longer affects the return code.
+    * If `usbHsFsRequestPostBuffer()` fails, the library now tries to retrieve a CSW right away - if it succeeds, a Request Sense command will be issued immediately to the block device.
+    * Mode Sense (6) / Mode Sense (10) command success is no longer mandatory in `usbHsFsScsiStartDriveLogicalUnit()`.
+    * SPC standard version is now validated.
+* Improvements to the PKGBUILD scripts for NTFS-3G and lwext4:
+    * Made it possible to build and install all three libraries using the Makefile - for more information, please refer to the **How to install** section from the README.
+    * Proper library path is now forced while building NTFS-3G. Fixes issues in some Linux systems. Thanks to [sigmaboy](https://github.com/sigmaboy) for the correction.
+    * Other minor improvements.
+* Library API changes:
+    * Added `vid` and `pid` fields to `UsbHsFsDevice`. Useful if the application needs to implement a device filter on its own.
+    * `vendor_id`, `product_id` and `product_revision` fields in `UsbHsFsDevice` have been replaced with `manufacturer`, `product_name` and `serial_number` fields, which represent UTF-8 conversions of string descriptors referenced by the USB device descriptor.
+        * Strings from SCP INQUIRY data are still used as a fallback method for `manufacturer` and `product_name` fields if the USB device descriptor holds no references to string descriptors.
+* Miscellaneous changes:
+    * Renamed `ff_rename()` from FatFs to avoid issues fix conflicts in applications linked against FFmpeg. Thanks to [Cpasjuste](https://github.com/Cpasjuste) for letting us know.
+    * The `has_journal` flag from the superblock in EXT filesystems is now verified before calling journal-related functions.
+    * EXT filesystem version is now retrieved only once, while mounting the volume.
+    * The `AtmosphereHasService` sm API extension available in Atmosphère and Atmosphère-based CFWs is now being used to check if a specific service is running.
+        * HOS 12.0.x / AMS 0.19.x support is provided by using TIPC serialization to dispatch the IPC request, if needed.
+    * Improved logfile code and simplified binary data logging throughout the codebase.
+* Changes under the hood (currently unused, but may change in the future):
+    * Implemented SYNCHRONIZE CACHE (10) and SYNCHRONIZE CACHE (16) SCP commands.
+    * Modified drive and logical unit contexts to prepare for UASP support.
+    * Added extra code to handle USB Attached SCSI Protocol (UASP) interface descriptors under both USB 2.0 and 3.0 modes.
+
 **v0.2.2:**
 
 * By popular demand, the NTFS journal is now rebuilt by default for NTFS volumes that have not been properly unmounted, which lets the library mount them right away without having to use a Windows PC. Please bear in mind this process may cause inconsistencies - always try to safely remove your storage devices.
