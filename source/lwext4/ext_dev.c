@@ -313,7 +313,7 @@ end:
 
 static int extdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
-    char existing_path[USB_MAX_PATH_LENGTH] = {0};
+    char existing_path[MAX_PATH_LENGTH] = {0};
     char *new_path = __usbhsfs_dev_path_buf;
     int ret = -1;
     
@@ -396,7 +396,7 @@ end:
 
 static int extdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    char old_path[USB_MAX_PATH_LENGTH] = {0};
+    char old_path[MAX_PATH_LENGTH] = {0};
     char *new_path = __usbhsfs_dev_path_buf;
     int ret = -1;
     
@@ -812,7 +812,7 @@ static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogic
     len = (strlen(mount_point) + strlen(path));
     if (path[0] != '/') len += strlen(cwd);
     
-    if (len >= USB_MAX_PATH_LENGTH) ext_set_error_and_exit(ENAMETOOLONG);
+    if (len >= MAX_PATH_LENGTH) ext_set_error_and_exit(ENAMETOOLONG);
     
     /* Generate fixed path. */
     if (path[0] == '/')

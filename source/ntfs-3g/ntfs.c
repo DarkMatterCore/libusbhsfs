@@ -15,10 +15,10 @@
 
 /// NTFS path.
 typedef struct _ntfs_path {
-    const char *path;               ///< Volume path (e.g. '/foo/bar/file.txt').
-    const char *dir;                ///< Directory path (e.g. '/foo/bar').
-    const char *name;               ///< Filename (e.g. 'file.txt').
-    char buf[USB_MAX_PATH_LENGTH];  ///< Internal buffer containing the path string.
+    const char *path;           ///< Volume path (e.g. '/foo/bar/file.txt').
+    const char *dir;            ///< Directory path (e.g. '/foo/bar').
+    const char *name;           ///< Filename (e.g. 'file.txt').
+    char buf[MAX_PATH_LENGTH];  ///< Internal buffer containing the path string.
 } ntfs_path;
 
 /* Function prototypes. */
@@ -54,7 +54,7 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
         if (formatted_str[formatted_str_len - 1] == '.') formatted_str[--formatted_str_len] = '\0';
         
         /* Log message. */
-        usbHsFsUtilsWriteMessageToLogFile(function, "%s (file \"%s\", line %d, level 0x%X).", formatted_str, file, line, level);
+        usbHsFsUtilsWriteFormattedStringToLogFile(function, "%s (file \"%s\", line %d, level 0x%X).", formatted_str, file, line, level);
     }
     
     /* Free allocated buffer. */

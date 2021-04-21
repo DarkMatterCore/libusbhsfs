@@ -305,7 +305,7 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     /* Calculate actual offset. */
     offset += pos;
     
-    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv, ff_tell(file));
+    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv);
     
     /* Perform file seek. */
     res = ff_lseek(file, (FSIZE_t)offset);
@@ -426,7 +426,7 @@ end:
 
 static int ffdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    char old_path[USB_MAX_PATH_LENGTH] = {0};
+    char old_path[MAX_PATH_LENGTH] = {0};
     char *new_path = __usbhsfs_dev_path_buf;
     FRESULT res = FR_OK;
     
@@ -594,7 +594,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
 {
     (void)path;
     
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     DWORD free_clusters = 0;
     FRESULT res = FR_OK;
     
@@ -769,7 +769,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     ssize_t units = 0;
     u32 code = 0;
     size_t len = 0;
-    char name[USB_MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : __usbhsfs_dev_path_buf), *cwd = NULL;
+    char name[MOUNT_NAME_LENGTH] = {0}, *outptr = (outpath ? outpath : __usbhsfs_dev_path_buf), *cwd = NULL;
     
     ff_declare_error_state;
     
@@ -804,7 +804,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     len = (strlen(name) + strlen(path));
     if (path[0] != '/') len += strlen(cwd);
     
-    if (len >= USB_MAX_PATH_LENGTH) ff_set_error_and_exit(ENAMETOOLONG);
+    if (len >= MAX_PATH_LENGTH) ff_set_error_and_exit(ENAMETOOLONG);
     
     /* Generate fixed path. */
     if (path[0] == '/')

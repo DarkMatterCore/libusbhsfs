@@ -14,9 +14,7 @@
 
 #include "usbhsfs_drive.h"
 
-#define USB_DEFAULT_DEVOPTAB_INVALID_ID UINT32_MAX
-
-extern __thread char __usbhsfs_dev_path_buf[USB_MAX_PATH_LENGTH];
+extern __thread char __usbhsfs_dev_path_buf[MAX_PATH_LENGTH];
 
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 

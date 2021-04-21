@@ -25,6 +25,8 @@
 
 #define MBR_PARTITION_COUNT     4
 
+#define DEVOPTAB_INVALID_ID     UINT32_MAX
+
 #ifdef DEBUG
 #define FS_TYPE_STR(x)          ((x) == UsbHsFsDriveLogicalUnitFileSystemType_FAT ? "FAT" : ((x) == UsbHsFsDriveLogicalUnitFileSystemType_NTFS ? "NTFS" : "EXT"))
 #endif
@@ -174,7 +176,7 @@ static_assert(sizeof(GuidPartitionTableHeader) == 0x200, "Bad GuidPartitionTable
 static u32 g_devoptabDeviceCount = 0;
 static u32 *g_devoptabDeviceIds = NULL;
 
-static u32 g_devoptabDefaultDeviceId = USB_DEFAULT_DEVOPTAB_INVALID_ID;
+static u32 g_devoptabDefaultDeviceId = DEVOPTAB_INVALID_ID;
 static Mutex g_devoptabDefaultDeviceMutex = 0;
 
 static bool g_fatFsVolumeTable[FF_VOLUMES] = { false };
@@ -184,7 +186,7 @@ static const u8 g_linuxFilesystemDataGuid[0x10] = { 0xAF, 0x3D, 0xC6, 0x0F, 0x83
 
 static u32 g_fileSystemMountFlags = (UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ReplayJournal);
 
-__thread char __usbhsfs_dev_path_buf[USB_MAX_PATH_LENGTH] = {0};
+__thread char __usbhsfs_dev_path_buf[MAX_PATH_LENGTH] = {0};
 
 /* Function prototypes. */
 
@@ -284,7 +286,7 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
 {
     if (!usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx)) return;
     
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     u32 *tmp_device_ids = NULL;
     
     /* Unset default devoptab device. */
@@ -370,7 +372,7 @@ bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemConte
     
     const devoptab_t *cur_default_devoptab = NULL;
     int new_default_device = -1;
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     bool ret = false;
     
     if (!g_devoptabDeviceCount || !g_devoptabDeviceIds || !usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx))
@@ -588,7 +590,7 @@ static u8 usbHsFsMountInspectExtSuperBlock(UsbHsFsDriveLogicalUnitContext *lun_c
         /* Read entire EXT superblock. */
         if (!usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, block, block_read_addr, 1))
         {
-            USBHSFS_LOG("Failed to read block at LBA 0x%lX! (interface %d, LUN %u).", block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
+            USBHSFS_LOG("Failed to read block at LBA 0x%X! (interface %d, LUN %u).", block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
             goto end;
         }
         
@@ -598,7 +600,7 @@ static u8 usbHsFsMountInspectExtSuperBlock(UsbHsFsDriveLogicalUnitContext *lun_c
         /* Read entire EXT superblock. */
         if (!usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, (u8*)&superblock, block_read_addr, block_read_count))
         {
-            USBHSFS_LOG("Failed to read %u blocks at LBA 0x%lX! (interface %d, LUN %u).", block_read_count, block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
+            USBHSFS_LOG("Failed to read %u blocks at LBA 0x%X! (interface %d, LUN %u).", block_read_count, block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
             goto end;
         }
     }
@@ -607,7 +609,7 @@ static u8 usbHsFsMountInspectExtSuperBlock(UsbHsFsDriveLogicalUnitContext *lun_c
     if (ext4_sb_check(&superblock)) ret = UsbHsFsDriveLogicalUnitFileSystemType_EXT;
     
 end:
-    if (ret == UsbHsFsDriveLogicalUnitFileSystemType_EXT) USBHSFS_LOG("Found EXT superblock at LBA 0x%lX (interface %d, LUN %u).", block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
+    if (ret == UsbHsFsDriveLogicalUnitFileSystemType_EXT) USBHSFS_LOG("Found EXT superblock at LBA 0x%X (interface %d, LUN %u).", block_read_addr, lun_ctx->usb_if_id, lun_ctx->lun);
     
     return ret;
 }
@@ -836,7 +838,7 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitFileSystemConte
 #endif
     
     u8 pdrv = 0;
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     FRESULT ff_res = FR_DISK_ERR;
     bool ret = false;
     
@@ -921,7 +923,7 @@ static void usbHsFsMountUnregisterFatVolume(char *name, UsbHsFsDriveLogicalUnitF
 static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     u32 flags = fs_ctx->flags;
     bool ret = false;
     
@@ -1120,14 +1122,14 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystem
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
 #endif
     
-    char name[USB_MOUNT_NAME_LENGTH] = {0};
+    char name[MOUNT_NAME_LENGTH] = {0};
     const devoptab_t *fs_device = NULL;
     int ad_res = -1;
     u32 *tmp_device_ids = NULL;
     bool ret = false;
     
     /* Generate devoptab mount name. */
-    fs_ctx->name = calloc(USB_MOUNT_NAME_LENGTH, sizeof(char));
+    fs_ctx->name = calloc(MOUNT_NAME_LENGTH, sizeof(char));
     if (!fs_ctx->name)
     {
         USBHSFS_LOG("Failed to allocate memory for the mount name! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
@@ -1141,7 +1143,7 @@ static bool usbHsFsMountRegisterDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystem
     sprintf(name, "%s:", fs_ctx->name); /* Will be used if something goes wrong and we end up having to remove the devoptab device. */
     
     /* Allocate memory for the current working directory. */
-    fs_ctx->cwd = calloc(USB_MAX_PATH_LENGTH, sizeof(char));
+    fs_ctx->cwd = calloc(MAX_PATH_LENGTH, sizeof(char));
     if (!fs_ctx->cwd)
     {
         USBHSFS_LOG("Failed to allocate memory for the current working directory! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
@@ -1268,7 +1270,7 @@ static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id)
     mutexLock(&g_devoptabDefaultDeviceMutex);
     
     /* Check if the provided device ID matches the current default devoptab device ID. */
-    if (g_devoptabDefaultDeviceId != USB_DEFAULT_DEVOPTAB_INVALID_ID && g_devoptabDefaultDeviceId == device_id)
+    if (g_devoptabDefaultDeviceId != DEVOPTAB_INVALID_ID && g_devoptabDefaultDeviceId == device_id)
     {
         USBHSFS_LOG("Current default devoptab device matches provided device ID! (%u).", device_id);
         
@@ -1285,7 +1287,7 @@ static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id)
         }
         
         /* Update default device ID. */
-        g_devoptabDefaultDeviceId = USB_DEFAULT_DEVOPTAB_INVALID_ID;
+        g_devoptabDefaultDeviceId = DEVOPTAB_INVALID_ID;
     }
     
     mutexUnlock(&g_devoptabDefaultDeviceMutex);

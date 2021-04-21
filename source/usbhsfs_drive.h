@@ -21,8 +21,6 @@
 #include "lwext4/ext.h"
 #endif
 
-#define USB_BOT_MAX_LUN 16  /* Max returned value is actually a zero-based index to the highest LUN. */
-
 /// Used by filesystem contexts to determine which FS object to use.
 typedef enum {
     UsbHsFsDriveLogicalUnitFileSystemType_Invalid     = 0,  ///< Invalid boot signature.
@@ -55,7 +53,8 @@ typedef struct {
 /// Used to handle LUNs from drives.
 typedef struct {
     void *drive_ctx;                                    ///< Pointer to the drive context this LUN belongs to.
-    s32 usb_if_id;                                      ///< USB interface ID. Kept here for convenience.
+    s32 usb_if_id;                                      ///< USB interface ID. Placed here for convenience.
+    bool uasp;                                          ///< Set to true if USB Attached SCSI Protocol is being used with this drive. Placed here for convenience.
     u8 lun;                                             ///< Drive LUN index (zero-based, up to 15). Used to send SCSI commands.
     bool removable;                                     ///< Set to true if this LUN is removable. Retrieved via Inquiry SCSI command.
     bool eject_supported;                               ///< Set to true if ejection via Prevent/Allow Medium Removal + Start Stop Unit is supported.
@@ -74,14 +73,14 @@ typedef struct {
 /// Used to handle drives.
 typedef struct {
     Mutex mutex;                                ///< Drive mutex.
-    s32 usb_if_id;                              ///< USB interface ID. Exactly the same as usb_if_session.ID / usb_if_session.inf.inf.ID. Placed here for convenience.
     u8 *xfer_buf;                               ///< Dedicated transfer buffer for this drive.
+    s32 usb_if_id;                              ///< USB interface ID. Exactly the same as usb_if_session.ID / usb_if_session.inf.inf.ID. Placed here for convenience.
+    bool uasp;                                  ///< Set to true if USB Attached SCSI Protocol is being used with this drive.
     UsbHsClientIfSession usb_if_session;        ///< Interface session.
-    UsbHsClientEpSession usb_in_ep_session;     ///< Input endpoint session (device to host).
-    UsbHsClientEpSession usb_out_ep_session;    ///< Output endpoint session (host to device).
+    UsbHsClientEpSession usb_in_ep_session[2];  ///< Input endpoint sessions (device to host). BOT: 0 = Data In & Status, 1 = Unused. UASP: 0 = Status, 1 = Data In.
+    UsbHsClientEpSession usb_out_ep_session[2]; ///< Output endpoint sessions (host to device). BOT: 0 = Command & Data Out, 1 = Unused. UASP: 0 = Command, 1 = Data Out.
     u16 vid;                                    ///< Vendor ID. Retrieved from the device descriptor. Placed here for convenience.
     u16 pid;                                    ///< Product ID. Retrieved from the device descriptor. Placed here for convenience.
-    u16 lang_id;                                ///< Language ID used to retrieve string descriptors.
     char *manufacturer;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
     char *product_name;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
     char *serial_number;                        ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
@@ -98,17 +97,21 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
 /// Destroys the provided drive context.
 void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun);
 
+/// Wrapper for usbHsFsRequestClearEndpointHaltFeature() that clears a possible STALL status from all endpoints.
+void usbHsFsDriveClearStallStatus(UsbHsFsDriveContext *drive_ctx);
+
 /// Checks if the provided drive context is valid.
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *drive_ctx)
 {
-    return (drive_ctx && drive_ctx->xfer_buf && usbHsIfIsActive(&(drive_ctx->usb_if_session)) && serviceIsActive(&(drive_ctx->usb_in_ep_session.s)) && \
-            serviceIsActive(&(drive_ctx->usb_out_ep_session.s)));
+    return (drive_ctx && drive_ctx->xfer_buf && usbHsIfIsActive(&(drive_ctx->usb_if_session)) && \
+            serviceIsActive(&(drive_ctx->usb_in_ep_session[0].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[0].s)) && (!drive_ctx->uasp || \
+            (serviceIsActive(&(drive_ctx->usb_in_ep_session[1].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[1].s)))));
 }
 
 /// Checks if the provided LUN context is valid.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 {
-    return (lun_ctx && usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) && lun_ctx->lun < USB_BOT_MAX_LUN && lun_ctx->block_count && lun_ctx->block_length && lun_ctx->capacity);
+    return (lun_ctx && usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) && lun_ctx->lun < UMS_MAX_LUN && lun_ctx->block_count && lun_ctx->block_length && lun_ctx->capacity);
 }
 
 /// Checks if the provided filesystem context is valid.

@@ -489,7 +489,7 @@ end:
 
 static int ntfsdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
-    char existing_path[USB_MAX_PATH_LENGTH] = {0};
+    char existing_path[MAX_PATH_LENGTH] = {0};
     char *new_path = __usbhsfs_dev_path_buf;
     ntfs_inode *ni = NULL;
     
@@ -575,7 +575,7 @@ end:
 
 static int ntfsdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    char old_path[USB_MAX_PATH_LENGTH] = {0};
+    char old_path[MAX_PATH_LENGTH] = {0};
     char *new_path = __usbhsfs_dev_path_buf;
     ntfs_inode *ni = NULL;
     
@@ -1027,7 +1027,7 @@ static bool ntfsdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogi
     full_len = strlen(path);
     if (path[0] != '/') full_len += cwd_len;
     
-    if (full_len >= USB_MAX_PATH_LENGTH) ntfs_set_error_and_exit(ENAMETOOLONG);
+    if (full_len >= MAX_PATH_LENGTH) ntfs_set_error_and_exit(ENAMETOOLONG);
     
     /* Follow path and build the fixed path. NTFS-3G doesn't seem to support dot entries in input paths. */
     /* We'll also replace consecutive path separators with a single one, make sure there are no more colons nor NT path separators, and check if the remainder of the string is valid UTF-8. */

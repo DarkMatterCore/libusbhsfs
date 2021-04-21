@@ -71,7 +71,7 @@ Result usbHsFsInitialize(u8 event_idx)
     
 #ifdef DEBUG
     /* Start new log session. */
-    usbHsFsUtilsWriteLogBufferToLogFile("________________________________________________________________\r\n");
+    usbHsFsUtilsWriteStringToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 #ifdef GPL_BUILD
     USBHSFS_LOG("Build type: GPL.");
@@ -572,7 +572,7 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
             /* Check if the mount status has changed. */
             if (cur_status != prev_status)
             {
-                USBHSFS_LOG("New status received: %u.", cur_status);
+                USBHSFS_LOG("New status received: %lu.", cur_status);
                 
                 /* Check if the filesystem from the UMS device is truly mounted and if we can register a devoptab interface for it. */
                 g_sxOSDeviceAvailable = (cur_status == USBFS_MOUNTED && usbfsdev_register());
@@ -753,7 +753,8 @@ static void usbHsFsResetDrives(void)
         memset(&usb_if_session, 0, sizeof(UsbHsClientIfSession));
         
         /* Filter interface protocol. */
-        if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+        //if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+        if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT)
         {
             USBHSFS_LOG("Interface #%d (%d) discarded.", i, usb_if->inf.ID);
             continue;
@@ -859,7 +860,8 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
             USBHSFS_LOG_DATA(usb_if, sizeof(UsbHsInterface), "Interface #%d (%d) data:", i, usb_if->inf.ID);
             
             /* Filter interface protocol. */
-            if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+            //if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT && usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_USB_ATTACHED_SCSI)
+            if (usb_if->inf.interface_desc.bInterfaceProtocol != USB_PROTOCOL_BULK_ONLY_TRANSPORT)
             {
                 USBHSFS_LOG("Interface #%d (%d) discarded.", i, usb_if->inf.ID);
                 continue;
