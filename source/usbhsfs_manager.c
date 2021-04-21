@@ -73,6 +73,10 @@ Result usbHsFsInitialize(u8 event_idx)
     /* Start new log session. */
     usbHsFsUtilsWriteStringToLogFile("________________________________________________________________\r\n");
     USBHSFS_LOG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+    
+    /* Log Horizon OS version. */
+    u32 hos_version = hosversionGet();
+    USBHSFS_LOG("Horizon OS version: %u.%u.%u.", HOSVER_MAJOR(hos_version), HOSVER_MINOR(hos_version), HOSVER_MICRO(hos_version));
 #ifdef GPL_BUILD
     USBHSFS_LOG("Build type: GPL.");
     

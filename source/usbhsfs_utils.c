@@ -35,7 +35,7 @@ static char *g_logBuffer = NULL;
 static size_t g_logBufferLength = 0;
 
 static const char *g_utf8Bom = "\xEF\xBB\xBF";
-static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%lu] %s -> ";
+static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%lu] %s: ";
 static const char *g_logLineBreak = "\r\n";
 
 static bool usbHsFsUtilsGetSdCardFileSystem(void)
