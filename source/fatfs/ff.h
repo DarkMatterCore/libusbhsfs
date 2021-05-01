@@ -1,8 +1,8 @@
 /*----------------------------------------------------------------------------/
-/  FatFs - Generic FAT Filesystem module  R0.14                               /
+/  FatFs - Generic FAT Filesystem module  R0.14b                              /
 /-----------------------------------------------------------------------------/
 /
-/ Copyright (C) 2019, ChaN, all right reserved.
+/ Copyright (C) 2021, ChaN, all right reserved.
 /
 / FatFs module is an open source software. Redistribution and use of FatFs in
 / source and binary forms, with or without modification, are permitted provided
@@ -20,7 +20,7 @@
 
 
 #ifndef FF_DEFINED
-#define FF_DEFINED	86606	/* Revision ID */
+#define FF_DEFINED	86631	/* Revision ID */
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,10 +35,14 @@ extern "C" {
 
 /* Integer types used for FatFs API */
 
-#if defined(_WIN32)	/* Main development platform */
+#if defined(_WIN32)		/* Windows VC++ (for development only) */
 #define FF_INTDEF 2
 #include <windows.h>
 typedef unsigned __int64 QWORD;
+#include <float.h>
+#define isnan(v) _isnan(v)
+#define isinf(v) (!_finite(v))
+
 #elif (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || defined(__cplusplus)	/* C99 or later */
 #define FF_INTDEF 2
 #include <stdint.h>
@@ -48,6 +52,7 @@ typedef uint16_t		WORD;	/* 16-bit unsigned integer */
 typedef uint32_t		DWORD;	/* 32-bit unsigned integer */
 typedef uint64_t		QWORD;	/* 64-bit unsigned integer */
 typedef WORD			WCHAR;	/* UTF-16 character type */
+
 #else  	/* Earlier than C99 */
 #define FF_INTDEF 1
 typedef unsigned int	UINT;	/* int must be 16-bit or 32-bit */
@@ -56,36 +61,6 @@ typedef unsigned short	WORD;	/* 16-bit unsigned integer */
 typedef unsigned long	DWORD;	/* 32-bit unsigned integer */
 typedef WORD			WCHAR;	/* UTF-16 character type */
 #endif
-
-
-
-/* Type of path name strings on FatFs API */
-
-#ifndef _INC_TCHAR
-#define _INC_TCHAR
-
-#if FF_USE_LFN && FF_LFN_UNICODE == 1 	/* Unicode in UTF-16 encoding */
-typedef WCHAR TCHAR;
-#define _T(x) L ## x
-#define _TEXT(x) L ## x
-#elif FF_USE_LFN && FF_LFN_UNICODE == 2	/* Unicode in UTF-8 encoding */
-typedef char TCHAR;
-#define _T(x) u8 ## x
-#define _TEXT(x) u8 ## x
-#elif FF_USE_LFN && FF_LFN_UNICODE == 3	/* Unicode in UTF-32 encoding */
-typedef DWORD TCHAR;
-#define _T(x) U ## x
-#define _TEXT(x) U ## x
-#elif FF_USE_LFN && (FF_LFN_UNICODE < 0 || FF_LFN_UNICODE > 3)
-#error Wrong FF_LFN_UNICODE setting
-#else									/* ANSI/OEM code in SBCS/DBCS */
-typedef char TCHAR;
-#define _T(x) x
-#define _TEXT(x) x
-#endif
-
-#endif
-
 
 
 /* Type of file size and LBA variables */
@@ -106,6 +81,30 @@ typedef DWORD LBA_t;
 #endif
 typedef DWORD FSIZE_t;
 typedef DWORD LBA_t;
+#endif
+
+
+
+/* Type of path name strings on FatFs API (TCHAR) */
+
+#if FF_USE_LFN && FF_LFN_UNICODE == 1 	/* Unicode in UTF-16 encoding */
+typedef WCHAR TCHAR;
+#define _T(x) L ## x
+#define _TEXT(x) L ## x
+#elif FF_USE_LFN && FF_LFN_UNICODE == 2	/* Unicode in UTF-8 encoding */
+typedef char TCHAR;
+#define _T(x) u8 ## x
+#define _TEXT(x) u8 ## x
+#elif FF_USE_LFN && FF_LFN_UNICODE == 3	/* Unicode in UTF-32 encoding */
+typedef DWORD TCHAR;
+#define _T(x) U ## x
+#define _TEXT(x) U ## x
+#elif FF_USE_LFN && (FF_LFN_UNICODE < 0 || FF_LFN_UNICODE > 3)
+#error Wrong FF_LFN_UNICODE setting
+#else									/* ANSI/OEM code in SBCS/DBCS */
+typedef char TCHAR;
+#define _T(x) x
+#define _TEXT(x) x
 #endif
 
 
@@ -309,10 +308,6 @@ TCHAR* ff_gets (TCHAR* buff, int len, FIL* fp);						/* Get a string from the fi
 #define ff_rmdir(path) ff_unlink(path)
 #define ff_unmount(path) ff_mount(0, path, 0)
 
-#ifndef EOF
-#define EOF (-1)
-#endif
-
 
 
 
@@ -321,17 +316,17 @@ TCHAR* ff_gets (TCHAR* buff, int len, FIL* fp);						/* Get a string from the fi
 
 /* RTC function */
 #define FAT_TIMESTAMP(year, mon, mday, hour, min, sec)	({ \
-    DWORD fat_year = (DWORD)year, fat_mon = (DWORD)mon, fat_mday = (DWORD)mday, fat_hour = (DWORD)hour, fat_min = (DWORD)min, fat_sec = (DWORD)sec; \
-    if (fat_year < 1980 || fat_year > 2107) fat_year = FF_NORTC_YEAR; \
-    fat_year -= 1980; \
-    if (fat_mon < 1 || fat_mon > 12) fat_mon = FF_NORTC_MON; \
-    if (fat_mday < 1 || fat_mday > 31) fat_mday = FF_NORTC_MDAY; \
-    if (fat_hour > 23) fat_hour = 0; \
-    if (fat_min > 59) fat_min = 0; \
-    if (fat_sec > 58) fat_sec = 58; \
-    fat_sec /= 2; \
-    DWORD timestamp = (((fat_year << 25) & (DWORD)0xFE000000) | ((fat_mon << 21) & (DWORD)0x01E00000) | ((fat_mday << 16) & (DWORD)0x001F0000) | ((fat_hour << 11) & (DWORD)0x0000F800) | ((fat_min << 5) & (DWORD)0x000007E0) | (fat_sec & (DWORD)0x0000001F)); \
-    timestamp; \
+	DWORD fat_year = (DWORD)year, fat_mon = (DWORD)mon, fat_mday = (DWORD)mday, fat_hour = (DWORD)hour, fat_min = (DWORD)min, fat_sec = (DWORD)sec; \
+	if (fat_year < 1980 || fat_year > 2107) fat_year = FF_NORTC_YEAR; \
+	fat_year -= 1980; \
+	if (fat_mon < 1 || fat_mon > 12) fat_mon = FF_NORTC_MON; \
+	if (fat_mday < 1 || fat_mday > 31) fat_mday = FF_NORTC_MDAY; \
+	if (fat_hour > 23) fat_hour = 0; \
+	if (fat_min > 59) fat_min = 0; \
+	if (fat_sec > 58) fat_sec = 58; \
+	fat_sec /= 2; \
+	DWORD timestamp = (((fat_year << 25) & (DWORD)0xFE000000) | ((fat_mon << 21) & (DWORD)0x01E00000) | ((fat_mday << 16) & (DWORD)0x001F0000) | ((fat_hour << 11) & (DWORD)0x0000F800) | ((fat_min << 5) & (DWORD)0x000007E0) | (fat_sec & (DWORD)0x0000001F)); \
+	timestamp; \
 })
 
 #if !FF_FS_READONLY && !FF_FS_NORTC
