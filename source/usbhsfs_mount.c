@@ -528,9 +528,13 @@ static u8 usbHsFsMountInspectVolumeBootRecord(UsbHsFsDriveLogicalUnitContext *lu
     u8 jmp_code = vbr->jmp_boot[0];
     u16 boot_sig = vbr->boot_sig;
     
-    DOS_2_0_BPB *dos_2_0_bpb = &(vbr->dos_7_1_ebpb.dos_3_31_bpb.dos_2_0_bpb);
+    DOS_3_31_BPB *dos_3_31_bpb = &(vbr->dos_7_1_ebpb.dos_3_31_bpb);
+    DOS_2_0_BPB *dos_2_0_bpb = &(dos_3_31_bpb->dos_2_0_bpb);
+    
     u8 sectors_per_cluster = dos_2_0_bpb->sectors_per_cluster, num_fats = dos_2_0_bpb->num_fats;
-    u16 sector_size = dos_2_0_bpb->sector_size, root_dir_entries = dos_2_0_bpb->root_dir_entries, sectors_per_fat = dos_2_0_bpb->sectors_per_fat;
+    u16 sector_size = dos_2_0_bpb->sector_size, reserved_sectors = dos_2_0_bpb->reserved_sectors, root_dir_entries = dos_2_0_bpb->root_dir_entries, total_sectors_16 = dos_2_0_bpb->total_sectors;
+    u16 sectors_per_fat = dos_2_0_bpb->sectors_per_fat;
+    u32 total_sectors_32 = dos_3_31_bpb->total_sectors;
     
     /* Check if we have a valid boot sector signature. */
     if (boot_sig == BOOT_SIGNATURE)
@@ -562,7 +566,8 @@ static u8 usbHsFsMountInspectVolumeBootRecord(UsbHsFsDriveLogicalUnitContext *lu
         
         /* FAT volumes formatted with old tools lack a boot sector signature and a filesystem type string, so we'll try to identify the FAT VBR without them. */
         if ((sector_size & (sector_size - 1)) == 0 && sector_size <= (u16)block_length && sectors_per_cluster != 0 && (sectors_per_cluster & (sectors_per_cluster - 1)) == 0 && \
-            (num_fats == 1 || num_fats == 2) && root_dir_entries != 0 && sectors_per_fat != 0) ret = UsbHsFsDriveLogicalUnitFileSystemType_FAT;
+            reserved_sectors != 0 && (num_fats - 1) <= 1 && root_dir_entries != 0 && (total_sectors_16 >= 128 || total_sectors_32 >= 0x10000) && sectors_per_fat != 0) \
+                ret = UsbHsFsDriveLogicalUnitFileSystemType_FAT;
     }
     
     /* Change return value if we couldn't identify a potential VBR but there's valid boot signature. */
