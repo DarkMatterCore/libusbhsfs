@@ -685,7 +685,35 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveLogicalUnitContext *
     if (header_crc32_calc != header_crc32)
     {
         USBHSFS_LOG("Invalid CRC32 checksum for GPT header at LBA 0x%lX! (%08X != %08X) (interface %d, LUN %u).", gpt_lba, header_crc32_calc, header_crc32, lun_ctx->usb_if_id, lun_ctx->lun);
-        return;
+        
+        /* Check if the LBA for the backup GPT header points to a valid location. */
+        gpt_lba = gpt_header.backup_header_lba;
+        if (!gpt_lba || gpt_lba == gpt_header.cur_header_lba || gpt_lba >= lun_ctx->block_count) return;
+        
+        /* Read block where the backup GPT header is located. */
+        if (!usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, block, gpt_lba, 1))
+        {
+            USBHSFS_LOG("Failed to read backup GPT header from LBA 0x%lX! (interface %d, LUN %u).", gpt_lba, lun_ctx->usb_if_id, lun_ctx->lun);
+            return;
+        }
+        
+        /* Copy backup GPT header data. */
+        memcpy(&gpt_header, block, sizeof(GuidPartitionTableHeader));
+        
+        /* Verify backup GPT header CRC32 checksum. */
+        header_crc32 = gpt_header.header_crc32;
+        gpt_header.header_crc32 = 0;
+        header_crc32_calc = crc32Calculate(&gpt_header, gpt_header.header_size);
+        gpt_header.header_crc32 = header_crc32;
+        
+        if (header_crc32_calc != header_crc32)
+        {
+            USBHSFS_LOG("Invalid CRC32 checksum for backup GPT header at LBA 0x%lX! (%08X != %08X) (interface %d, LUN %u).", gpt_lba, header_crc32_calc, header_crc32, lun_ctx->usb_if_id, \
+                        lun_ctx->lun);
+            return;
+        }
+        
+        USBHSFS_LOG("Backup GPT header located at LBA 0x%lX (interface %d, LUN %u).", gpt_lba, lun_ctx->usb_if_id, lun_ctx->lun);
     }
     
     /* Verify GPT partition entry size. */
