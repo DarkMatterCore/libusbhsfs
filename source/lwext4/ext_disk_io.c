@@ -47,7 +47,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
     bdev = calloc(1, sizeof(struct ext4_blockdev));
     if (!bdev)
     {
-        USBHSFS_LOG("Failed to allocate memory for ext4_blockdev object!");
+        USBHSFS_LOG_MSG("Failed to allocate memory for ext4_blockdev object!");
         goto end;
     }
     
@@ -55,7 +55,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
     bdev->bdif = calloc(1, sizeof(struct ext4_blockdev_iface));
     if (!bdev->bdif)
     {
-        USBHSFS_LOG("Failed to allocate memory for ext4_blockdev_iface object!");
+        USBHSFS_LOG_MSG("Failed to allocate memory for ext4_blockdev_iface object!");
         goto end;
     }
     
@@ -66,7 +66,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
     bdev->bdif->ph_bbuf = calloc(1, lun_ctx->block_length);
     if (!bdev->bdif->ph_bbuf)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for block size buffer!", lun_ctx->block_length);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for block size buffer!", lun_ctx->block_length);
         goto end;
     }
     

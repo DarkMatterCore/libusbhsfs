@@ -54,7 +54,7 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
         if (formatted_str[formatted_str_len - 1] == '.') formatted_str[--formatted_str_len] = '\0';
         
         /* Log message. */
-        usbHsFsUtilsWriteFormattedStringToLogFile(function, "%s (file \"%s\", line %d, level 0x%X).", formatted_str, file, line, level);
+        usbHsFsLogWriteFormattedStringToLogFile(function, "%s (file \"%s\", line %d, level 0x%X).", formatted_str, file, line, level);
     }
     
     /* Free allocated buffer. */
@@ -110,7 +110,7 @@ ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const 
     {
         case S_IFDIR:   /* Directory. */
         case S_IFREG:   /* File. */
-            USBHSFS_LOG("Creating inode in directory \"%s\" named \"%s\".", full_path.dir, full_path.name);
+            USBHSFS_LOG_MSG("Creating inode in directory \"%s\" named \"%s\".", full_path.dir, full_path.name);
             ni = ntfs_create(dir_ni, 0, uname, uname_len, type);
             break;
         case S_IFLNK:   /* Symbolic link. */
@@ -122,7 +122,7 @@ ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const 
                 goto end;
             }
             
-            USBHSFS_LOG("Creating symlink in directory \"%s\" named \"%s\" targetting \"%s\".", full_path.dir, full_path.name, target);
+            USBHSFS_LOG_MSG("Creating symlink in directory \"%s\" named \"%s\" targetting \"%s\".", full_path.dir, full_path.name, target);
             ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
             break;
         default:        /* Invalid entry. */
@@ -182,7 +182,7 @@ int ntfs_inode_link(ntfs_vd *vd, const char *old_path, const char *new_path)
     }
     
     /* Link the entry to its new parent directory. */
-    USBHSFS_LOG("Linking inode \"%s\" to \"%s\".", full_old_path.path, full_new_path.path);
+    USBHSFS_LOG_MSG("Linking inode \"%s\" to \"%s\".", full_old_path.path, full_new_path.path);
     ret = ntfs_link(ni, dir_ni, uname, uname_len);
     
 end:
@@ -235,7 +235,7 @@ int ntfs_inode_unlink(ntfs_vd *vd, const char *path)
         goto end;
     }
     
-    USBHSFS_LOG("Unlinking inode \"%s\" from \"%s\".", full_path.name, full_path.dir);
+    USBHSFS_LOG_MSG("Unlinking inode \"%s\" from \"%s\".", full_path.name, full_path.dir);
     
     /* Unlink entry from its parent. */
     /* 'ni' and 'dir_ni' are always closed by ntfs_delete(), even if it fails. */
@@ -264,7 +264,7 @@ void ntfs_inode_update_times_filtered(ntfs_vd *vd, ntfs_inode *ni, ntfs_time_upd
     /* Update entry times. */
     if (mask)
     {
-        USBHSFS_LOG("Updating access times for inode %lu (mask 0x%X).", ni->mft_no, mask);
+        USBHSFS_LOG_MSG("Updating access times for inode %lu (mask 0x%X).", ni->mft_no, mask);
         ntfs_inode_update_times(ni, mask);
     }
 }
@@ -281,17 +281,17 @@ static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *pa
         goto end;
     }
     
-    USBHSFS_LOG("Opening requested inode \"%s\" (reparse depth %d).", path, reparse_depth);
+    USBHSFS_LOG_MSG("Opening requested inode \"%s\" (reparse depth %d).", path, reparse_depth);
     
     /* Open requested inode. */
     ni = ntfs_pathname_to_inode(vd->vol, NULL, path);
     if (!ni)
     {
-        USBHSFS_LOG("Failed to open requested inode \"%s\" (errno %d).", path, errno);
+        USBHSFS_LOG_MSG("Failed to open requested inode \"%s\" (errno %d).", path, errno);
         goto end;
     }
     
-    USBHSFS_LOG("Successfully opened inode from path \"%s\" (mft_no %lu).", path, ni->mft_no);
+    USBHSFS_LOG_MSG("Successfully opened inode from path \"%s\" (mft_no %lu).", path, ni->mft_no);
     
     /* If the entry was found and it has reparse data, then resolve the true entry. */
     /* This effectively follows directory junctions and symbolic links until the target entry is found. */
@@ -305,7 +305,7 @@ static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *pa
         ntfs_inode_close(ni);
         
         /* Open the target entry. */
-        USBHSFS_LOG("Following inode symlink \"%s\" -> \"%s\".", path, target);
+        USBHSFS_LOG_MSG("Following inode symlink \"%s\" -> \"%s\".", path, target);
         ni = ntfs_inode_open_from_path_reparse(vd, target, ++reparse_depth);
         
         /* Clean up. */
@@ -320,7 +320,7 @@ end:
 /* Check ntfsdev_fixpath(). */
 static void ntfs_split_path(const char *path, ntfs_path *p)
 {
-    USBHSFS_LOG("Input path: \"%s\".", path);
+    USBHSFS_LOG_MSG("Input path: \"%s\".", path);
     
     /* Setup NTFS path. */
     memset(p, 0, sizeof(ntfs_path));
@@ -341,5 +341,5 @@ static void ntfs_split_path(const char *path, ntfs_path *p)
     *buf_sep = '\0';
     p->name = (buf_sep + 1);
     
-    USBHSFS_LOG("Output strings -> Path: \"%s\" | Directory: \"%s\" | Name: \"%s\".", p->path, p->dir, p->name);
+    USBHSFS_LOG_MSG("Output strings -> Path: \"%s\" | Directory: \"%s\" | Name: \"%s\".", p->path, p->dir, p->name);
 }

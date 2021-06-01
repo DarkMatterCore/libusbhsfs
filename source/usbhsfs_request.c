@@ -24,7 +24,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !out)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -35,7 +35,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
     max_lun = memalign(USB_XFER_BUF_ALIGNMENT, len);
     if (!max_lun)
     {
-        USBHSFS_LOG("Failed to allocate memory! (interface %d).", usb_if_session->ID);
+        USBHSFS_LOG_MSG("Failed to allocate memory! (interface %d).", usb_if_session->ID);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -44,14 +44,14 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_GET_MAX_LUN, 0, if_num, len, max_lun, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
         goto end;
     }
     
     /* Check transferred data size. */
     if (xfer_size != len)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer read 0x%X byte(s), expected 0x%X! (interface %d).", xfer_size, len, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer read 0x%X byte(s), expected 0x%X! (interface %d).", xfer_size, len, usb_if_session->ID);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
@@ -74,7 +74,7 @@ Result usbHsFsRequestMassStorageReset(UsbHsClientIfSession *usb_if_session)
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session))
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -83,7 +83,7 @@ Result usbHsFsRequestMassStorageReset(UsbHsClientIfSession *usb_if_session)
     
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_RESET, 0, if_num, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
     
 end:
     return rc;
@@ -102,7 +102,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || idx >= usb_if_session->inf.device_desc.bNumConfigurations || !out_buf || !out_buf_size)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -111,7 +111,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     config_desc = memalign(USB_XFER_BUF_ALIGNMENT, len);
     if (!config_desc)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for the minimal configuration descriptor! (interface %d, index %u).", len, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the minimal configuration descriptor! (interface %d, index %u).", len, usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -120,14 +120,14 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, len, config_desc, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (minimal) (interface %d, index %u).", rc, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (minimal) (interface %d, index %u).", rc, usb_if_session->ID, idx);
         goto end;
     }
     
     /* Check transferred data size. */
     if (xfer_size != len)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (minimal) (interface %d, index %u).", xfer_size, len, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (minimal) (interface %d, index %u).", xfer_size, len, usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
@@ -137,7 +137,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     /* Verify configuration descriptor. */
     if (config_desc->bLength != len || config_desc->bDescriptorType != USB_DT_CONFIG || config_desc->wTotalLength <= config_desc->bLength)
     {
-        USBHSFS_LOG("Invalid configuration descriptor! (minimal) (interface %d, index %u).", usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("Invalid configuration descriptor! (minimal) (interface %d, index %u).", usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
         goto end;
     }
@@ -147,7 +147,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     buf = memalign(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength + 1);
     if (!buf)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for the full configuration descriptor! (interface %d, index %u).", config_desc->wTotalLength + 1, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the full configuration descriptor! (interface %d, index %u).", config_desc->wTotalLength + 1, usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -156,14 +156,14 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, config_desc->wTotalLength, buf, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (full) (interface %d, index %u).", rc, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (full) (interface %d, index %u).", rc, usb_if_session->ID, idx);
         goto end;
     }
     
     /* Check transferred data size. */
     if (xfer_size != config_desc->wTotalLength)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (full) (interface %d, index %u).", xfer_size, config_desc->wTotalLength, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (full) (interface %d, index %u).", xfer_size, config_desc->wTotalLength, usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
@@ -174,7 +174,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     struct usb_config_descriptor *full_config_desc = (struct usb_config_descriptor*)buf;
     if (memcmp(config_desc, full_config_desc, len) != 0)
     {
-        USBHSFS_LOG("Invalid configuration descriptor! (full) (interface %d, index %u).", usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("Invalid configuration descriptor! (full) (interface %d, index %u).", usb_if_session->ID, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
         goto end;
     }
@@ -204,7 +204,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !out_buf || !out_buf_size)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -213,7 +213,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     string_desc = memalign(USB_XFER_BUF_ALIGNMENT, len);
     if (!string_desc)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for the string descriptor! (interface %d, language ID 0x%04X, index 0x%02X).", len, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the string descriptor! (interface %d, language ID 0x%04X, index 0x%02X).", len, usb_if_session->ID, lang_id, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -222,14 +222,14 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, lang_id, len, string_desc, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, language ID 0x%04X, index 0x%02X).", rc, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, language ID 0x%04X, index 0x%02X).", rc, usb_if_session->ID, lang_id, idx);
         goto end;
     }
     
     /* Check transferred data size. */
     if (!xfer_size || (xfer_size % 2) != 0)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s)! (interface %d, language ID 0x%04X, index 0x%02X).", xfer_size, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer got 0x%X byte(s)! (interface %d, language ID 0x%04X, index 0x%02X).", xfer_size, usb_if_session->ID, lang_id, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
@@ -239,7 +239,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     /* Verify string descriptor. */
     if (string_desc->bLength != xfer_size || string_desc->bDescriptorType != USB_DT_STRING)
     {
-        USBHSFS_LOG("Invalid string descriptor! (interface %d, language ID 0x%04X, index 0x%02X).", usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("Invalid string descriptor! (interface %d, language ID 0x%04X, index 0x%02X).", usb_if_session->ID, lang_id, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_IoError);
         goto end;
     }
@@ -249,7 +249,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     buf = calloc(1, xfer_size);
     if (!buf)
     {
-        USBHSFS_LOG("Failed to allocate 0x%X bytes for the string descriptor data! (interface %d, language ID 0x%04X, index 0x%02X).", xfer_size, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the string descriptor data! (interface %d, language ID 0x%04X, index 0x%02X).", xfer_size, usb_if_session->ID, lang_id, idx);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -277,7 +277,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !usb_ep_session || !serviceIsActive(&(usb_ep_session->s)) || !out)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -288,7 +288,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
     status = memalign(USB_XFER_BUF_ALIGNMENT, len);
     if (!status)
     {
-        USBHSFS_LOG("Failed to allocate memory! (interface %d, endpoint 0x%02X).", usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("Failed to allocate memory! (interface %d, endpoint 0x%02X).", usb_if_session->ID, ep_addr);
         rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
         goto end;
     }
@@ -297,14 +297,14 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_GET_STATUS, 0, ep_addr, len, status, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         goto end;
     }
     
     /* Check transferred data size. */
     if (xfer_size != len)
     {
-        USBHSFS_LOG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (interface %d, endpoint 0x%02X).", xfer_size, len, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer got 0x%X byte(s), expected 0x%X! (interface %d, endpoint 0x%02X).", xfer_size, len, usb_if_session->ID, ep_addr);
         rc = MAKERESULT(Module_Libnx, LibnxError_BadUsbCommsRead);
         goto end;
     }
@@ -326,7 +326,7 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsClientIfSession *usb_if_sessi
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !usb_ep_session || !serviceIsActive(&(usb_ep_session->s)))
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -335,7 +335,7 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsClientIfSession *usb_if_sessi
     
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_CLEAR_FEATURE, USB_FEATURE_ENDPOINT_HALT, ep_addr, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
     
 end:
     return rc;
@@ -350,7 +350,7 @@ Result usbHsFsRequestSetInterface(UsbHsClientIfSession *usb_if_session)
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session))
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -360,7 +360,7 @@ Result usbHsFsRequestSetInterface(UsbHsClientIfSession *usb_if_session)
     
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_INTERFACE, if_alt_setting, if_num, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, number %u, alt %u).", rc, usb_if_session->ID, if_num, if_alt_setting);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, number %u, alt %u).", rc, usb_if_session->ID, if_num, if_alt_setting);
     
 end:
     return rc;
@@ -374,7 +374,7 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
     
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !usb_ep_session || !serviceIsActive(&(usb_ep_session->s)) || !buf || !size || !xfer_size)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
         goto end;
     }
@@ -386,13 +386,13 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
     rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         
         /* Attempt to clear this endpoint if it was STALLed. */
         rc_halt = usbHsFsRequestGetEndpointStatus(usb_if_session, usb_ep_session, &status);
         if (R_SUCCEEDED(rc_halt) && status)
         {
-            USBHSFS_LOG("Clearing STALL status (interface %d, endpoint 0x%02X).", usb_if_session->ID, ep_addr);
+            USBHSFS_LOG_MSG("Clearing STALL status (interface %d, endpoint 0x%02X).", usb_if_session->ID, ep_addr);
             rc_halt = usbHsFsRequestClearEndpointHaltFeature(usb_if_session, usb_ep_session);
         }
         
@@ -400,7 +400,7 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
         if (R_SUCCEEDED(rc_halt) && retry)
         {
             rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
-            if (R_FAILED(rc)) USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+            if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         }
     }
     

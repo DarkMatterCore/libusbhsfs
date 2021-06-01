@@ -28,7 +28,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
 {
     if (!drive_ctx || !usb_if)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         return false;
     }
     
@@ -44,7 +44,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     drive_ctx->xfer_buf = usbHsFsRequestAllocateXferBuffer();
     if (!drive_ctx->xfer_buf)
     {
-        USBHSFS_LOG("Failed to allocate USB transfer buffer! (interface %d).", usb_if->inf.ID);
+        USBHSFS_LOG_MSG("Failed to allocate USB transfer buffer! (interface %d).", usb_if->inf.ID);
         goto end;
     }
     
@@ -52,14 +52,14 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     rc = usbHsAcquireUsbIf(usb_if_session, usb_if);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+        USBHSFS_LOG_MSG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
         goto end;
     }
     
     /* Setup interface and endpoint descriptors. */
     if (!usbHsFsDriveSetupInterfaceAndEndpointDescriptors(drive_ctx))
     {
-        USBHSFS_LOG("Failed to setup interface and endpoint descriptors! (interface %d).", usb_if->inf.ID);
+        USBHSFS_LOG_MSG("Failed to setup interface and endpoint descriptors! (interface %d).", usb_if->inf.ID);
         goto end;
     }
     
@@ -81,7 +81,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         if (R_MODULE(rc) != Module_Libnx) usbHsFsDriveClearStallStatus(drive_ctx);
     }
     
-    USBHSFS_LOG("Max LUN count (interface %d): %u.", drive_ctx->usb_if_id, drive_ctx->max_lun);
+    USBHSFS_LOG_MSG("Max LUN count (interface %d): %u.", drive_ctx->usb_if_id, drive_ctx->max_lun);
     
     /* Bail out if we're dealing with a UASP interface (for now). */
     if (drive_ctx->uasp) goto end;
@@ -90,7 +90,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     drive_ctx->lun_ctx = calloc(drive_ctx->max_lun, sizeof(UsbHsFsDriveLogicalUnitContext));
     if (!drive_ctx->lun_ctx)
     {
-        USBHSFS_LOG("Failed to allocate memory for LUN contexts! (interface %d).", drive_ctx->usb_if_id);
+        USBHSFS_LOG_MSG("Failed to allocate memory for LUN contexts! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
     
@@ -113,7 +113,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         /* Start LUN. */
         if (!usbHsFsScsiStartDriveLogicalUnit(lun_ctx))
         {
-            USBHSFS_LOG("Failed to initialize context for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
+            USBHSFS_LOG_MSG("Failed to initialize context for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
             (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
             continue;
         }
@@ -121,7 +121,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         /* Initialize filesystem contexts for this LUN. */
         if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(lun_ctx))
         {
-            USBHSFS_LOG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
+            USBHSFS_LOG_MSG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
             usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, true);   /* Destroy LUN context. */
             (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
         }
@@ -129,7 +129,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     
     if (!drive_ctx->lun_count)
     {
-        USBHSFS_LOG("Failed to initialize any LUN/filesystem contexts! (interface %d).", drive_ctx->usb_if_id);
+        USBHSFS_LOG_MSG("Failed to initialize any LUN/filesystem contexts! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
     
@@ -275,14 +275,14 @@ static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext
     rc = usbHsFsRequestGetConfigurationDescriptor(usb_if_session, 0, &config_desc_start, &config_desc_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsFsRequestGetConfigurationDescriptor failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsFsRequestGetConfigurationDescriptor failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
         goto end;
     }
     
     /* Do not proceed if the configuration descriptor is too small to hold a USB Attached SCSI interface. */
     if (config_desc_size < (sizeof(struct usb_config_descriptor) + sizeof(struct usb_interface_descriptor) + ((sizeof(struct usb_endpoint_descriptor) + sizeof(struct usb_pipe_usage_descriptor)) * 4)))
     {
-        USBHSFS_LOG("Configuration descriptor is too small to hold a UASP interface (interface %d).", usb_if_session->ID);
+        USBHSFS_LOG_MSG("Configuration descriptor is too small to hold a UASP interface (interface %d).", usb_if_session->ID);
         goto end;
     }
     
@@ -305,13 +305,13 @@ static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext
         /* Check descriptor size. */
         if (!cur_desc_size)
         {
-            USBHSFS_LOG("Size for descriptor 0x%02X at offset 0x%X is zero! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
+            USBHSFS_LOG_MSG("Size for descriptor 0x%02X at offset 0x%X is zero! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
             goto end;
         }
         
         if ((config_desc_offset + cur_desc_size) > config_desc_size)
         {
-            USBHSFS_LOG("Descriptor 0x%02X at offset 0x%X exceeds configuration descriptor size! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
+            USBHSFS_LOG_MSG("Descriptor 0x%02X at offset 0x%X exceeds configuration descriptor size! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
             goto end;
         }
         
@@ -339,7 +339,7 @@ static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext
         if (success) break;
     }
     
-    if (!success) USBHSFS_LOG("Unable to find and/or set a UASP interface descriptor (interface %d).", usb_if_session->ID);
+    if (!success) USBHSFS_LOG_MSG("Unable to find and/or set a UASP interface descriptor (interface %d).", usb_if_session->ID);
     
 end:
     if (config_desc_start) free(config_desc_start);
@@ -347,7 +347,7 @@ end:
     /* Fallback to the Bulk-Only Transport interface if we must. */
     if (!success && orig_interface_desc.bInterfaceProtocol == USB_PROTOCOL_BULK_ONLY_TRANSPORT && usbHsFsDriveChangeInterfaceDescriptor(usb_if_session, &orig_interface_desc))
     {
-        USBHSFS_LOG("Proceeding with BOT interface descriptor (interface %d).", usb_if_session->ID);
+        USBHSFS_LOG_MSG("Proceeding with BOT interface descriptor (interface %d).", usb_if_session->ID);
         success = usbHsFsDriveSetupEndpointDescriptors(drive_ctx, NULL, NULL, NULL);
     }
     
@@ -369,7 +369,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
     /* Check if we're trying to set the same interface. */
     if (new_if_num == cur_if_num && new_if_alt_setting == cur_if_alt_setting)
     {
-        USBHSFS_LOG("Trying to set an interface descriptor that matches the current one (interface %d).", usb_if_session->ID);
+        USBHSFS_LOG_MSG("Trying to set an interface descriptor that matches the current one (interface %d).", usb_if_session->ID);
         return true;
     }
     
@@ -379,7 +379,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
         rc = usbHsIfSetInterface(usb_if_session, NULL, new_if_num);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG("usbHsIfSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+            USBHSFS_LOG_MSG("usbHsIfSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
             return false;
         }
     }
@@ -390,7 +390,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
         rc = usbHsIfGetAlternateInterface(usb_if_session, NULL, new_if_alt_setting);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG("usbHsIfGetAlternateInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+            USBHSFS_LOG_MSG("usbHsIfGetAlternateInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
             return false;
         }
     }
@@ -400,7 +400,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
     /*rc = usbHsFsRequestSetInterface(usb_if_session);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsFsRequestSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsFsRequestSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
         return false;
     }*/
     
@@ -456,13 +456,13 @@ static bool usbHsFsDriveSetupEndpointDescriptors(UsbHsFsDriveContext *drive_ctx,
         /* Check descriptor size. */
         if (!cur_desc_size)
         {
-            USBHSFS_LOG("Size for descriptor 0x%02X at offset 0x%X is zero! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
+            USBHSFS_LOG_MSG("Size for descriptor 0x%02X at offset 0x%X is zero! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
             goto end;
         }
         
         if ((config_desc_offset + cur_desc_size) > config_desc_size)
         {
-            USBHSFS_LOG("Descriptor 0x%02X at offset 0x%X exceeds configuration descriptor size! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
+            USBHSFS_LOG_MSG("Descriptor 0x%02X at offset 0x%X exceeds configuration descriptor size! (interface %d).", cur_desc_type, config_desc_offset, usb_if_session->ID);
             goto end;
         }
         
@@ -498,7 +498,7 @@ static bool usbHsFsDriveSetupEndpointDescriptors(UsbHsFsDriveContext *drive_ctx,
         
         if ((input && pipe_id != USB_PIPE_USAGE_ID_STS && pipe_id != USB_PIPE_USAGE_ID_DATA_IN) || (!input && pipe_id != USB_PIPE_USAGE_ID_CMD && pipe_id != USB_PIPE_USAGE_ID_DATA_OUT))
         {
-            USBHSFS_LOG("Pipe ID 0x%02X doesn't match direction from endpoint 0x%02X! (interface %d).", pipe_id, ep_addr, usb_if_session->ID);
+            USBHSFS_LOG_MSG("Pipe ID 0x%02X doesn't match direction from endpoint 0x%02X! (interface %d).", pipe_id, ep_addr, usb_if_session->ID);
             goto end;
         }
         
@@ -508,7 +508,7 @@ static bool usbHsFsDriveSetupEndpointDescriptors(UsbHsFsDriveContext *drive_ctx,
         
         if (!usbHsFsDriveGetEndpointSession(usb_if_session, usb_ep_session, input, ep_addr))
         {
-            USBHSFS_LOG("Failed to retrieve endpoint session! (interface %d, endpoint 0x%02X, pipe ID 0x%02X).", usb_if_session->ID, ep_addr, pipe_id);
+            USBHSFS_LOG_MSG("Failed to retrieve endpoint session! (interface %d, endpoint 0x%02X, pipe ID 0x%02X).", usb_if_session->ID, ep_addr, pipe_id);
             goto end;
         }
         
@@ -558,7 +558,7 @@ static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session,
             Result rc = usbHsIfOpenUsbEp(usb_if_session, usb_ep_session, 1, ep_desc->wMaxPacketSize, ep_desc);
             if (R_FAILED(rc))
             {
-                USBHSFS_LOG("usbHsIfOpenUsbEp failed! (0x%08X) (interface %d, endpoint 0x%02X, %u URB(s)).", rc, usb_if_session->ID, ep_desc->bEndpointAddress, max_burst);
+                USBHSFS_LOG_MSG("usbHsIfOpenUsbEp failed! (0x%08X) (interface %d, endpoint 0x%02X, %u URB(s)).", rc, usb_if_session->ID, ep_desc->bEndpointAddress, max_burst);
                 break;
             }
             
@@ -594,7 +594,7 @@ static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx)
     rc = usbHsFsRequestGetStringDescriptor(usb_if_session, 0, 0, &lang_ids, &lang_ids_count);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("Unable to retrieve supported language IDs! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("Unable to retrieve supported language IDs! (0x%08X) (interface %d).", rc, usb_if_session->ID);
         return;
     }
     
@@ -641,7 +641,7 @@ static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsClientIfSession *
     units = utf16_to_utf8(NULL, string_data, 0);
     if (units <= 0)
     {
-        USBHSFS_LOG("Failed to get UTF-8 string size for string descriptor! (interface %d, language ID 0x%04X, index %u).", usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("Failed to get UTF-8 string size for string descriptor! (interface %d, language ID 0x%04X, index %u).", usb_if_session->ID, lang_id, idx);
         goto end;
     }
     
@@ -649,7 +649,7 @@ static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsClientIfSession *
     utf8_str = calloc(units + 1, sizeof(char));
     if (!utf8_str)
     {
-        USBHSFS_LOG("Failed to allocate 0x%lX byte-long UTF-8 buffer for string descriptor! (interface %d, language ID 0x%04X, index %u).", units + 1, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("Failed to allocate 0x%lX byte-long UTF-8 buffer for string descriptor! (interface %d, language ID 0x%04X, index %u).", units + 1, usb_if_session->ID, lang_id, idx);
         goto end;
     }
     
@@ -657,11 +657,11 @@ static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsClientIfSession *
     units = utf16_to_utf8((u8*)utf8_str, string_data, (size_t)units);
     if (units <= 0)
     {
-        USBHSFS_LOG("UTF-16 to UTF-8 conversion failed for string descriptor! (interface %d, language ID 0x%04X, index %u).", usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("UTF-16 to UTF-8 conversion failed for string descriptor! (interface %d, language ID 0x%04X, index %u).", usb_if_session->ID, lang_id, idx);
         goto end;
     }
     
-    USBHSFS_LOG("Converted string (interface %d, language ID 0x%04X, index %u): \"%s\".", usb_if_session->ID, lang_id, idx, utf8_str);
+    USBHSFS_LOG_MSG("Converted string (interface %d, language ID 0x%04X, index %u): \"%s\".", usb_if_session->ID, lang_id, idx, utf8_str);
     
     /* Update output. */
     *out_buf = utf8_str;

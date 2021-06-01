@@ -173,7 +173,7 @@ static int ffdev_open(struct _reent *r, void *fd, const char *path, int flags, i
         ffdev_flags |= FA_OPEN_EXISTING;
     }
     
-    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, __usbhsfs_dev_path_buf, flags, ffdev_flags);
+    USBHSFS_LOG_MSG("Opening file \"%s\" (\"%s\") with flags 0x%X (0x%X).", path, __usbhsfs_dev_path_buf, flags, ffdev_flags);
     
     /* Reset file descriptor. */
     memset(file, 0, sizeof(FIL));
@@ -198,7 +198,7 @@ static int ffdev_close(struct _reent *r, void *fd)
     /* Sanity check. */
     if (!file) ff_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Closing file from \"%u:\".", file->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Closing file from \"%u:\".", file->obj.fs->pdrv);
     
     /* Close file. */
     res = ff_close(file);
@@ -235,7 +235,7 @@ static ssize_t ffdev_write(struct _reent *r, void *fd, const char *ptr, size_t l
         if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
     }
     
-    USBHSFS_LOG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
+    USBHSFS_LOG_MSG("Writing 0x%lX byte(s) to file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
     
     /* Write file data. */
     res = ff_write(file, ptr, (UINT)len, &bw);
@@ -261,7 +261,7 @@ static ssize_t ffdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     /* Check if the file was opened with read access. */
     if (!(file->flag & FA_READ)) ff_set_error_and_exit(EBADF);
     
-    USBHSFS_LOG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
+    USBHSFS_LOG_MSG("Reading 0x%lX byte(s) from file in \"%u:\" at offset 0x%lX.", len, file->obj.fs->pdrv, ff_tell(file));
     
     /* Read file data. */
     res = ff_read(file, ptr, (UINT)len, &br);
@@ -305,7 +305,7 @@ static off_t ffdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     /* Calculate actual offset. */
     offset += pos;
     
-    USBHSFS_LOG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Seeking to offset 0x%lX from file in \"%u:\".", offset, file->obj.fs->pdrv);
     
     /* Perform file seek. */
     res = ff_lseek(file, (FSIZE_t)offset);
@@ -340,7 +340,7 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
     /* Fix input path. */
     if (!ffdev_fixpath(r, file, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
     
     /* Get stats. */
     res = ff_stat(__usbhsfs_dev_path_buf, &info);
@@ -374,7 +374,7 @@ static int ffdev_unlink(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Delete file. */
     res = ff_unlink(__usbhsfs_dev_path_buf);
@@ -397,7 +397,7 @@ static int ffdev_chdir(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!ffdev_fixpath(r, name, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Open directory. */
     res = ff_opendir(&dir, __usbhsfs_dev_path_buf);
@@ -436,7 +436,7 @@ static int ffdev_rename(struct _reent *r, const char *oldName, const char *newNa
     /* Fix input paths. */
     if (!ffdev_fixpath(r, oldName, &fs_ctx, old_path) || !ffdev_fixpath(r, newName, &fs_ctx, new_path)) ff_end;
     
-    USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
+    USBHSFS_LOG_MSG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
     
     /* Rename entry. */
     res = _ff_rename(old_path, new_path);
@@ -459,7 +459,7 @@ static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Create directory. */
     res = ff_mkdir(__usbhsfs_dev_path_buf);
@@ -486,7 +486,7 @@ static DIR_ITER *ffdev_diropen(struct _reent *r, DIR_ITER *dirState, const char 
     /* Fix input path. */
     if (!ffdev_fixpath(r, path, &fs_ctx, NULL)) ff_end;
     
-    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Reset directory state. */
     memset(dir, 0, sizeof(DIR));
@@ -515,7 +515,7 @@ static int ffdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     
     ff_declare_dir_state;
     
-    USBHSFS_LOG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Resetting directory state from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Reset directory state. */
     res = ff_rewinddir(dir);
@@ -539,7 +539,7 @@ static int ffdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, s
     
     ff_declare_dir_state;
     
-    USBHSFS_LOG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Getting info from next directory entry in \"%u:\".", dir->obj.fs->pdrv);
     
     /* Read directory. */
     res = ff_readdir(dir, &info);
@@ -576,7 +576,7 @@ static int ffdev_dirclose(struct _reent *r, DIR_ITER *dirState)
     
     ff_declare_dir_state;
     
-    USBHSFS_LOG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Closing directory from \"%u:\".", dir->obj.fs->pdrv);
     
     /* Close directory. */
     res = ff_closedir(dir);
@@ -608,7 +608,7 @@ static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf
     /* Generate volume name. */
     sprintf(name, "%u:", fatfs->pdrv);
     
-    USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
+    USBHSFS_LOG_MSG("Getting filesystem stats for \"%s\" (\"%s\").", path, name);
     
     /* Get volume information. */
     res = ff_getfree(name, &free_clusters, &fatfs);
@@ -648,7 +648,7 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
     /* Check if the file was opened with write access. */
     if (!(file->flag & FA_WRITE)) ff_set_error_and_exit(EBADF);
     
-    USBHSFS_LOG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
+    USBHSFS_LOG_MSG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
     
     /* Seek to the provided offset. */
     res = ff_lseek(file, (FSIZE_t)len);
@@ -674,7 +674,7 @@ static int ffdev_fsync(struct _reent *r, void *fd)
     /* Sanity check. */
     if (!file) ff_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
+    USBHSFS_LOG_MSG("Synchronizing data for file in \"%u:\".", file->obj.fs->pdrv);
     
     /* Synchronize file. */
     res = ff_sync(file);
@@ -750,7 +750,7 @@ static int ffdev_utimes(struct _reent *r, const char *filename, const struct tim
         info.ftime = (WORD)(timestamp & 0xFF);
     }
     
-    USBHSFS_LOG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, __usbhsfs_dev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
+    USBHSFS_LOG_MSG("Setting last modification time for \"%s\" (\"%s\") to %u-%02u-%02u %02u:%02u:%02u (0x%04X%04X).", filename, __usbhsfs_dev_path_buf, caltime.year, caltime.month, caltime.day, caltime.hour, \
                 caltime.minute, caltime.second, info.fdate, info.ftime);
     
     /* Change timestamp. */
@@ -775,7 +775,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
     
     if (!r || !path || !*path || !fs_ctx || !*fs_ctx || !(fatfs = (*fs_ctx)->fatfs) || !(cwd = (*fs_ctx)->cwd)) ff_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Input path: \"%s\".", path);
+    USBHSFS_LOG_MSG("Input path: \"%s\".", path);
     
     /* Generate FatFs mount name ID. */
     sprintf(name, "%u:", fatfs->pdrv);
@@ -814,7 +814,7 @@ static bool ffdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogica
         sprintf(outptr, "%s%s%s", name, cwd, path);
     }
     
-    USBHSFS_LOG("Fixed path: \"%s\".", outptr);
+    USBHSFS_LOG_MSG("Fixed path: \"%s\".", outptr);
     
 end:
     ff_return_bool;
@@ -852,7 +852,7 @@ static void ffdev_fill_stat(struct stat *st, const FILINFO *info)
     st->st_mtime = mktime(&timeinfo);
     st->st_ctime = 0;                   /* Not returned by FatFs + only available under exFAT. */
     
-    USBHSFS_LOG("DOS timestamp: 0x%04X%04X. Generated POSIX timestamp: %lu.", info->fdate, info->ftime, st->st_mtime);
+    USBHSFS_LOG_MSG("DOS timestamp: 0x%04X%04X. Generated POSIX timestamp: %lu.", info->fdate, info->ftime, st->st_mtime);
 }
 
 static int ffdev_translate_error(FRESULT res)
@@ -916,7 +916,7 @@ static int ffdev_translate_error(FRESULT res)
             break;
     }
     
-    USBHSFS_LOG("FRESULT: %u. Translated errno: %d.", res, ret);
+    USBHSFS_LOG_MSG("FRESULT: %u. Translated errno: %d.", res, ret);
     
     return ret;
 }

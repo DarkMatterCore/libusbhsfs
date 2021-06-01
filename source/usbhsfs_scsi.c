@@ -331,7 +331,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     
     if (!lun_ctx || !usbHsFsDriveIsValidContext((drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx)) || (lun = lun_ctx->lun) >= UMS_MAX_LUN)
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         return false;
     }
     
@@ -346,7 +346,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     
     bool ret = false, eject_supported = false, write_protect = false, fua_supported = false, long_lba = false;
     
-    USBHSFS_LOG("Starting LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
+    USBHSFS_LOG_MSG("Starting LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
     
     /* Reset medium present flag. */
     g_mediumPresent = true;
@@ -354,7 +354,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     /* Send Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, &inquiry_data))
     {
-        USBHSFS_LOG("Inquiry failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Inquiry failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
         goto end;
     }
     
@@ -363,14 +363,14 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     /* Check if we're dealing with an available Direct Access Block device. */
     if (inquiry_data.peripheral_qualifier != ScsiPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiPeripheralDeviceType_DirectAccessBlock)
     {
-        USBHSFS_LOG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
         goto end;
     }
     
     /* Check if the SPC standard version is valid. */
     if (inquiry_data.version > ScsiInquirySPCVersion_SPC5)
     {
-        USBHSFS_LOG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
         goto end;
     }
     
@@ -384,14 +384,14 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
             /* Send Start Stop Unit SCSI command. */
             if (!usbHsFsScsiSendStartStopUnitCommand(drive_ctx, lun, true))
             {
-                USBHSFS_LOG("Start Stop Unit failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+                USBHSFS_LOG_MSG("Start Stop Unit failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
                 goto end;
             }
             
             /* Update eject supported flag. */
             eject_supported = true;
         } else {
-            USBHSFS_LOG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+            USBHSFS_LOG_MSG("Prevent/Allow Medium Removal failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
             if (!g_mediumPresent) goto end;
         }
     }
@@ -407,7 +407,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
         write_protect = (mode_parameter_header_6.wp == 1);
         fua_supported = (mode_parameter_header_6.dpofua == 1);
     } else {
-        USBHSFS_LOG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Mode Sense (6) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
         
         /* Send Mode Sense (10) SCSI command. */
         /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
@@ -421,21 +421,21 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
             fua_supported = (mode_parameter_header_10.dpofua == 1);
         } else {
             /* Nothing else to do - Mode Sense commands most likely aren't supported at all. */
-            USBHSFS_LOG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+            USBHSFS_LOG_MSG("Mode Sense (10) failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
         }
     }
     
     /* Send Test Unit Ready SCSI command. */
     if (!usbHsFsScsiSendTestUnitReadyCommand(drive_ctx, lun))
     {
-        USBHSFS_LOG("Test Unit Ready failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Test Unit Ready failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
         goto end;
     }
     
     /* Send Read Capacity (10) SCSI command. */
     if (!usbHsFsScsiSendReadCapacity10Command(drive_ctx, lun, &read_capacity_10_data))
     {
-        USBHSFS_LOG("Read Capacity (10) failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Read Capacity (10) failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
         goto end;
     }
     
@@ -446,7 +446,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
         /* Send Read Capacity (16) SCSI command. */
         if (!usbHsFsScsiSendReadCapacity16Command(drive_ctx, lun, &read_capacity_16_data))
         {
-            USBHSFS_LOG("Read Capacity (16) failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
+            USBHSFS_LOG_MSG("Read Capacity (16) failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
             goto end;
         }
         
@@ -467,7 +467,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     /* Verify block length. */
     if (!block_length || (block_length % BLKDEV_MIN_BLOCK_SIZE) != 0 || block_length > BLKDEV_MAX_BLOCK_SIZE)
     {
-        USBHSFS_LOG("Invalid block length! (0x%lX) (interface %d, LUN %u).", block_length, drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Invalid block length! (0x%lX) (interface %d, LUN %u).", block_length, drive_ctx->usb_if_id, lun);
         goto end;
     }
     
@@ -475,11 +475,11 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     capacity = (block_count * block_length);
     if (!capacity)
     {
-        USBHSFS_LOG("Capacity is zero! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Capacity is zero! (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
         goto end;
     }
     
-    USBHSFS_LOG("Capacity (interface %d, LUN %u): 0x%lX byte(s).", drive_ctx->usb_if_id, lun, capacity);
+    USBHSFS_LOG_MSG("Capacity (interface %d, LUN %u): 0x%lX byte(s).", drive_ctx->usb_if_id, lun, capacity);
     
     /* Fill LUN context. */
     lun_ctx->removable = inquiry_data.rmb;
@@ -501,7 +501,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     /* Update return value. */
     ret = true;
     
-    USBHSFS_LOG("Successfully started LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
+    USBHSFS_LOG_MSG("Successfully started LUN #%u from drive with interface ID %d.", lun, drive_ctx->usb_if_id);
     
 end:
     /* Stop removable LUN if we successfully started it but the overall process failed. */
@@ -557,7 +557,7 @@ bool usbHsFsScsiReadLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, v
         u64 xfer_size = ((u64)xfer_block_count * (u64)block_length);
         
         /* Read blocks. */
-        USBHSFS_LOG("Reading 0x%X block(s) from LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Reading 0x%X block(s) from LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendRead16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendRead10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
@@ -582,7 +582,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     /* Make sure write protection is disabled. */
     if (lun_ctx->write_protect)
     {
-        USBHSFS_LOG("Error: write protection enabled! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Error: write protection enabled! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun);
         return false;
     }
     
@@ -602,7 +602,7 @@ bool usbHsFsScsiWriteLogicalUnitBlocks(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
         u64 xfer_size = ((u64)xfer_block_count * (u64)block_length);
         
         /* Write blocks. */
-        USBHSFS_LOG("Writing 0x%X block(s) to LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
+        USBHSFS_LOG_MSG("Writing 0x%X block(s) to LBA 0x%lX (0x%lX byte[s]) (interface %d, LUN %u).", xfer_block_count, cur_block_addr, xfer_size, lun_ctx->usb_if_id, lun);
         cmd = (long_lba ? usbHsFsScsiSendWrite16Command(drive_ctx, lun, data_buf + data_transferred, cur_block_addr, xfer_block_count, block_length, fua) : \
                           usbHsFsScsiSendWrite10Command(drive_ctx, lun, data_buf + data_transferred, (u32)cur_block_addr, (u16)xfer_block_count, block_length, fua));
         if (!cmd) break;
@@ -627,7 +627,7 @@ static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, 
     cbw.CBWCB[0] = ScsiCommandOperationCode_TestUnitReady;  /* Operation code. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
@@ -644,7 +644,7 @@ static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *drive_ctx, u
     cbw.CBWCB[4] = (u8)cbw.dCBWDataTransferLength;          /* Set allocation length. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, sense_data);
 }
 
@@ -665,7 +665,7 @@ static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun
     memcpy(&(cbw.CBWCB[3]), &allocation_length, sizeof(u16));   /* Set allocation length. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, inquiry_data);
 }
 
@@ -684,7 +684,7 @@ static bool usbHsFsScsiSendModeSense6Command(UsbHsFsDriveContext *drive_ctx, u8 
     cbw.CBWCB[4] = allocation_length;                                   /* Set allocation length. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -703,7 +703,7 @@ static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, 
     cbw.CBWCB[4] = (start ? 1 : 2);                         /* Start: LOEJ cleared, START set. Stop: LOEJ set, START cleared. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
@@ -720,7 +720,7 @@ static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext 
     cbw.CBWCB[4] = (prevent ? 1 : 0);                                   /* Prevent or allow medium removal. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
@@ -735,7 +735,7 @@ static bool usbHsFsScsiSendReadCapacity10Command(UsbHsFsDriveContext *drive_ctx,
     cbw.CBWCB[0] = ScsiCommandOperationCode_ReadCapacity10; /* Operation code. Everything else is ignored/deprecated. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, read_capacity_10_data);
 }
 
@@ -757,7 +757,7 @@ static bool usbHsFsScsiSendRead10Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
     memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16)); /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -779,7 +779,7 @@ static bool usbHsFsScsiSendWrite10Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16)); /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -801,7 +801,7 @@ static bool usbHsFsScsiSendSynchronizeCache10Command(UsbHsFsDriveContext *drive_
     memcpy(&(cbw.CBWCB[7]), &block_count, sizeof(u16));         /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
@@ -823,7 +823,7 @@ static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8
     memcpy(&(cbw.CBWCB[7]), &allocation_length, sizeof(u16));           /* Set allocation length. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -845,7 +845,7 @@ static bool usbHsFsScsiSendRead16Command(UsbHsFsDriveContext *drive_ctx, u8 lun,
     memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));    /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -867,7 +867,7 @@ static bool usbHsFsScsiSendWrite16Command(UsbHsFsDriveContext *drive_ctx, u8 lun
     memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));    /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
@@ -889,7 +889,7 @@ static bool usbHsFsScsiSendSynchronizeCache16Command(UsbHsFsDriveContext *drive_
     memcpy(&(cbw.CBWCB[10]), &block_count, sizeof(u32));        /* Transfer length (big endian). */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, NULL);
 }
 
@@ -909,7 +909,7 @@ static bool usbHsFsScsiSendReadCapacity16Command(UsbHsFsDriveContext *drive_ctx,
     memcpy(&(cbw.CBWCB[10]), &allocation_length, sizeof(u32));  /* Set allocation length. */
     
     /* Send command. */
-    USBHSFS_LOG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, read_capacity_16_data);
 }
 
@@ -928,7 +928,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
 {
     if (!drive_ctx || !cbw || (cbw->dCBWDataTransferLength && !buf))
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         return false;
     }
     
@@ -962,7 +962,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         rc = usbHsFsRequestPostBuffer(usb_if_session, usb_ep_session, xfer_buf, xfer_size, &rest_size, false);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%08X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%08X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
             
             /* Try to receive a CSW. */
             if (usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw))
@@ -979,7 +979,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         /* Check transferred data size. */
         if (rest_size != xfer_size)
         {
-            USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
             
             /* Check if we received an unexpected CSW. */
             if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
@@ -992,7 +992,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
                     /* Check if we got a Phase Error status. */
                     if (csw.bCSWStatus == ScsiCommandStatus_PhaseError)
                     {
-                        USBHSFS_LOG("Phase error status in unexpected CSW! (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
+                        USBHSFS_LOG_MSG("Phase error status in unexpected CSW! (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
                         usbHsFsScsiResetRecovery(drive_ctx);
                     }
                     
@@ -1021,7 +1021,7 @@ req_sense:
         /* Send Request Sense SCSI command. */
         if (!usbHsFsScsiSendRequestSenseCommand(drive_ctx, cbw->bCBWLUN, &sense_data))
         {
-            USBHSFS_LOG("Request Sense failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
+            USBHSFS_LOG_MSG("Request Sense failed! (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
             ret = false;
             goto end;
         }
@@ -1036,7 +1036,7 @@ req_sense:
             case ScsiSenseKey_UnitAttention:
             case ScsiSenseKey_Completed:
                 /* Proceed normally. */
-                USBHSFS_LOG("Proceeding normally (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
+                USBHSFS_LOG_MSG("Proceeding normally (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
                 
                 /* Retry Inquiry command if we're dealing with an unexpected CSW with no sense data. */
                 if (unexpected_csw && cbw->CBWCB[0] == ScsiCommandOperationCode_Inquiry) ret = usbHsFsScsiTransferCommand(drive_ctx, cbw, buf);
@@ -1046,7 +1046,7 @@ req_sense:
                 /* Check if we're dealing with a medium not present. */
                 if (sense_data.additional_sense_code == SCSI_ASC_MEDIUM_NOT_PRESENT)
                 {
-                    USBHSFS_LOG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
+                    USBHSFS_LOG_MSG("Error: medium not present! (0x%02X / 0x%02X) (interface %d, LUN %u).", sense_data.sense_key, sense_data.additional_sense_code, drive_ctx->usb_if_id, cbw->bCBWLUN);
                     ret = false;
                     g_mediumPresent = false;    /* Update medium present flag. */
                     break;
@@ -1056,12 +1056,12 @@ req_sense:
                 usbHsFsUtilsSleep(1);
             case ScsiSenseKey_AbortedCommand:
                 /* Retry command once more. */
-                USBHSFS_LOG("Retrying command 0x%02X (0x%X) (interface %d, LUN %u).", cbw->CBWCB[0], sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
+                USBHSFS_LOG_MSG("Retrying command 0x%02X (0x%X) (interface %d, LUN %u).", cbw->CBWCB[0], sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
                 ret = usbHsFsScsiTransferCommand(drive_ctx, cbw, buf);
                 break;
             default:
                 /* Unrecoverable error. */
-                USBHSFS_LOG("Unrecoverable error (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
+                USBHSFS_LOG_MSG("Unrecoverable error (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
                 ret = false;
                 break;
         }
@@ -1089,14 +1089,14 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     rc = usbHsEpPostBuffer(&(drive_ctx->usb_out_ep_session[0]), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
     
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandBlockWrapper))
     {
-        USBHSFS_LOG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
     
@@ -1109,14 +1109,14 @@ ep_chk:
     rc = usbHsFsRequestGetEndpointStatus(&(drive_ctx->usb_if_session), &(drive_ctx->usb_out_ep_session[0]), &status);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("Failed to get output endpoint status! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Failed to get output endpoint status! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
     /* If the endpoint was STALLed, something went wrong. Let's perform a reset recovery. */
     if (status)
     {
-        USBHSFS_LOG("Output endpoint STALLed (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Output endpoint STALLed (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
         usbHsFsScsiResetRecovery(drive_ctx);
     }
     
@@ -1136,14 +1136,14 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     rc = usbHsFsRequestPostBuffer(&(drive_ctx->usb_if_session), &(drive_ctx->usb_in_ep_session[0]), csw, sizeof(ScsiCommandStatusWrapper), &xfer_size, true);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandStatusWrapper))
     {
-        USBHSFS_LOG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandStatusWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandStatusWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
@@ -1152,14 +1152,14 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     /* Check CSW signature. */
     if (csw->dCSWSignature != __builtin_bswap32(SCSI_CSW_SIGNATURE))
     {
-        USBHSFS_LOG("Invalid CSW signature! (0x%08X) (interface %d, LUN %u).", __builtin_bswap32(csw->dCSWSignature), drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Invalid CSW signature! (0x%08X) (interface %d, LUN %u).", __builtin_bswap32(csw->dCSWSignature), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
     /* Check CSW tag. */
     if (csw->dCSWTag != cbw->dCBWTag)
     {
-        USBHSFS_LOG("Invalid CSW tag! (0x%08X != 0x%08X) (interface %d, LUN %u).", csw->dCSWTag, cbw->dCBWTag, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Invalid CSW tag! (0x%08X != 0x%08X) (interface %d, LUN %u).", csw->dCSWTag, cbw->dCBWTag, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
@@ -1172,7 +1172,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     /* Check if we got a Phase Error status. */
     if (csw->bCSWStatus == ScsiCommandStatus_PhaseError)
     {
-        USBHSFS_LOG("Phase error status in CSW! (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Phase error status in CSW! (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
     
@@ -1182,7 +1182,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
 end:
     if (R_SUCCEEDED(rc) && !valid_csw)
     {
-        USBHSFS_LOG("Invalid CSW detected (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Invalid CSW detected (interface %d, LUN %u). Performing BOT mass storage reset.", drive_ctx->usb_if_id, cbw->bCBWLUN);
         usbHsFsScsiResetRecovery(drive_ctx);
     }
     
@@ -1192,7 +1192,7 @@ end:
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx)
 {
     /* Perform BOT mass storage reset. */
-    if (R_FAILED(usbHsFsRequestMassStorageReset(&(drive_ctx->usb_if_session)))) USBHSFS_LOG("BOT mass storage reset failed! (interface %d).", drive_ctx->usb_if_id);
+    if (R_FAILED(usbHsFsRequestMassStorageReset(&(drive_ctx->usb_if_session)))) USBHSFS_LOG_MSG("BOT mass storage reset failed! (interface %d).", drive_ctx->usb_if_id);
     
     /* Clear STALL status from both endpoints. */
     usbHsFsDriveClearStallStatus(drive_ctx);

@@ -133,7 +133,7 @@ static int extdev_open(struct _reent *r, void *fd, const char *path, int flags, 
     /* Fix input path. */
     if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Opening file \"%s\" (\"%s\") with flags 0x%X.", path, __usbhsfs_dev_path_buf, flags);
+    USBHSFS_LOG_MSG("Opening file \"%s\" (\"%s\") with flags 0x%X.", path, __usbhsfs_dev_path_buf, flags);
     
     /* Reset file descriptor. */
     memset(file, 0, sizeof(ext4_file));
@@ -158,7 +158,7 @@ static int extdev_close(struct _reent *r, void *fd)
     /* Sanity check. */
     if (!file) ext_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Closing file %u.", file->inode);
+    USBHSFS_LOG_MSG("Closing file %u.", file->inode);
     
     /* Close file. */
     ret = ext4_fclose(file);
@@ -192,7 +192,7 @@ static ssize_t extdev_write(struct _reent *r, void *fd, const char *ptr, size_t 
         if (ret) ext_set_error_and_exit(ret);
     }
     
-    USBHSFS_LOG("Writing 0x%lX byte(s) to file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
+    USBHSFS_LOG_MSG("Writing 0x%lX byte(s) to file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
     
     /* Write file data. */
     ret = ext4_fwrite(file, ptr, len, &bw);
@@ -215,7 +215,7 @@ static ssize_t extdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     /* Sanity check. */
     if (!file || !ptr || !len) ext_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Reading 0x%lX byte(s) from file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
+    USBHSFS_LOG_MSG("Reading 0x%lX byte(s) from file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
     
     /* Read file data. */
     ret = ext4_fread(file, ptr, len, &br);
@@ -238,7 +238,7 @@ static off_t extdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     /* Sanity check. */
     if (!file) ext_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Seeking 0x%lX byte(s) from current position in file %u.", pos, file->inode);
+    USBHSFS_LOG_MSG("Seeking 0x%lX byte(s) from current position in file %u.", pos, file->inode);
     
     /* Perform file seek. */
     ret = ext4_fseek(file, (s64)pos, (u32)dir);
@@ -297,7 +297,7 @@ static int extdev_stat(struct _reent *r, const char *file, struct stat *st)
     /* Fix input path. */
     if (!extdev_fixpath(r, file, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
     
     /* Get inode. */
     ret = ext4_raw_inode_fill(__usbhsfs_dev_path_buf, &inode_num, &inode);
@@ -323,7 +323,7 @@ static int extdev_link(struct _reent *r, const char *existing, const char *newLi
     /* Fix input paths. */
     if (!extdev_fixpath(r, existing, &fs_ctx, existing_path) || !extdev_fixpath(r, newLink, &fs_ctx, new_path)) ext_end;
     
-    USBHSFS_LOG("Linking \"%s\" (\"%s\") to \"%s\" (\"%s\").", existing, existing_path, newLink, new_path);
+    USBHSFS_LOG_MSG("Linking \"%s\" (\"%s\") to \"%s\" (\"%s\").", existing, existing_path, newLink, new_path);
     
     /* Create hard link. */
     ret = ext4_flink(existing_path, new_path);
@@ -344,7 +344,7 @@ static int extdev_unlink(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!extdev_fixpath(r, name, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Delete file. */
     ret = ext4_fremove(__usbhsfs_dev_path_buf);
@@ -367,7 +367,7 @@ static int extdev_chdir(struct _reent *r, const char *name)
     /* Fix input path. */
     if (!extdev_fixpath(r, name, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
     
     /* Open directory. */
     ret = ext4_dir_open(&dir, __usbhsfs_dev_path_buf);
@@ -406,7 +406,7 @@ static int extdev_rename(struct _reent *r, const char *oldName, const char *newN
     /* Fix input paths. */
     if (!extdev_fixpath(r, oldName, &fs_ctx, old_path) || !extdev_fixpath(r, newName, &fs_ctx, new_path)) ext_end;
     
-    USBHSFS_LOG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
+    USBHSFS_LOG_MSG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
     
     /* Rename entry. */
     ret = ext4_frename(old_path, new_path);
@@ -429,7 +429,7 @@ static int extdev_mkdir(struct _reent *r, const char *path, int mode)
     /* Fix input path. */
     if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Create directory. */
     ret = ext4_dir_mk(__usbhsfs_dev_path_buf);
@@ -456,7 +456,7 @@ static DIR_ITER *extdev_diropen(struct _reent *r, DIR_ITER *dirState, const char
     /* Fix input path. */
     if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
     
     /* Reset directory state. */
     memset(dir, 0, sizeof(ext4_dir));
@@ -483,7 +483,7 @@ static int extdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     
     ext_declare_dir_state;
     
-    USBHSFS_LOG("Resetting state from directory %u.", dir->f.inode);
+    USBHSFS_LOG_MSG("Resetting state from directory %u.", dir->f.inode);
     
     /* Reset directory state. */
     ext4_dir_entry_rewind(dir);
@@ -508,7 +508,7 @@ static int extdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
     
     ext_declare_dir_state;
     
-    USBHSFS_LOG("Getting info from next entry in directory %u.", dir->f.inode);
+    USBHSFS_LOG_MSG("Getting info from next entry in directory %u.", dir->f.inode);
     
     while(true)
     {
@@ -559,7 +559,7 @@ static int extdev_dirclose(struct _reent *r, DIR_ITER *dirState)
     
     ext_declare_dir_state;
     
-    USBHSFS_LOG("Closing directory %u.", dir->f.inode);
+    USBHSFS_LOG_MSG("Closing directory %u.", dir->f.inode);
     
     /* Close directory. */
     ret = ext4_dir_close(dir);
@@ -591,7 +591,7 @@ static int extdev_statvfs(struct _reent *r, const char *path, struct statvfs *bu
     /* Generate lwext4 mount point. */
     sprintf(mount_point, "/%s/", vd->dev_name);
     
-    USBHSFS_LOG("Getting filesystem stats for \"%s\" (\"%s\").", path, mount_point);
+    USBHSFS_LOG_MSG("Getting filesystem stats for \"%s\" (\"%s\").", path, mount_point);
     
     /* Get volume information. */
     ret = ext4_mount_point_stats(mount_point, &mount_stats);
@@ -628,7 +628,7 @@ static int extdev_ftruncate(struct _reent *r, void *fd, off_t len)
     /* Sanity check. */
     if (!file || len < 0) ext_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Truncating file %u to 0x%lX bytes.", file->inode, len);
+    USBHSFS_LOG_MSG("Truncating file %u to 0x%lX bytes.", file->inode, len);
     
     /* Truncate file. */
     ret = ext4_ftruncate(file, (u64)len);
@@ -658,7 +658,7 @@ static int extdev_chmod(struct _reent *r, const char *path, mode_t mode)
     /* Fix input path. */
     if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
     
-    USBHSFS_LOG("Changing permissions for \"%s\" (\"%s\") to %o.", path, __usbhsfs_dev_path_buf, mode);
+    USBHSFS_LOG_MSG("Changing permissions for \"%s\" (\"%s\") to %o.", path, __usbhsfs_dev_path_buf, mode);
     
     /* Change permissions. */
     ret = ext4_mode_set(__usbhsfs_dev_path_buf, (u32)mode);
@@ -700,7 +700,7 @@ static int extdev_fchmod(struct _reent *r, void *fd, mode_t mode)
         ext_set_error_and_exit(ret);
     }
     
-    USBHSFS_LOG("Changing permissions for file %u to %o.", file->inode, mode);
+    USBHSFS_LOG_MSG("Changing permissions for file %u to %o.", file->inode, mode);
     
     /* Change permissions. */
 	orig_mode = ext4_inode_get_mode(sblock, inode_ref.inode);
@@ -755,7 +755,7 @@ static int extdev_utimes(struct _reent *r, const char *filename, const struct ti
         TIMEVAL_TO_TIMESPEC(&(times[1]), &(ts_times[1]));
     }
     
-    USBHSFS_LOG("Setting last access and modification times for \"%s\" (\"%s\") to 0x%lX and 0x%lX, respectively.", filename, __usbhsfs_dev_path_buf, ts_times[0].tv_sec, ts_times[1].tv_sec);
+    USBHSFS_LOG_MSG("Setting last access and modification times for \"%s\" (\"%s\") to 0x%lX and 0x%lX, respectively.", filename, __usbhsfs_dev_path_buf, ts_times[0].tv_sec, ts_times[1].tv_sec);
     
     /* Set access time. */
     ret = ext4_atime_set(__usbhsfs_dev_path_buf, (u32)ts_times[0].tv_sec);
@@ -783,7 +783,7 @@ static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogic
     
     if (!r || !path || !*path || !fs_ctx || !*fs_ctx || !(vd = (*fs_ctx)->ext) || !(cwd = (*fs_ctx)->cwd)) ext_set_error_and_exit(EINVAL);
     
-    USBHSFS_LOG("Input path: \"%s\".", path);
+    USBHSFS_LOG_MSG("Input path: \"%s\".", path);
     
     /* Generate lwext4 mount point. */
     sprintf(mount_point, "/%s", vd->dev_name);
@@ -822,7 +822,7 @@ static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogic
         sprintf(outptr, "%s%s%s", mount_point, cwd, path);
     }
     
-    USBHSFS_LOG("Fixed path: \"%s\".", outptr);
+    USBHSFS_LOG_MSG("Fixed path: \"%s\".", outptr);
     
 end:
     ext_return_bool;

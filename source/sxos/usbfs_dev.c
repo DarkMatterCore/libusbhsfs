@@ -136,7 +136,7 @@ bool usbfsdev_register(void)
         device_idx = AddDevice(&usbfsdev_devoptab);
         if (device_idx < 0)
         {
-            USBHSFS_LOG("Failed to add devoptab device for \"" USBFS_MOUNT_NAME "\"!");
+            USBHSFS_LOG_MSG("Failed to add devoptab device for \"" USBFS_MOUNT_NAME "\"!");
             goto end;
         }
     }

@@ -24,34 +24,18 @@
 
 #include "usb_common.h"
 #include "usbhsfs.h"
+#include "usbhsfs_log.h"
 
-#define ALIGN_DOWN(x, y)                            ((x) & ~((y) - 1))
+#define ALIGN_DOWN(x, y)    ((x) & ~((y) - 1))
 
-#ifdef DEBUG
-/// Logfile helper macros.
-#define USBHSFS_LOG(fmt, ...)                       usbHsFsUtilsWriteFormattedStringToLogFile(__func__, fmt, ##__VA_ARGS__)
-#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) usbHsFsUtilsWriteBinaryDataToLogFile(data, data_size, __func__, fmt, ##__VA_ARGS__)
+#define SCOPED_LOCK(mtx)    for(UsbHsFsUtilsScopedLock scoped_lock __attribute__((__cleanup__(usbHsFsUtilsUnlockScope))) = usbHsFsUtilsLockScope(mtx); scoped_lock.cond; scoped_lock.cond = 0)
 
-/// Logfile management functions.
-
-/// Writes the provided string to the logfile.
-void usbHsFsUtilsWriteStringToLogFile(const char *src);
-
-/// Writes a formatted log string to the logfile.
-__attribute__((format(printf, 2, 3))) void usbHsFsUtilsWriteFormattedStringToLogFile(const char *func_name, const char *fmt, ...);
-
-/// Writes a formatted log string + a hex string representation of the provided binary data to the logfile.
-__attribute__((format(printf, 4, 5))) void usbHsFsUtilsWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *func_name, const char *fmt, ...);
-
-/// Forces a flush operation on the logfile.
-void usbHsFsUtilsFlushLogFile(void);
-
-/// Closes the logfile.
-void usbHsFsUtilsCloseLogFile(void);
-#else
-#define USBHSFS_LOG(fmt, ...)                       do {} while(0)
-#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) do {} while(0)
-#endif
+/// Used by scoped locks.
+typedef struct {
+    Mutex *mtx;
+    bool lock;
+    int cond;
+} UsbHsFsUtilsScopedLock;
 
 /// Returns true if we're running under SX OS.
 bool usbHsFsUtilsSXOSCustomFirmwareCheck(void);
@@ -66,6 +50,19 @@ void usbHsFsUtilsTrimString(char *str);
 NX_INLINE void usbHsFsUtilsSleep(u64 seconds)
 {
     if (seconds) svcSleepThread(seconds * (u64)1000000000);
+}
+
+/// Wrappers used in scoped locks.
+NX_INLINE UsbHsFsUtilsScopedLock usbHsFsUtilsLockScope(Mutex *mtx)
+{
+    UsbHsFsUtilsScopedLock scoped_lock = { mtx, !mutexIsLockedByCurrentThread(mtx), 1 };
+    if (scoped_lock.lock) mutexLock(scoped_lock.mtx);
+    return scoped_lock;
+}
+
+NX_INLINE void usbHsFsUtilsUnlockScope(UsbHsFsUtilsScopedLock *scoped_lock)
+{
+    if (scoped_lock->lock) mutexUnlock(scoped_lock->mtx);
 }
 
 #endif /* __USBHSFS_UTILS_H__ */

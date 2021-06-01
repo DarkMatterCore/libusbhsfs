@@ -36,7 +36,7 @@ bool ext_mount(ext_vd *vd)
     
     if (!vd || !vd->bdev || !vd->bdev->bdif || !vd->bdev->bdif->ph_bbuf || !(lun_ctx = (UsbHsFsDriveLogicalUnitContext*)vd->bdev->bdif->p_user) || !vd->dev_name[0])
     {
-        USBHSFS_LOG("Invalid parameters!");
+        USBHSFS_LOG_MSG("Invalid parameters!");
         return false;
     }
     
@@ -47,7 +47,7 @@ bool ext_mount(ext_vd *vd)
     res = ext4_device_register(vd->bdev, vd->dev_name);
     if (res)
     {
-        USBHSFS_LOG("Failed to register EXT block device \"%s\"! (%d).", vd->dev_name, res);
+        USBHSFS_LOG_MSG("Failed to register EXT block device \"%s\"! (%d).", vd->dev_name, res);
         goto end;
     }
     
@@ -60,7 +60,7 @@ bool ext_mount(ext_vd *vd)
     res = ext4_mount(vd->dev_name, mount_point, read_only);
     if (res)
     {
-        USBHSFS_LOG("Failed to mount EXT volume \"%s\"! (%d).", mount_point, res);
+        USBHSFS_LOG_MSG("Failed to mount EXT volume \"%s\"! (%d).", mount_point, res);
         goto end;
     }
     
@@ -75,7 +75,7 @@ bool ext_mount(ext_vd *vd)
         /* Replay EXT journal depending on the mount flags. */
         if ((vd->flags & UsbHsFsMountFlags_ReplayJournal) && (res = ext4_recover(mount_point)))
         {
-            USBHSFS_LOG("Failed to replay EXT journal from volume \"%s\"! (%d).", mount_point, res);
+            USBHSFS_LOG_MSG("Failed to replay EXT journal from volume \"%s\"! (%d).", mount_point, res);
             goto end;
         }
         
@@ -83,7 +83,7 @@ bool ext_mount(ext_vd *vd)
         res = ext4_journal_start(mount_point);
         if (res)
         {
-            USBHSFS_LOG("Failed to start journaling on EXT volume \"%s\"! (%d).", mount_point, res);
+            USBHSFS_LOG_MSG("Failed to start journaling on EXT volume \"%s\"! (%d).", mount_point, res);
             goto end;
         }
     }
@@ -117,16 +117,16 @@ void ext_umount(ext_vd *vd)
     
     /* Stop EXT journaling. */
     res = ext4_journal_stop(mount_point);
-    if (res) USBHSFS_LOG("Failed to stop EXT journaling for volume \"%s\"! (%d).", mount_point, res);
+    if (res) USBHSFS_LOG_MSG("Failed to stop EXT journaling for volume \"%s\"! (%d).", mount_point, res);
     
     /* Unmount EXT volume. */
     res = ext4_umount(mount_point);
-    if (res) USBHSFS_LOG("Failed to unmount EXT volume \"%s\"! (%d).", mount_point, res);
+    if (res) USBHSFS_LOG_MSG("Failed to unmount EXT volume \"%s\"! (%d).", mount_point, res);
     
     /* Unregister EXT block device. */
     /* Do not check for errors in this call - it always returns ENOENT. */
     res = ext4_device_unregister(vd->dev_name);
-    //if (res) USBHSFS_LOG("Failed to unregister EXT block device \"%s\"! (%d).", vd->dev_name, res);
+    //if (res) USBHSFS_LOG_MSG("Failed to unregister EXT block device \"%s\"! (%d).", vd->dev_name, res);
 }
 
 static void ext_get_version(ext_vd *vd)
