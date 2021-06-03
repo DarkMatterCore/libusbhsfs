@@ -25,7 +25,7 @@
 static Mutex g_managerMutex = 0;
 static bool g_usbHsFsInitialized = false;
 
-static bool g_isSXOS = false, g_sxOSDeviceAvailable = false;
+static bool g_isSXOS = false, g_isSXOSDeviceAvailable = false;
 static UsbHsFsDevice g_sxOSDevice = {0};
 
 static UsbHsInterfaceFilter g_usbInterfaceFilter = {0};
@@ -61,274 +61,270 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
 
 Result usbHsFsInitialize(u8 event_idx)
 {
-    mutexLock(&g_managerMutex);
-    
     Result rc = 0;
-    bool usbhs_init = false, usb_event_created = false, usbfs_init = false;
     
-    /* Check if the interface has already been initialized. */
-    if (g_usbHsFsInitialized) goto end;
-    
+    SCOPED_LOCK(&g_managerMutex)
+    {
+        /* Check if the interface has already been initialized. */
+        if (g_usbHsFsInitialized) break;
+        
+        bool usbhs_init = false, usb_event_created = false, usbfs_init = false;
+        
 #ifdef DEBUG
-    /* Start new log session. */
-    usbHsFsLogWriteStringToLogFile("________________________________________________________________\r\n");
-    USBHSFS_LOG_MSG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
-    
-    /* Log Horizon OS version. */
-    u32 hos_version = hosversionGet();
-    USBHSFS_LOG_MSG("Horizon OS version: %u.%u.%u.", HOSVER_MAJOR(hos_version), HOSVER_MINOR(hos_version), HOSVER_MICRO(hos_version));
+        /* Start new log session. */
+        usbHsFsLogWriteStringToLogFile("________________________________________________________________\r\n");
+        USBHSFS_LOG_MSG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+        
+        /* Log Horizon OS version. */
+        u32 hos_version = hosversionGet();
+        USBHSFS_LOG_MSG("Horizon OS version: %u.%u.%u.", HOSVER_MAJOR(hos_version), HOSVER_MINOR(hos_version), HOSVER_MICRO(hos_version));
 #ifdef GPL_BUILD
-    USBHSFS_LOG_MSG("Build type: GPL.");
-    
-    /* Setup NTFS-3G logging. */
-    ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
-    ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_VERBOSE | NTFS_LOG_LEVEL_PROGRESS | NTFS_LOG_LEVEL_WARNING | \
-                        NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE);
-    
-    /* Setup lwext4 logging. */
-    ext4_dmask_set(DEBUG_ALL & ~DEBUG_NOPREFIX);
+        USBHSFS_LOG_MSG("Build type: GPL.");
+        
+        /* Setup NTFS-3G logging. */
+        ntfs_log_set_handler(ntfs_log_handler_usbhsfs);
+        ntfs_log_set_levels(NTFS_LOG_LEVEL_DEBUG | NTFS_LOG_LEVEL_TRACE | NTFS_LOG_LEVEL_QUIET | NTFS_LOG_LEVEL_INFO | NTFS_LOG_LEVEL_VERBOSE | NTFS_LOG_LEVEL_PROGRESS | NTFS_LOG_LEVEL_WARNING | \
+                            NTFS_LOG_LEVEL_ERROR | NTFS_LOG_LEVEL_PERROR | NTFS_LOG_LEVEL_CRITICAL | NTFS_LOG_LEVEL_ENTER | NTFS_LOG_LEVEL_LEAVE);
+        
+        /* Setup lwext4 logging. */
+        ext4_dmask_set(DEBUG_ALL & ~DEBUG_NOPREFIX);
 #else   /* GPL_BUILD */
-    USBHSFS_LOG_MSG("Build type: ISC.");
+        USBHSFS_LOG_MSG("Build type: ISC.");
 #endif  /* GPL_BUILD */
 #else   /* DEBUG */
 #ifdef GPL_BUILD
-    /* Disable NTFS-3G logging. */
-    ntfs_log_set_handler(ntfs_log_handler_null);
-    ntfs_log_set_levels(0);
-    
-    /* Disable lwext4 logging. */
-    ext4_dmask_set(0);
+        /* Disable NTFS-3G logging. */
+        ntfs_log_set_handler(ntfs_log_handler_null);
+        ntfs_log_set_levels(0);
+        
+        /* Disable lwext4 logging. */
+        ext4_dmask_set(0);
 #endif  /* GPL_BUILD */
 #endif  /* DEBUG */
-    
-    /* Check if the deprecated fsp-usb service is running. */
-    /* This custom mitm service offers system-wide UMS support - we definitely don't want to run alongside it to avoid undesired results. */
-    if (usbHsFsUtilsIsFspUsbRunning())
-    {
-        USBHSFS_LOG_MSG("Error: fsp-usb is running!");
-        rc = MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
-        goto end;
-    }
-    
-    /* Check if we're running under SX OS. */
-    /* If true, this completely changes the way the library works. */
-    g_isSXOS = usbHsFsUtilsSXOSCustomFirmwareCheck();
-    USBHSFS_LOG_MSG("Running under SX OS: %s.", g_isSXOS ? "yes" : "no");
-    
-    if (!g_isSXOS)
-    {
-        /* Check if the provided event index value is valid. */
-        if (event_idx > 2)
+        
+        /* Check if the deprecated fsp-usb service is running. */
+        /* This custom mitm service offers system-wide UMS support - we definitely don't want to run alongside it to avoid undesired results. */
+        if (usbHsFsUtilsIsFspUsbRunning())
         {
-            USBHSFS_LOG_MSG("Invalid event index value provided! (%u).", event_idx);
-            rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+            USBHSFS_LOG_MSG("Error: fsp-usb is running!");
+            rc = MAKERESULT(Module_Libnx, LibnxError_IncompatSysVer);
             goto end;
         }
         
-        /* Allocate memory for the USB interfaces. */
-        g_usbInterfaces = malloc(g_usbInterfacesMaxSize);
-        if (!g_usbInterfaces)
+        /* Check if we're running under SX OS. */
+        /* If true, this completely changes the way the library works. */
+        g_isSXOS = usbHsFsUtilsSXOSCustomFirmwareCheck();
+        USBHSFS_LOG_MSG("Running under SX OS: %s.", g_isSXOS ? "yes" : "no");
+        
+        if (!g_isSXOS)
         {
-            USBHSFS_LOG_MSG("Failed to allocate memory for USB interfaces!");
-            rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
-            goto end;
+            /* Check if the provided event index value is valid. */
+            if (event_idx > 2)
+            {
+                USBHSFS_LOG_MSG("Invalid event index value provided! (%u).", event_idx);
+                rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+                goto end;
+            }
+            
+            /* Allocate memory for the USB interfaces. */
+            g_usbInterfaces = malloc(g_usbInterfacesMaxSize);
+            if (!g_usbInterfaces)
+            {
+                USBHSFS_LOG_MSG("Failed to allocate memory for USB interfaces!");
+                rc = MAKERESULT(Module_Libnx, LibnxError_HeapAllocFailed);
+                goto end;
+            }
+            
+            /* Initialize usb:hs service. */
+            rc = usbHsInitialize();
+            if (R_FAILED(rc))
+            {
+                USBHSFS_LOG_MSG("usbHsInitialize failed! (0x%08X).", rc);
+                goto end;
+            }
+            
+            usbhs_init = true;
+            
+            /* Fill USB interface filter. */
+            g_usbInterfaceFilter.Flags = (UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass);
+            g_usbInterfaceFilter.bInterfaceClass = USB_CLASS_MASS_STORAGE;
+            g_usbInterfaceFilter.bInterfaceSubClass = USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET;
+            
+            /* Create USB interface available event for our filter. */
+            /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
+            rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, false, event_idx, &g_usbInterfaceFilter);
+            if (R_FAILED(rc))
+            {
+                USBHSFS_LOG_MSG("usbHsCreateInterfaceAvailableEvent failed! (0x%08X).", rc);
+                goto end;
+            }
+            
+            usb_event_created = true;
+            
+            /* Update USB interface available event index. */
+            g_usbInterfaceAvailableEventIndex = event_idx;
+            
+            /* Retrieve the interface change event. */
+            /* This will be signaled each time a device is removed from the console. */
+            g_usbInterfaceStateChangeEvent = usbHsGetInterfaceStateChangeEvent();
+        } else {
+            /* Initialize usbfs service. */
+            rc = usbFsInitialize();
+            if (R_FAILED(rc))
+            {
+                USBHSFS_LOG_MSG("usbFsInitialize failed! (0x%08X).", rc);
+                goto end;
+            }
+            
+            usbfs_init = true;
+            
+            /* Prepare SX OS device. */
+            memset(&g_sxOSDevice, 0, sizeof(UsbHsFsDevice));
+            sprintf(g_sxOSDevice.manufacturer, "TX");
+            sprintf(g_sxOSDevice.product_name, "USBHDD");
+            sprintf(g_sxOSDevice.name, USBFS_MOUNT_NAME ":");
         }
         
-        /* Initialize usb:hs service. */
-        rc = usbHsInitialize();
+        /* Create user-mode drive manager thread exit event. */
+        ueventCreate(&g_usbDriveManagerThreadExitEvent, true);
+        
+        /* Create user-mode USB status change event. */
+        ueventCreate(&g_usbStatusChangeEvent, true);
+        
+        /* Create and start drive manager background thread. */
+        rc = usbHsFsCreateDriveManagerThread();
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsInitialize failed! (0x%08X).", rc);
+            USBHSFS_LOG_MSG("Failed to create drive manager background thread!");
             goto end;
         }
         
-        usbhs_init = true;
+        /* Update flag. */
+        g_usbHsFsInitialized = true;
         
-        /* Fill USB interface filter. */
-        g_usbInterfaceFilter.Flags = (UsbHsInterfaceFilterFlags_bInterfaceClass | UsbHsInterfaceFilterFlags_bInterfaceSubClass);
-        g_usbInterfaceFilter.bInterfaceClass = USB_CLASS_MASS_STORAGE;
-        g_usbInterfaceFilter.bInterfaceSubClass = USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET;
-        
-        /* Create USB interface available event for our filter. */
-        /* This will be signaled each time a USB device with a descriptor that matches our filter is connected to the console. */
-        rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, false, event_idx, &g_usbInterfaceFilter);
-        if (R_FAILED(rc))
-        {
-            USBHSFS_LOG_MSG("usbHsCreateInterfaceAvailableEvent failed! (0x%08X).", rc);
-            goto end;
-        }
-        
-        usb_event_created = true;
-        
-        /* Update USB interface available event index. */
-        g_usbInterfaceAvailableEventIndex = event_idx;
-        
-        /* Retrieve the interface change event. */
-        /* This will be signaled each time a device is removed from the console. */
-        g_usbInterfaceStateChangeEvent = usbHsGetInterfaceStateChangeEvent();
-    } else {
-        /* Initialize usbfs service. */
-        rc = usbFsInitialize();
-        if (R_FAILED(rc))
-        {
-            USBHSFS_LOG_MSG("usbFsInitialize failed! (0x%08X).", rc);
-            goto end;
-        }
-        
-        usbfs_init = true;
-        
-        /* Prepare SX OS device. */
-        memset(&g_sxOSDevice, 0, sizeof(UsbHsFsDevice));
-        sprintf(g_sxOSDevice.manufacturer, "TX");
-        sprintf(g_sxOSDevice.product_name, "USBHDD");
-        sprintf(g_sxOSDevice.name, USBFS_MOUNT_NAME ":");
-    }
-    
-    /* Create user-mode drive manager thread exit event. */
-    ueventCreate(&g_usbDriveManagerThreadExitEvent, true);
-    
-    /* Create user-mode USB status change event. */
-    ueventCreate(&g_usbStatusChangeEvent, true);
-    
-    /* Create and start drive manager background thread. */
-    rc = usbHsFsCreateDriveManagerThread();
-    if (R_FAILED(rc))
-    {
-        USBHSFS_LOG_MSG("Failed to create drive manager background thread!");
-        goto end;
-    }
-    
-    /* Update flag. */
-    g_usbHsFsInitialized = true;
-    
 end:
-    /* Close usb:hs service if initialization failed. */
-    if (R_FAILED(rc))
-    {
-        if (usbfs_init) usbFsExit();
-        
-        if (usb_event_created) usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, event_idx);
-        
-        if (usbhs_init) usbHsExit();
-        
-        if (g_usbInterfaces)
+        /* Close usb:hs service if initialization failed. */
+        if (R_FAILED(rc))
         {
-            free(g_usbInterfaces);
-            g_usbInterfaces = NULL;
-        }
-        
+            if (usbfs_init) usbFsExit();
+            
+            if (usb_event_created) usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, event_idx);
+            
+            if (usbhs_init) usbHsExit();
+            
+            if (g_usbInterfaces)
+            {
+                free(g_usbInterfaces);
+                g_usbInterfaces = NULL;
+            }
+            
 #ifdef DEBUG
-        usbHsFsLogCloseLogFile();
+            usbHsFsLogCloseLogFile();
 #endif
+        }
     }
-    
-    mutexUnlock(&g_managerMutex);
     
     return rc;
 }
 
 void usbHsFsExit(void)
 {
-    mutexLock(&g_managerMutex);
-    
-    /* Check if the interface has already been initialized. */
-    if (!g_usbHsFsInitialized) goto end;
-    
-    /* Stop and close drive manager background thread. */
-    usbHsFsCloseDriveManagerThread();
-    
-    if (!g_isSXOS)
+    SCOPED_LOCK(&g_managerMutex)
     {
-        /* Destroy the USB interface available event we previously created for our filter. */
-        usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, g_usbInterfaceAvailableEventIndex);
-        g_usbInterfaceAvailableEventIndex = 0;
+        /* Check if the interface has already been initialized. */
+        if (!g_usbHsFsInitialized) break;
         
-        /* Close usb:hs service. */
-        usbHsExit();
+        /* Stop and close drive manager background thread. */
+        usbHsFsCloseDriveManagerThread();
         
-        /* Free USB interfaces. */
-        free(g_usbInterfaces);
-        g_usbInterfaces = NULL;
-    } else {
-        /* Close usbfs service. */
-        usbFsExit();
-    }
-    
+        if (!g_isSXOS)
+        {
+            /* Destroy the USB interface available event we previously created for our filter. */
+            usbHsDestroyInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, g_usbInterfaceAvailableEventIndex);
+            g_usbInterfaceAvailableEventIndex = 0;
+            
+            /* Close usb:hs service. */
+            usbHsExit();
+            
+            /* Free USB interfaces. */
+            free(g_usbInterfaces);
+            g_usbInterfaces = NULL;
+        } else {
+            /* Close usbfs service. */
+            usbFsExit();
+        }
+        
 #ifdef DEBUG
-    /* Close logfile. */
-    usbHsFsLogCloseLogFile();
+        /* Close logfile. */
+        usbHsFsLogCloseLogFile();
 #endif
-    
-    /* Update flag. */
-    g_usbHsFsInitialized = false;
-    
-end:
-    mutexUnlock(&g_managerMutex);
+        
+        /* Update flag. */
+        g_usbHsFsInitialized = false;
+    }
 }
 
 UEvent *usbHsFsGetStatusChangeUserEvent(void)
 {
-    mutexLock(&g_managerMutex);
-    UEvent *event = (g_usbHsFsInitialized ? &g_usbStatusChangeEvent : NULL);
-    mutexUnlock(&g_managerMutex);
+    UEvent *event = NULL;
+    SCOPED_LOCK(&g_managerMutex) event = (g_usbHsFsInitialized ? &g_usbStatusChangeEvent : NULL);
     return event;
 }
 
 u32 usbHsFsGetMountedDeviceCount(void)
 {
-    mutexLock(&g_managerMutex);
-    u32 ret = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_sxOSDeviceAvailable ? 1 : 0)) : 0);
-    mutexUnlock(&g_managerMutex);
+    u32 ret = 0;
+    SCOPED_LOCK(&g_managerMutex) ret = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_isSXOSDeviceAvailable ? 1 : 0)) : 0);
     return ret;
 }
 
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
 {
-    mutexLock(&g_managerMutex);
-    
-    u32 device_count = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_sxOSDeviceAvailable ? 1 : 0)) : 0);
     u32 ret = 0;
     
-    if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count || !out || !max_count)
+    SCOPED_LOCK(&g_managerMutex)
     {
-        USBHSFS_LOG_MSG("Invalid parameters!");
-        goto end;
-    }
-    
-    if (g_isSXOS)
-    {
-        /* Copy device data, update return value and jump to the end. */
-        memcpy(out, &g_sxOSDevice, sizeof(UsbHsFsDevice));
-        ret = device_count;
-        goto end;
-    }
-    
-    for(u32 i = 0; i < g_driveCount; i++)
-    {
-        UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
-        if (!drive_ctx) continue;
+        u32 device_count = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_isSXOSDeviceAvailable ? 1 : 0)) : 0);
         
-        for(u8 j = 0; j < drive_ctx->lun_count; j++)
+        if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count || !out || !max_count)
         {
-            UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[j]);
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+        
+        if (g_isSXOS)
+        {
+            /* Copy device data, update return value and jump to the end. */
+            memcpy(out, &g_sxOSDevice, sizeof(UsbHsFsDevice));
+            ret = device_count;
+            break;
+        }
+        
+        for(u32 i = 0; i < g_driveCount; i++)
+        {
+            UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+            if (!drive_ctx) continue;
             
-            for(u32 k = 0; k < lun_ctx->fs_count; k++)
+            for(u8 j = 0; j < drive_ctx->lun_count; j++)
             {
-                UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[k]);
+                UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[j];
                 
-                /* Fill device element. */
-                UsbHsFsDevice *device = &(out[ret++]);  /* Increase return value. */
-                usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
-                
-                /* Jump out of the loops if we have reached a limit */
-                if (ret >= max_count || ret >= device_count) goto end;
+                for(u32 k = 0; k < lun_ctx->fs_count; k++)
+                {
+                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[k];
+                    
+                    /* Fill device element. */
+                    UsbHsFsDevice *device = &(out[ret++]);  /* Increase return value. */
+                    usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
+                    
+                    /* Jump out of the loops if we have reached a limit */
+                    if (ret >= max_count || ret >= device_count) goto end;
+                }
             }
         }
     }
     
 end:
-    mutexUnlock(&g_managerMutex);
-    
 #ifdef DEBUG
     /* Flush logfile. */
     usbHsFsLogFlushLogFile();
@@ -339,48 +335,47 @@ end:
 
 bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
 {
-    mutexLock(&g_managerMutex);
-    
-    u32 drive_ctx_idx = 0;
     bool ret = false;
     
-    if (!g_usbHsFsInitialized || g_isSXOS || (!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device)
+    SCOPED_LOCK(&g_managerMutex)
     {
-        USBHSFS_LOG_MSG("Invalid parameters!");
-        goto end;
+        u32 drive_ctx_idx = 0;
+        
+        if (!g_usbHsFsInitialized || g_isSXOS || (!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device)
+        {
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+        
+        /* Locate drive context. */
+        for(drive_ctx_idx = 0; drive_ctx_idx < g_driveCount; drive_ctx_idx++)
+        {
+            UsbHsFsDriveContext *drive_ctx = g_driveContexts[drive_ctx_idx];
+            if (!drive_ctx) continue;
+            if (drive_ctx->usb_if_id == device->usb_if_id) break;
+        }
+        
+        if (drive_ctx_idx >= g_driveCount)
+        {
+            USBHSFS_LOG_MSG("Unable to find a matching drive context with USB interface ID %d.", device->usb_if_id);
+            break;
+        }
+        
+        /* Destroy drive context and remove it from our pointer array. */
+        usbHsFsRemoveDriveContextFromListByIndex(drive_ctx_idx, true);
+        
+        USBHSFS_LOG_MSG("Successfully unmounted UMS device with ID %d.", device->usb_if_id);
+        
+        if (signal_status_event)
+        {
+            /* Signal user-mode event. */
+            USBHSFS_LOG_MSG("Signaling status change event.");
+            ueventSignal(&g_usbStatusChangeEvent);
+        }
+        
+        /* Update return value. */
+        ret = true;
     }
-    
-    /* Locate drive context. */
-    for(drive_ctx_idx = 0; drive_ctx_idx < g_driveCount; drive_ctx_idx++)
-    {
-        UsbHsFsDriveContext *drive_ctx = g_driveContexts[drive_ctx_idx];
-        if (!drive_ctx) continue;
-        if (drive_ctx->usb_if_id == device->usb_if_id) break;
-    }
-    
-    if (drive_ctx_idx >= g_driveCount)
-    {
-        USBHSFS_LOG_MSG("Unable to find a matching drive context with USB interface ID %d.", device->usb_if_id);
-        goto end;
-    }
-    
-    /* Destroy drive context and remove it from our pointer array. */
-    usbHsFsRemoveDriveContextFromListByIndex(drive_ctx_idx, true);
-    
-    USBHSFS_LOG_MSG("Successfully unmounted UMS device with ID %d.", device->usb_if_id);
-    
-    if (signal_status_event)
-    {
-        /* Signal user-mode event. */
-        USBHSFS_LOG_MSG("Signaling status change event.");
-        ueventSignal(&g_usbStatusChangeEvent);
-    }
-    
-    /* Update return value. */
-    ret = true;
-    
-end:
-    mutexUnlock(&g_managerMutex);
     
 #ifdef DEBUG
     /* Flush logfile. */
@@ -392,17 +387,14 @@ end:
 
 u32 usbHsFsGetFileSystemMountFlags(void)
 {
-    mutexLock(&g_managerMutex);
-    u32 flags = usbHsFsMountGetFileSystemMountFlags();
-    mutexUnlock(&g_managerMutex);
+    u32 flags = 0;
+    SCOPED_LOCK(&g_managerMutex) flags = usbHsFsMountGetFileSystemMountFlags();
     return flags;
 }
 
 void usbHsFsSetFileSystemMountFlags(u32 flags)
 {
-    mutexLock(&g_managerMutex);
-    usbHsFsMountSetFileSystemMountFlags(flags);
-    mutexUnlock(&g_managerMutex);
+    SCOPED_LOCK(&g_managerMutex) usbHsFsMountSetFileSystemMountFlags(flags);
 }
 
 /* Non-static function not meant to be disclosed to users. */
@@ -410,25 +402,24 @@ bool usbHsFsManagerIsDriveContextPointerValid(UsbHsFsDriveContext *drive_ctx)
 {
     bool ret = false;
     
-    mutexLock(&g_managerMutex);
-    
-    /* Try to find a drive context in our pointer array that matches the provided drive context. */
-    for(u32 i = 0; i < g_driveCount; i++)
+    SCOPED_LOCK(&g_managerMutex)
     {
-        UsbHsFsDriveContext *cur_drive_ctx = g_driveContexts[i];
-        if (!cur_drive_ctx) continue;
-        
-        if (cur_drive_ctx == drive_ctx)
+        /* Try to find a drive context in our pointer array that matches the provided drive context. */
+        for(u32 i = 0; i < g_driveCount; i++)
         {
-            ret = true;
-            break;
+            UsbHsFsDriveContext *cur_drive_ctx = g_driveContexts[i];
+            if (!cur_drive_ctx) continue;
+            
+            if (cur_drive_ctx == drive_ctx)
+            {
+                ret = true;
+                break;
+            }
         }
+        
+        /* Lock drive context mutex if we found a match. */
+        if (ret) mutexLock(&(drive_ctx->mutex));
     }
-    
-    /* Lock drive context mutex if we found a match. */
-    if (ret) mutexLock(&(drive_ctx->mutex));
-    
-    mutexUnlock(&g_managerMutex);
     
     return ret;
 }
@@ -436,43 +427,41 @@ bool usbHsFsManagerIsDriveContextPointerValid(UsbHsFsDriveContext *drive_ctx)
 /* Non-static function not meant to be disclosed to users. */
 UsbHsFsDriveLogicalUnitContext *usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(u8 pdrv)
 {
-    bool lock = !mutexIsLockedByCurrentThread(&g_managerMutex);
     UsbHsFsDriveLogicalUnitContext *ret = NULL;
     
-    if (lock) mutexLock(&g_managerMutex);
-    
-    if (!g_driveCount || !g_driveContexts || pdrv >= FF_VOLUMES)
+    SCOPED_LOCK(&g_managerMutex)
     {
-        USBHSFS_LOG_MSG("Invalid parameters!");
-        goto end;
-    }
-    
-    for(u32 i = 0; i < g_driveCount; i++)
-    {
-        UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
-        if (!drive_ctx) continue;
-        
-        for(u8 j = 0; j < drive_ctx->lun_count; j++)
+        if (!g_driveCount || !g_driveContexts || pdrv >= FF_VOLUMES)
         {
-            UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[j]);
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+        
+        for(u32 i = 0; i < g_driveCount; i++)
+        {
+            UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+            if (!drive_ctx) continue;
             
-            for(u32 k = 0; k < lun_ctx->fs_count; k++)
+            for(u8 j = 0; j < drive_ctx->lun_count; j++)
             {
-                UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[k]);
+                UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[j];
                 
-                if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_FAT && fs_ctx->fatfs && fs_ctx->fatfs->pdrv == pdrv)
+                for(u32 k = 0; k < lun_ctx->fs_count; k++)
                 {
-                    ret = lun_ctx;
-                    goto end;
+                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[k];
+                    
+                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_FAT && fs_ctx->fatfs && fs_ctx->fatfs->pdrv == pdrv)
+                    {
+                        ret = lun_ctx;
+                        goto end;
+                    }
                 }
             }
         }
-    }
-    
-    USBHSFS_LOG_MSG("Unable to find a matching LUN context for filesystem context with FatFs drive number %u!", pdrv);
-    
+        
 end:
-    if (lock) mutexUnlock(&g_managerMutex);
+        if (!ret) USBHSFS_LOG_MSG("Unable to find a matching LUN context for filesystem context with FatFs drive number %u!", pdrv);
+    }
     
     return ret;
 }
@@ -567,35 +556,34 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
         /* Exit event triggered. */
         if (R_SUCCEEDED(rc)) break;
         
-        mutexLock(&g_managerMutex);
-        
-        /* Get UMS mount status. */
-        rc = usbFsGetMountStatus(&cur_status);
-        if (R_SUCCEEDED(rc))
+        SCOPED_LOCK(&g_managerMutex)
         {
-            /* Check if the mount status has changed. */
-            if (cur_status != prev_status)
+            /* Get UMS mount status. */
+            rc = usbFsGetMountStatus(&cur_status);
+            if (R_SUCCEEDED(rc))
             {
-                USBHSFS_LOG_MSG("New status received: %lu.", cur_status);
-                
-                /* Check if the filesystem from the UMS device is truly mounted and if we can register a devoptab interface for it. */
-                g_sxOSDeviceAvailable = (cur_status == USBFS_MOUNTED && usbfsdev_register());
-                
-                /* Unregister devoptab device, if needed. */
-                if (!g_sxOSDeviceAvailable) usbfsdev_unregister();
-                
-                /* Update previous status. */
-                prev_status = cur_status;
-                
-                /* Signal user-mode event. */
-                USBHSFS_LOG_MSG("Signaling status change event.");
-                ueventSignal(&g_usbStatusChangeEvent);
+                /* Check if the mount status has changed. */
+                if (cur_status != prev_status)
+                {
+                    USBHSFS_LOG_MSG("New status received: %lu.", cur_status);
+                    
+                    /* Check if the filesystem from the UMS device is truly mounted and if we can register a devoptab interface for it. */
+                    g_isSXOSDeviceAvailable = (cur_status == USBFS_MOUNTED && usbfsdev_register());
+                    
+                    /* Unregister devoptab device, if needed. */
+                    if (!g_isSXOSDeviceAvailable) usbfsdev_unregister();
+                    
+                    /* Update previous status. */
+                    prev_status = cur_status;
+                    
+                    /* Signal user-mode event. */
+                    USBHSFS_LOG_MSG("Signaling status change event.");
+                    ueventSignal(&g_usbStatusChangeEvent);
+                }
+            } else {
+                USBHSFS_LOG_MSG("usbFsGetMountStatus failed! (0x%08X).", rc);
             }
-        } else {
-            USBHSFS_LOG_MSG("usbFsGetMountStatus failed! (0x%08X).", rc);
         }
-        
-        mutexUnlock(&g_managerMutex);
         
 #ifdef DEBUG
         /* Flush logfile. */
@@ -604,10 +592,10 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
     }
     
     /* Unregister devoptab device. */
-    if (g_sxOSDeviceAvailable) usbfsdev_unregister();
+    if (g_isSXOSDeviceAvailable) usbfsdev_unregister();
     
     /* Update device available flag. */
-    g_sxOSDeviceAvailable = false;
+    g_isSXOSDeviceAvailable = false;
     
     /* Exit thread. */
     threadExit();
@@ -619,7 +607,6 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
     
     Result rc = 0;
     int idx = 0;
-    bool ctx_updated = false;
     
     Waiter usb_if_available_waiter = waiterForEvent(&g_usbInterfaceAvailableEvent);
     Waiter usb_if_state_change_waiter = waiterForEvent(g_usbInterfaceStateChangeEvent);
@@ -631,14 +618,10 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
     {
         USBHSFS_LOG_MSG("Interface available event triggered at startup (UMS devices already available).");
         
-        mutexLock(&g_managerMutex);
-        
         /* Reset each UMS device so we can safely issue Start Unit commands later on (if needed). */
         /* A Stop Unit command could have been issued before for each UMS device (e.g. if an app linked against this library was previously launched, but the UMS devices weren't disconnected). */
         /* Performing a bus reset on each one makes it possible to re-use them. */
-        usbHsFsResetDrives();
-        
-        mutexUnlock(&g_managerMutex);
+        SCOPED_LOCK(&g_managerMutex) usbHsFsResetDrives();
         
 #ifdef DEBUG
         /* Flush logfile. */
@@ -672,30 +655,29 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
         /* Exit event triggered. */
         if (idx == 2) break;
         
-        mutexLock(&g_managerMutex);
-        
-        /* Update drive contexts. */
-        ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
-        
-        if (idx == 0)
+        SCOPED_LOCK(&g_managerMutex)
         {
-            /* Clear the interface available event if it was triggered (not an autoclear event). */
-            eventClear(&g_usbInterfaceAvailableEvent);
-        } else
-        if (idx == 1)
-        {
-            /* Clear the interface change event if it was triggered (not an autoclear event). */
-            eventClear(g_usbInterfaceStateChangeEvent);
+            /* Update drive contexts. */
+            bool ctx_updated = usbHsFsUpdateDriveContexts(idx == 1);
+            
+            if (idx == 0)
+            {
+                /* Clear the interface available event if it was triggered (not an autoclear event). */
+                eventClear(&g_usbInterfaceAvailableEvent);
+            } else
+            if (idx == 1)
+            {
+                /* Clear the interface change event if it was triggered (not an autoclear event). */
+                eventClear(g_usbInterfaceStateChangeEvent);
+            }
+            
+            /* Signal user-mode event if contexts were updated. */
+            if (ctx_updated)
+            {
+                USBHSFS_LOG_MSG("Signaling status change event.");
+                ueventSignal(&g_usbStatusChangeEvent);
+            }
         }
-        
-        /* Signal user-mode event if contexts were updated. */
-        if (ctx_updated)
-        {
-            USBHSFS_LOG_MSG("Signaling status change event.");
-            ueventSignal(&g_usbStatusChangeEvent);
-        }
-        
-        mutexUnlock(&g_managerMutex);
         
 #ifdef DEBUG
         /* Flush logfile. */
@@ -711,9 +693,7 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
             UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
             if (!drive_ctx) continue;
             
-            mutexLock(&(drive_ctx->mutex));
-            usbHsFsDriveDestroyContext(drive_ctx, true);
-            mutexUnlock(&(drive_ctx->mutex));
+            SCOPED_LOCK(&(drive_ctx->mutex)) usbHsFsDriveDestroyContext(drive_ctx, true);
             
             free(drive_ctx);
             drive_ctx = NULL;
@@ -897,9 +877,7 @@ static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool sto
     
     if (!g_driveContexts || !g_driveCount || drive_ctx_idx >= g_driveCount || !(drive_ctx = g_driveContexts[drive_ctx_idx])) return;
     
-    mutexLock(&(drive_ctx->mutex));
-    usbHsFsDriveDestroyContext(drive_ctx, stop_lun);
-    mutexUnlock(&(drive_ctx->mutex));
+    SCOPED_LOCK(&(drive_ctx->mutex)) usbHsFsDriveDestroyContext(drive_ctx, stop_lun);
     
     free(drive_ctx);
     drive_ctx = NULL;

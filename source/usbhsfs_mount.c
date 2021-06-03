@@ -266,16 +266,6 @@ bool usbHsFsMountInitializeLogicalUnitFileSystemContexts(UsbHsFsDriveLogicalUnit
 #endif
     }
     
-    if (!ret) goto end;
-    
-    /* Update filesystem context references. */
-    /* Needed because we perform filesystem context buffer reallocations right before trying to mount any new volumes. */
-    for(u32 i = 0; i < lun_ctx->fs_count; i++)
-    {
-        UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[i]);
-        fs_ctx->device->deviceData = fs_ctx;
-    }
-    
 end:
     if (block) free(block);
     
@@ -368,57 +358,56 @@ u32 usbHsFsMountGetDevoptabDeviceCount(void)
 
 bool usbHsFsMountSetDefaultDevoptabDevice(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
-    mutexLock(&g_devoptabDefaultDeviceMutex);
-    
-    const devoptab_t *cur_default_devoptab = NULL;
-    int new_default_device = -1;
-    char name[MOUNT_NAME_LENGTH] = {0};
     bool ret = false;
     
-    if (!g_devoptabDeviceCount || !g_devoptabDeviceIds || !usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx))
+    SCOPED_LOCK(&g_devoptabDefaultDeviceMutex)
     {
-        USBHSFS_LOG_MSG("Invalid parameters!");
-        goto end;
-    }
-    
-    /* Get current default devoptab device index. */
-    cur_default_devoptab = GetDeviceOpTab("");
-    if (cur_default_devoptab && cur_default_devoptab->deviceData == fs_ctx)
-    {
-        /* Device already set as default. */
-        USBHSFS_LOG_MSG("Device \"%s\" already set as default.", fs_ctx->name);
+        if (!g_devoptabDeviceCount || !g_devoptabDeviceIds || !usbHsFsDriveIsValidLogicalUnitFileSystemContext(fs_ctx))
+        {
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+        
+        const devoptab_t *cur_default_devoptab = NULL;
+        int new_default_device = -1;
+        char name[MOUNT_NAME_LENGTH] = {0};
+        
+        /* Get current default devoptab device index. */
+        cur_default_devoptab = GetDeviceOpTab("");
+        if (cur_default_devoptab && cur_default_devoptab->deviceData == fs_ctx)
+        {
+            /* Device already set as default. */
+            USBHSFS_LOG_MSG("Device \"%s\" already set as default.", fs_ctx->name);
+            ret = true;
+            break;
+        }
+        
+        /* Get devoptab device index for our filesystem. */
+        sprintf(name, "%s:", fs_ctx->name);
+        new_default_device = FindDevice(name);
+        if (new_default_device < 0)
+        {
+            USBHSFS_LOG_MSG("Failed to retrieve devoptab device index for \"%s\"!", fs_ctx->name);
+            break;
+        }
+        
+        /* Set default devoptab device. */
+        setDefaultDevice(new_default_device);
+        cur_default_devoptab = GetDeviceOpTab("");
+        if (!cur_default_devoptab || cur_default_devoptab->deviceData != fs_ctx)
+        {
+            USBHSFS_LOG_MSG("Failed to set default devoptab device to index %d! (device \"%s\").", new_default_device, fs_ctx->name);
+            break;
+        }
+        
+        USBHSFS_LOG_MSG("Successfully set default devoptab device to index %d! (device \"%s\").", new_default_device, fs_ctx->name);
+        
+        /* Update default device ID. */
+        g_devoptabDefaultDeviceId = fs_ctx->device_id;
+        
+        /* Update return value. */
         ret = true;
-        goto end;
     }
-    
-    /* Get devoptab device index for our filesystem. */
-    sprintf(name, "%s:", fs_ctx->name);
-    new_default_device = FindDevice(name);
-    if (new_default_device < 0)
-    {
-        USBHSFS_LOG_MSG("Failed to retrieve devoptab device index for \"%s\"!", fs_ctx->name);
-        goto end;
-    }
-    
-    /* Set default devoptab device. */
-    setDefaultDevice(new_default_device);
-    cur_default_devoptab = GetDeviceOpTab("");
-    if (!cur_default_devoptab || cur_default_devoptab->deviceData != fs_ctx)
-    {
-        USBHSFS_LOG_MSG("Failed to set default devoptab device to index %d! (device \"%s\").", new_default_device, fs_ctx->name);
-        goto end;
-    }
-    
-    USBHSFS_LOG_MSG("Successfully set default devoptab device to index %d! (device \"%s\").", new_default_device, fs_ctx->name);
-    
-    /* Update default device ID. */
-    g_devoptabDefaultDeviceId = fs_ctx->device_id;
-    
-    /* Update return value. */
-    ret = true;
-    
-end:
-    mutexUnlock(&g_devoptabDefaultDeviceMutex);
     
     return ret;
 }
@@ -792,59 +781,76 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
     (void)block_count;
 #endif
     
-    UsbHsFsDriveLogicalUnitFileSystemContext *tmp_fs_ctx = NULL;
-    bool ret = false;
+    UsbHsFsDriveLogicalUnitFileSystemContext **tmp_fs_ctx = NULL, *fs_ctx = NULL;
+    bool ret = false, free_entry = false;
     
-    /* Reallocate filesystem context buffer. */
-    tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count + 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+    /* Reallocate filesystem context pointer array. */
+    tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count + 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext*));
     if (!tmp_fs_ctx)
     {
-        USBHSFS_LOG_MSG("Failed to reallocate filesystem context buffer! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
+        USBHSFS_LOG_MSG("Failed to reallocate filesystem context pointer array! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
         goto end;
     }
     
     lun_ctx->fs_ctx = tmp_fs_ctx;
+    tmp_fs_ctx = NULL;
+    free_entry = true;
     
-    /* Get pointer to current filesystem context. */
-    tmp_fs_ctx = &(lun_ctx->fs_ctx[(lun_ctx->fs_count)++]); /* Increase filesystem context count. */
-    
-    /* Clear filesystem context. */
-    memset(tmp_fs_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+    /* Allocate memory for a new filesystem context. */
+    fs_ctx = calloc(1, sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+    if (!fs_ctx)
+    {
+        USBHSFS_LOG_MSG("Failed to allocate memory for filesystem context entry #%u! (interface %d, LUN %u).", lun_ctx->fs_count, lun_ctx->usb_if_id, lun_ctx->lun);
+        goto end;
+    }
     
     /* Set filesystem context properties. */
-    tmp_fs_ctx->lun_ctx = lun_ctx;
-    tmp_fs_ctx->fs_idx = (lun_ctx->fs_count - 1);
-    tmp_fs_ctx->fs_type = fs_type;
-    tmp_fs_ctx->flags = g_fileSystemMountFlags;
+    fs_ctx->lun_ctx = lun_ctx;
+    fs_ctx->fs_idx = lun_ctx->fs_count;
+    fs_ctx->fs_type = fs_type;
+    fs_ctx->flags = g_fileSystemMountFlags;
+    
+    /* Set filesystem context entry pointer and update filesystem context count. */
+    lun_ctx->fs_ctx[(lun_ctx->fs_count)++] = fs_ctx;
     
     /* Mount and register filesystem. */
     switch(fs_type)
     {
         case UsbHsFsDriveLogicalUnitFileSystemType_FAT:     /* FAT12/FAT16/FAT32/exFAT. */
-            ret = usbHsFsMountRegisterFatVolume(tmp_fs_ctx, block, block_addr);
+            ret = usbHsFsMountRegisterFatVolume(fs_ctx, block, block_addr);
             break;
 #ifdef GPL_BUILD
         case UsbHsFsDriveLogicalUnitFileSystemType_NTFS:    /* NTFS. */
-            ret = usbHsFsMountRegisterNtfsVolume(tmp_fs_ctx, block, block_addr);
+            ret = usbHsFsMountRegisterNtfsVolume(fs_ctx, block, block_addr);
             break;
         case UsbHsFsDriveLogicalUnitFileSystemType_EXT:     /* EXT2/3/4. */
-            ret = usbHsFsMountRegisterExtVolume(tmp_fs_ctx, block_addr, block_count);
+            ret = usbHsFsMountRegisterExtVolume(fs_ctx, block_addr, block_count);
             break;
 #endif
         
         /* TO DO: populate this after adding support for additional filesystems. */
         
         default:
-            USBHSFS_LOG_MSG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_type, lun_ctx->usb_if_id, lun_ctx->lun, tmp_fs_ctx->fs_idx);
+            USBHSFS_LOG_MSG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_type, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
             break;
     }
     
-    if (!ret)
+end:
+    if (!ret && free_entry)
     {
-        if (lun_ctx->fs_count > 1)
+        /* Free filesystem context. */
+        if (fs_ctx)
+        {
+            free(fs_ctx);
+            
+            /* Update filesystem context count and clear filesystem context entry pointer. */
+            lun_ctx->fs_ctx[--(lun_ctx->fs_count)] = fs_ctx = NULL;
+        }
+        
+        if (lun_ctx->fs_count)
         {
             /* Reallocate filesystem context buffer. */
-            tmp_fs_ctx = realloc(lun_ctx->fs_ctx, (lun_ctx->fs_count - 1) * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext));
+            tmp_fs_ctx = realloc(lun_ctx->fs_ctx, lun_ctx->fs_count * sizeof(UsbHsFsDriveLogicalUnitFileSystemContext*));
             if (tmp_fs_ctx)
             {
                 lun_ctx->fs_ctx = tmp_fs_ctx;
@@ -855,12 +861,8 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
             free(lun_ctx->fs_ctx);
             lun_ctx->fs_ctx = NULL;
         }
-        
-        /* Decrease filesystem context count. */
-        (lun_ctx->fs_count)--;
     }
     
-end:
     return ret;
 }
 
@@ -1300,11 +1302,11 @@ static u32 usbHsFsMountGetAvailableDevoptabDeviceId(void)
 
 static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id)
 {
-    mutexLock(&g_devoptabDefaultDeviceMutex);
-    
-    /* Check if the provided device ID matches the current default devoptab device ID. */
-    if (g_devoptabDefaultDeviceId != DEVOPTAB_INVALID_ID && g_devoptabDefaultDeviceId == device_id)
+    SCOPED_LOCK(&g_devoptabDefaultDeviceMutex)
     {
+        /* Check if the provided device ID matches the current default devoptab device ID. */
+        if (g_devoptabDefaultDeviceId == DEVOPTAB_INVALID_ID || g_devoptabDefaultDeviceId != device_id) break;
+        
         USBHSFS_LOG_MSG("Current default devoptab device matches provided device ID! (%u).", device_id);
         
         u32 cur_device_id = 0;
@@ -1322,6 +1324,4 @@ static void usbHsFsMountUnsetDefaultDevoptabDevice(u32 device_id)
         /* Update default device ID. */
         g_devoptabDefaultDeviceId = DEVOPTAB_INVALID_ID;
     }
-    
-    mutexUnlock(&g_devoptabDefaultDeviceMutex);
 }

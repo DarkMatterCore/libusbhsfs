@@ -67,7 +67,7 @@ typedef struct {
     u32 block_length;                                   ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
     u64 capacity;                                       ///< LUN capacity (block count times block length).
     u32 fs_count;                                       ///< Number of mounted filesystems stored in this LUN.
-    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx;   ///< Dynamically allocated array of fs_count filesystem contexts.
+    UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx;  ///< Dynamically allocated pointer array of fs_count filesystem contexts.
 } UsbHsFsDriveLogicalUnitContext;
 
 /// Used to handle drives.
@@ -86,7 +86,7 @@ typedef struct {
     char *serial_number;                        ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
     u8 max_lun;                                 ///< Max LUNs supported by this drive. Must be at least 1.
     u8 lun_count;                               ///< Initialized LUN count. May differ from the max LUN count.
-    UsbHsFsDriveLogicalUnitContext *lun_ctx;    ///< Dynamically allocated array of lun_count LUN contexts.
+    UsbHsFsDriveLogicalUnitContext **lun_ctx;   ///< Dynamically allocated pointer array of lun_count LUN contexts.
 } UsbHsFsDriveContext;
 
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
@@ -104,8 +104,8 @@ void usbHsFsDriveClearStallStatus(UsbHsFsDriveContext *drive_ctx);
 NX_INLINE bool usbHsFsDriveIsValidContext(UsbHsFsDriveContext *drive_ctx)
 {
     return (drive_ctx && drive_ctx->xfer_buf && usbHsIfIsActive(&(drive_ctx->usb_if_session)) && \
-            serviceIsActive(&(drive_ctx->usb_in_ep_session[0].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[0].s)) && (!drive_ctx->uasp || \
-            (serviceIsActive(&(drive_ctx->usb_in_ep_session[1].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[1].s)))));
+            serviceIsActive(&(drive_ctx->usb_in_ep_session[0].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[0].s)) && \
+            (!drive_ctx->uasp || (serviceIsActive(&(drive_ctx->usb_in_ep_session[1].s)) && serviceIsActive(&(drive_ctx->usb_out_ep_session[1].s)))));
 }
 
 /// Checks if the provided LUN context is valid.

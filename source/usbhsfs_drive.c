@@ -33,11 +33,8 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     }
     
     Result rc = 0;
-    
     UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
-    
-    UsbHsFsDriveLogicalUnitContext *tmp_lun_ctx = NULL;
-    
+    UsbHsFsDriveLogicalUnitContext **tmp_lun_ctx = NULL;
     bool ret = false;
     
     /* Allocate memory for the USB transfer buffer. */
@@ -86,23 +83,35 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     /* Bail out if we're dealing with a UASP interface (for now). */
     if (drive_ctx->uasp) goto end;
     
-    /* Allocate memory for LUN contexts. */
-    drive_ctx->lun_ctx = calloc(drive_ctx->max_lun, sizeof(UsbHsFsDriveLogicalUnitContext));
+    /* Allocate memory for LUN context pointer array. */
+    drive_ctx->lun_ctx = calloc(drive_ctx->max_lun, sizeof(UsbHsFsDriveLogicalUnitContext*));
     if (!drive_ctx->lun_ctx)
     {
-        USBHSFS_LOG_MSG("Failed to allocate memory for LUN contexts! (interface %d).", drive_ctx->usb_if_id);
+        USBHSFS_LOG_MSG("Failed to allocate memory for LUN context pointer array! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
     
     /* Prepare LUNs using SCSI commands. */
     for(u8 i = 0; i < drive_ctx->max_lun; i++)
     {
-        /* Generate LUN context index and increase LUN context count. */
-        u8 lun_ctx_idx = (drive_ctx->lun_count)++;
+        /* Retrieve pointer to the current LUN context. */
+        UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[drive_ctx->lun_count];
+        if (!lun_ctx)
+        {
+            /* Allocate memory for a new LUN context. */
+            lun_ctx = calloc(1, sizeof(UsbHsFsDriveLogicalUnitContext));
+            if (!lun_ctx)
+            {
+                USBHSFS_LOG_MSG("Failed to allocate memory for LUN context entry #%u! (%u / %u).", drive_ctx->lun_count, i + 1, drive_ctx->max_lun);
+                goto end;
+            }
+            
+            /* Set LUN context entry pointer. */
+            drive_ctx->lun_ctx[drive_ctx->lun_count] = lun_ctx;
+        }
         
-        /* Retrieve pointer to LUN context and clear it. */
-        UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[lun_ctx_idx]);
-        memset(lun_ctx, 0, sizeof(UsbHsFsDriveLogicalUnitContext));
+        /* Increase LUN context count. */
+        (drive_ctx->lun_count)++;
         
         /* Set USB interface ID and LUN index. */
         lun_ctx->drive_ctx = drive_ctx;
@@ -122,49 +131,26 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(lun_ctx))
         {
             USBHSFS_LOG_MSG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, true);   /* Destroy LUN context. */
+            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, true);
             (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
         }
     }
     
     if (!drive_ctx->lun_count)
     {
+        if (drive_ctx->lun_ctx[0]) free(drive_ctx->lun_ctx[0]);
         USBHSFS_LOG_MSG("Failed to initialize any LUN/filesystem contexts! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
     
+    /* Reallocate LUN context pointer array if we're not using all allocated entries. */
     if (drive_ctx->lun_count < drive_ctx->max_lun)
     {
-        /* Reallocate LUN context buffer, if needed. */
-        tmp_lun_ctx = realloc(drive_ctx->lun_ctx, drive_ctx->lun_count * sizeof(UsbHsFsDriveLogicalUnitContext));
+        tmp_lun_ctx = realloc(drive_ctx->lun_ctx, drive_ctx->lun_count * sizeof(UsbHsFsDriveLogicalUnitContext*));
         if (tmp_lun_ctx)
         {
             drive_ctx->lun_ctx = tmp_lun_ctx;
             tmp_lun_ctx = NULL;
-            
-            /* Update LUN context references. */
-            for(u8 i = 0; i < drive_ctx->lun_count; i++)
-            {
-                UsbHsFsDriveLogicalUnitContext *lun_ctx = &(drive_ctx->lun_ctx[i]);
-                
-                for(u32 j = 0; j < lun_ctx->fs_count; j++)
-                {
-                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = &(lun_ctx->fs_ctx[j]);
-                    
-                    fs_ctx->lun_ctx = lun_ctx;
-                    
-#ifdef GPL_BUILD
-                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_NTFS)
-                    {
-                        fs_ctx->ntfs->dd->lun_ctx = lun_ctx;
-                    } else
-                    if (fs_ctx->fs_type == UsbHsFsDriveLogicalUnitFileSystemType_EXT)
-                    {
-                        fs_ctx->ext->bdev->bdif->p_user = lun_ctx;
-                    }
-#endif
-                }
-            }
         }
     }
     
@@ -193,9 +179,16 @@ void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
     if (drive_ctx->lun_ctx)
     {
         /* Destroy LUN contexts. */
-        for(u8 i = 0; i < drive_ctx->lun_count; i++) usbHsFsDriveDestroyLogicalUnitContext(&(drive_ctx->lun_ctx[i]), stop_lun);
+        for(u8 i = 0; i < drive_ctx->lun_count; i++)
+        {
+            UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[i];
+            if (!lun_ctx) continue;
+            
+            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, stop_lun);
+            free(lun_ctx);
+        }
         
-        /* Free LUN context buffer. */
+        /* Free LUN context pointer array. */
         free(drive_ctx->lun_ctx);
         drive_ctx->lun_ctx = NULL;
     }
@@ -679,9 +672,16 @@ static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext
     if (lun_ctx->fs_ctx)
     {
         /* Destroy filesystem contexts. */
-        for(u32 i = 0; i < lun_ctx->fs_count; i++) usbHsFsMountDestroyLogicalUnitFileSystemContext(&(lun_ctx->fs_ctx[i]));
+        for(u32 i = 0; i < lun_ctx->fs_count; i++)
+        {
+            UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[i];
+            if (!fs_ctx) continue;
+            
+            usbHsFsMountDestroyLogicalUnitFileSystemContext(fs_ctx);
+            free(fs_ctx);
+        }
         
-        /* Free filesystem context buffer. */
+        /* Free filesystem context pointer array. */
         free(lun_ctx->fs_ctx);
         lun_ctx->fs_ctx = NULL;
     }
