@@ -158,6 +158,16 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.4:**
+
+* Updated FatFs to R0.14b.
+* The backup GPT header from a drive is now retrieved and used if the main GPT header is corrupted, as long as it's available.
+* Slightly improved debug logging code.
+* Rewrote mutex handling throughout the code to use a small, macro-based scoped lock implementation whenever possible.
+* Removed superfluous memory operations by using dynamic pointer arrays to manage logical unit / filesystem contexts.
+* Added missing `splInitialize` / `splExit` calls while checking if a service is running.
+    * Furthermore, the Exosphère API version, which is used to determine if TIPC serialization is needed instead of CMIF, is now saved during the first service check.
+
 **v0.2.3:**
 
 * Improvements to the USB manager:
