@@ -8,7 +8,13 @@
 
 #include "usbhsfs_utils.h"
 
-/* Atmosph�re-related constants. */
+/* Global variables. */
+
+static u32 g_atmosphereVersion = 0;
+static Mutex g_atmosphereVersionMutex = 0;
+
+/* Atmosphère-related constants. */
+
 static const u32 g_smAtmosphereHasService = 65100;
 static const SplConfigItem SplConfigItem_ExosphereApiVersion = (SplConfigItem)65000;
 static const u32 g_atmosphereTipcVersion = MAKEHOSVERSION(0, 19, 0);
@@ -16,17 +22,8 @@ static const u32 g_atmosphereTipcVersion = MAKEHOSVERSION(0, 19, 0);
 /* Function prototypes. */
 
 static bool usbHsFsUtilsCheckRunningServiceByName(const char *name);
-static bool usbHsFsUtilsGetExosphereApiVersion(u32 *out);
-
-bool usbHsFsUtilsSXOSCustomFirmwareCheck(void)
-{
-    return (usbHsFsUtilsCheckRunningServiceByName("tx") && !usbHsFsUtilsCheckRunningServiceByName("rnx"));
-}
-
-bool usbHsFsUtilsIsFspUsbRunning(void)
-{
-    return usbHsFsUtilsCheckRunningServiceByName("fsp-usb");
-}
+static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name);
+static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out);
 
 void usbHsFsUtilsTrimString(char *str)
 {
@@ -50,6 +47,16 @@ void usbHsFsUtilsTrimString(char *str)
     if (start != str) memmove(str, start, end - start + 1);
 }
 
+bool usbHsFsUtilsIsFspUsbRunning(void)
+{
+    return usbHsFsUtilsCheckRunningServiceByName("fsp-usb");
+}
+
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void)
+{
+    return (usbHsFsUtilsCheckRunningServiceByName("tx") && !usbHsFsUtilsCheckRunningServiceByName("rnx"));
+}
+
 static bool usbHsFsUtilsCheckRunningServiceByName(const char *name)
 {
     if (!name || !*name)
@@ -58,44 +65,76 @@ static bool usbHsFsUtilsCheckRunningServiceByName(const char *name)
         return false;
     }
     
+    bool ret = false;
+    
+    SCOPED_LOCK(&g_atmosphereVersionMutex)
+    {
+        Result rc = usbHsFsUtilsAtmosphereHasService(&ret, smEncodeName(name));
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsAtmosphereHasService failed for \"%s\"! (0x%08X).", name, rc);
+    }
+    
+    return ret;
+}
+
+/* SM API extension available in Atmosphère and Atmosphère-based CFWs. */
+static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name)
+{
+    if (!out || !name.name[0]) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    
     u8 tmp = 0;
     Result rc = 0;
-    u32 version = 0;
-    SmServiceName srv_name = smEncodeName(name);
+    
+    /* Get Exosphère API version. */
+    if (!g_atmosphereVersion)
+    {
+        rc = usbHsFsUtilsGetExosphereApiVersion(&g_atmosphereVersion);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsGetExosphereApiVersion failed! (0x%08X).", rc);
+    }
     
     /* Check if service is running. */
     /* Dispatch IPC request using CMIF or TIPC serialization depending on our current environment. */
-    if (hosversionAtLeast(12, 0, 0) || (usbHsFsUtilsGetExosphereApiVersion(&version) && version >= g_atmosphereTipcVersion))
+    if (hosversionAtLeast(12, 0, 0) || g_atmosphereVersion >= g_atmosphereTipcVersion)
     {
-        rc = tipcDispatchInOut(smGetServiceSessionTipc(), g_smAtmosphereHasService, srv_name, tmp);
+        rc = tipcDispatchInOut(smGetServiceSessionTipc(), g_smAtmosphereHasService, name, tmp);
     } else {
-        rc = serviceDispatchInOut(smGetServiceSession(), g_smAtmosphereHasService, srv_name, tmp);
+        rc = serviceDispatchInOut(smGetServiceSession(), g_smAtmosphereHasService, name, tmp);
     }
     
-    if (R_FAILED(rc)) USBHSFS_LOG_MSG("AtmosphereHasService failed for \"%s\"! (0x%08X).", name, rc);
+    if (R_SUCCEEDED(rc)) *out = (tmp != 0);
     
-    return (R_SUCCEEDED(rc) && tmp);
+    return rc;
 }
 
-static bool usbHsFsUtilsGetExosphereApiVersion(u32 *out)
+/* SMC config item available in Atmosphère and Atmosphère-based CFWs. */
+static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out)
 {
-    if (!out)
-    {
-        USBHSFS_LOG_MSG("Invalid parameters!");
-        return false;
-    }
+    if (!out) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
     
     Result rc = 0;
-    u64 version = 0;
+    u64 cfg = 0;
+    u32 version = 0;
     
-    rc = splGetConfig(SplConfigItem_ExosphereApiVersion, &version);
+    /* Initialize spl service. */
+    rc = splInitialize();
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("splGetConfig failed! (0x%08X).", rc);
-        return false;
+        USBHSFS_LOG_MSG("splInitialize failed! (0x%08X).", rc);
+        return rc;
     }
     
-    *out = (u32)((version >> 40) & 0xFFFFFF);
+    /* Get Exosphère API version config item. */
+    rc = splGetConfig(SplConfigItem_ExosphereApiVersion, &cfg);
     
-    return true;
+    /* Close spl service. */
+    splExit();
+    
+    if (R_SUCCEEDED(rc))
+    {
+        *out = version = (u32)((cfg >> 40) & 0xFFFFFF);
+        USBHSFS_LOG_MSG("Exosphère API version: %u.%u.%u.", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));
+    } else {
+        USBHSFS_LOG_MSG("splGetConfig failed! (0x%08X).", rc);
+    }
+    
+    return rc;
 }

@@ -37,14 +37,14 @@ typedef struct {
     int cond;
 } UsbHsFsUtilsScopedLock;
 
-/// Returns true if we're running under SX OS.
-bool usbHsFsUtilsSXOSCustomFirmwareCheck(void);
+/// Trims whitespace characters from the provided string.
+void usbHsFsUtilsTrimString(char *str);
 
 /// Returns true if the fsp-usb service is running in the background.
 bool usbHsFsUtilsIsFspUsbRunning(void);
 
-/// Trims whitespace characters from the provided string.
-void usbHsFsUtilsTrimString(char *str);
+/// Returns true if we're running under SX OS.
+bool usbHsFsUtilsSXOSCustomFirmwareCheck(void);
 
 /// Simple wrapper to sleep the current thread for a specific number of full seconds.
 NX_INLINE void usbHsFsUtilsSleep(u64 seconds)
