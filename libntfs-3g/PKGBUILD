@@ -4,14 +4,14 @@
 pkgbasename=ntfs-3g_ntfsprogs
 pkgname=switch-libntfs-3g
 pkgver=2017.3.23
-pkgrel=2
+pkgrel=3
 pkgdesc='Read-Write NTFS Driver'
 baseurl='https://www.tuxera.com'
 url="${baseurl}/community/open-source-ntfs-3g/"
 license=('GPL')
 arch=('any')
 options=(!strip libtool staticlibs)
-makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
+makedepends=('devkitA64' 'dkp-toolchain-vars')
 groups=('switch-portlibs')
 source=(
   "${baseurl}/opensource/${pkgbasename}-${pkgver}.tgz"
@@ -26,7 +26,7 @@ prepare() {
   cd "${pkgbasename}-${pkgver}"
   patch -Np1 -i "${srcdir}/${pkgname}-${pkgver}.patch"
 
-  source /opt/devkitpro/switchvars.sh
+  source "${DEVKITPRO}/switchvars.sh"
 }
 
 build() {

@@ -3,13 +3,13 @@
 pkgbasename=lwext4
 pkgname=switch-${pkgbasename}
 pkgver=733b2c40d7121900e339bee8784977467a9fe8c9
-pkgrel=2
+pkgrel=3
 pkgdesc='ext2/ext3/ext4 filesystem library for microcontrollers'
 url='https://github.com/gkostka/lwext4'
 license=('GPL')
 arch=('any')
 options=(!strip libtool staticlibs)
-makedepends=('switch-pkg-config' 'devkitpro-pkgbuild-helpers')
+makedepends=('devkitA64' 'dkp-toolchain-vars' 'switch-cmake')
 groups=('switch-portlibs')
 source=(
   "${url}/archive/${pkgver}.zip"
@@ -17,14 +17,14 @@ source=(
 )
 sha256sums=(
   '7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e'
-  '6fce1278a51537a616d7cb757eb95a56082763a854c1d5b9588cad1f2e246d31'
+  'dbb49d3c5323e193dc695755ac63f7efb535acbbf7e8efc58e1756d7912d4194'
 )
 
 prepare() {
   cd "${pkgbasename}-${pkgver}"
   patch -Np1 -i "${srcdir}/${pkgname}-${pkgver}.patch"
 
-  source /opt/devkitpro/switchvars.sh
+  source "${DEVKITPRO}/switchvars.sh"
 
   mv include lwext4
   mkdir -p include

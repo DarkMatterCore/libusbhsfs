@@ -62,7 +62,7 @@ index 12ee5c7..bd5ae43 100644
  	rm -R -f build_lib_only
  	mkdir build_lib_only
 -	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE ..
-+	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE -DCMAKE_TOOLCHAIN_FILE=$(DEVKITPRO)/switch.cmake ..
++	cd build_lib_only && aarch64-none-elf-cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE ..
  
  all: 
  	generic
