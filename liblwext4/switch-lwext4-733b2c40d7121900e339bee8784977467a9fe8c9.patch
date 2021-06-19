@@ -453,7 +453,7 @@ index d79febc..227b3a6 100644
  struct ext4_xattr_info {
  	uint8_t name_index;
 diff --git a/src/ext4.c b/src/ext4.c
-index b270361..b548b18 100644
+index b270361..656940c 100644
 --- a/src/ext4.c
 +++ b/src/ext4.c
 @@ -34,24 +34,24 @@
@@ -499,6 +499,22 @@ index b270361..b548b18 100644
  
  
  #include <stdlib.h>
+@@ -391,7 +391,6 @@ int ext4_mount(const char *dev_name, const char *mount_point,
+ 	for (size_t i = 0; i < CONFIG_EXT4_MOUNTPOINTS_COUNT; ++i) {
+ 		if (!s_mp[i].mounted) {
+ 			strcpy(s_mp[i].name, mount_point);
+-			s_mp[i].mounted = 1;
+ 			mp = &s_mp[i];
+ 			break;
+ 		}
+@@ -436,6 +435,7 @@ int ext4_mount(const char *dev_name, const char *mount_point,
+ 	}
+ 
+ 	bd->fs = &mp->fs;
++	mp->mounted = 1;
+ 	return r;
+ }
+ 
 @@ -460,14 +460,13 @@ int ext4_umount(const char *mount_point)
  	if (r != EOK)
  		goto Finish;
@@ -511,7 +527,7 @@ index b270361..b548b18 100644
  	r = ext4_block_fini(mp->fs.bdev);
  Finish:
  	mp->fs.bdev->fs = NULL;
-+    memset(mp, 0, sizeof(struct ext4_mountpoint));
++	memset(mp, 0, sizeof(struct ext4_mountpoint));
  	return r;
  }
  
