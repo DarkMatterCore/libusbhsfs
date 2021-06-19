@@ -31,7 +31,7 @@ CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS		:=	-g $(ARCH)
 
-ifeq ($(filter $(MAKECMDGOALS),clean dist-src),)
+ifeq ($(filter $(MAKECMDGOALS),clean dist-src fs-libs),)
     # Check BUILD_TYPE flag
     ifneq ($(origin BUILD_TYPE),undefined)
         ifeq (${BUILD_TYPE},ISC)

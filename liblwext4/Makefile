@@ -6,7 +6,7 @@ MAKEPKG	:=	dkp-makepkg
 endif
 
 all:
-	@$(MAKEPKG) -i -s --needed --noconfirm > /dev/null
+	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
 
 deps:
 	@pacman -S --needed --noconfirm patch cmake > /dev/null

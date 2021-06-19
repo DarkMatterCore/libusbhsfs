@@ -158,6 +158,13 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.5:**
+
+* Updated lwext4 patch to fix mountpoint corruption issues if a mountpoint name is reused after a previous call to `ext4_mount` failed.
+    * This fixes a data abort discovered by [phisch](https://github.com/phisch). Thanks for the report!
+    * The fix is based on [HenriChataing](https://github.com/HenriChataing)'s [pull request in lwext4's repository](https://github.com/gkostka/lwext4/pull/51), but also adds an additional `memset` call to `ext4_umount` to fully clear every unmounted mountpoint.
+    * A note to all developers using the GPL-licensed version of the library: update the `switch-lwext4` package by running `make fs-libs` in your libusbhsfs clone *before* building your project.
+
 **v0.2.4:**
 
 * Updated FatFs to R0.14b.
