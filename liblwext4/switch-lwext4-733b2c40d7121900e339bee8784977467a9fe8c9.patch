@@ -54,7 +54,7 @@ index eec0993..0e193ed 100644
  add_subdirectory(src)
  #Detect all possible warnings for lwext4 target
 diff --git a/Makefile b/Makefile
-index 12ee5c7..bd5ae43 100644
+index 12ee5c7..413317d 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -65,7 +65,7 @@ mingw:
@@ -453,7 +453,7 @@ index d79febc..227b3a6 100644
  struct ext4_xattr_info {
  	uint8_t name_index;
 diff --git a/src/ext4.c b/src/ext4.c
-index b270361..849cb32 100644
+index b270361..b548b18 100644
 --- a/src/ext4.c
 +++ b/src/ext4.c
 @@ -34,24 +34,24 @@
@@ -499,6 +499,22 @@ index b270361..849cb32 100644
  
  
  #include <stdlib.h>
+@@ -460,14 +460,13 @@ int ext4_umount(const char *mount_point)
+ 	if (r != EOK)
+ 		goto Finish;
+ 
+-	mp->mounted = 0;
+-
+ 	ext4_bcache_cleanup(mp->fs.bdev->bc);
+ 	ext4_bcache_fini_dynamic(mp->fs.bdev->bc);
+ 
+ 	r = ext4_block_fini(mp->fs.bdev);
+ Finish:
+ 	mp->fs.bdev->fs = NULL;
++    memset(mp, 0, sizeof(struct ext4_mountpoint));
+ 	return r;
+ }
+ 
 diff --git a/src/ext4_balloc.c b/src/ext4_balloc.c
 index 8945554..e0e4d09 100644
 --- a/src/ext4_balloc.c

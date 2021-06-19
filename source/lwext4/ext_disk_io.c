@@ -85,9 +85,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
 end:
     if (!success && bdev)
     {
-        if (bdev->bdif) free(bdev->bdif);
-        
-        free(bdev);
+        ext_disk_io_free_blockdev(bdev);
         bdev = NULL;
     }
     
