@@ -184,17 +184,19 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
     char *tmp_str = NULL;
     size_t tmp_len = 0;
     
-    /* Get current time with nanosecond precision. */
+    struct tm ts = {0};
     struct timespec now = {0};
+    
+    /* Get current time with nanosecond precision. */
     clock_gettime(CLOCK_REALTIME, &now);
     
     /* Get local time. */
-    struct tm *ts = localtime(&(now.tv_sec));
-    ts->tm_year += 1900;
-    ts->tm_mon++;
+    localtime_r(&(now.tv_sec), &ts);
+    ts.tm_year += 1900;
+    ts.tm_mon++;
     
     /* Get formatted string length. */
-    str1_len = snprintf(NULL, 0, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
+    str1_len = snprintf(NULL, 0, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
     if (str1_len <= 0) return;
     
     str2_len = vsnprintf(NULL, 0, fmt, args);
@@ -213,7 +215,7 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
         }
         
         /* Nice and easy string formatting using the log buffer. */
-        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
+        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
         vsprintf(g_logBuffer + g_logBufferLength + (size_t)str1_len, fmt, args);
         strcat(g_logBuffer, g_logLineBreak);
         g_logBufferLength += log_str_len;
@@ -227,7 +229,7 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
         if (!tmp_str) return;
         
         /* Generate formatted string. */
-        sprintf(tmp_str, g_logStrFormat, ts->tm_year, ts->tm_mon, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, now.tv_nsec, func_name);
+        sprintf(tmp_str, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
         vsprintf(tmp_str + (size_t)str1_len, fmt, args);
         strcat(tmp_str, g_logLineBreak);
         

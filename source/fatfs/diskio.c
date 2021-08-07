@@ -138,15 +138,15 @@ DWORD get_fattime(void)
 {
     Result rc = 0;
     u64 timestamp = 0;
+    struct tm timeinfo = {0};
     DWORD output = FAT_TIMESTAMP(FF_NORTC_YEAR, FF_NORTC_MON, FF_NORTC_MDAY, 0, 0, 0);  /* Use FF_NORTC values by default. */
     
     /* Try to retrieve time from time services. */
     rc = timeGetCurrentTime(TimeType_LocalSystemClock, &timestamp);
     if (R_SUCCEEDED(rc))
     {
-        time_t rawtime = (time_t)timestamp;
-        struct tm *timeinfo = localtime(&rawtime);
-        output = FAT_TIMESTAMP(timeinfo->tm_year, timeinfo->tm_mon + 1, timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+        localtime_r((time_t*)&timestamp, &timeinfo);
+        output = FAT_TIMESTAMP(timeinfo.tm_year, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     }
     
     return output;
