@@ -153,7 +153,6 @@ Thanks to
 * [ITotalJustice](https://github.com/ITotalJustice), for testing the partition table parsing algorithm.
 * [FennecTECH](https://github.com/fennectech), for breaking stuff on a regular basis.
 * All the Alpha Testers and Super Users from the nxdumptool Discord server, for being a constant source of ideas (and memes).
-* And last but not least, my girlfriend, for always being by my side and motivating me to keep working on all my projects. I love you.
 
 Changelog
 --------------
