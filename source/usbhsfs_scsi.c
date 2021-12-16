@@ -985,7 +985,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
             if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
             {
                 memcpy(&csw, xfer_buf, sizeof(ScsiCommandStatusWrapper));
-                if (csw.dCSWSignature == __builtin_bswap32(SCSI_CSW_SIGNATURE) && csw.dCSWTag == cbw->dCBWTag)
+                if ((csw.dCSWSignature == SCSI_CSW_SIGNATURE || csw.dCSWSignature == __builtin_bswap32(SCSI_CSW_SIGNATURE)) && csw.dCSWTag == cbw->dCBWTag)
                 {
                     USBHSFS_LOG_DATA(&csw, sizeof(ScsiCommandStatusWrapper), "Data from unexpected CSW (interface %d, LUN %u):", drive_ctx->usb_if_id, cbw->bCBWLUN);
                     
@@ -1150,7 +1150,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     USBHSFS_LOG_DATA(csw, sizeof(ScsiCommandStatusWrapper), "Data from received CSW (interface %d, LUN %u):", drive_ctx->usb_if_id, cbw->bCBWLUN);
     
     /* Check CSW signature. */
-    if (csw->dCSWSignature != __builtin_bswap32(SCSI_CSW_SIGNATURE))
+    if (csw->dCSWSignature != SCSI_CSW_SIGNATURE && csw->dCSWSignature != __builtin_bswap32(SCSI_CSW_SIGNATURE))
     {
         USBHSFS_LOG_MSG("Invalid CSW signature! (0x%08X) (interface %d, LUN %u).", __builtin_bswap32(csw->dCSWSignature), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;

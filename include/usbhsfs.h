@@ -22,7 +22,7 @@ extern "C" {
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    2
-#define LIBUSBHSFS_VERSION_MICRO    5
+#define LIBUSBHSFS_VERSION_MICRO    6
 
 /// Helper macro to generate a string based on a filesystem type value.
 #define LIBUSBHSFS_FS_TYPE_STR(x)   ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \

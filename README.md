@@ -157,6 +157,12 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.6:**
+
+* Updated codebase to use `localtime_r()` instead of `localtime()` to avoid possible race conditions with other threads.
+* Fixed `fs-libs` building under Linux distros with pacman. Thanks to [ITotalJustice](https://github.com/ITotalJustice) for reporting this issue!
+* Implemented support for UMS devices that don't byteswap the Command Status Wrapper signature before sending back SCSI command responses.Thanks to [rdmrocha](https://github.com/rdmrocha) for reporting this issue!
+
 **v0.2.5:**
 
 * Updated lwext4 patch to fix mountpoint corruption issues if a mountpoint name is reused after a previous call to `ext4_mount` failed.
