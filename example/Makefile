@@ -38,6 +38,8 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
 
+BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
+
 VERSION_MAJOR	:=	0
 VERSION_MINOR	:=	0
 VERSION_MICRO	:=	1
@@ -59,7 +61,7 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES) $(INCLUDE) -D__SWITCH__
-CFLAGS		+=	-DAPP_TITLE=\"${APP_TITLE}\"
+CFLAGS		+=	-DBUILD_TIMESTAMP="\"${BUILD_TIMESTAMP}\"" -DAPP_TITLE=\"${APP_TITLE}\"
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -67,7 +69,7 @@ ASFLAGS		:=	-g $(ARCH)
 LDFLAGS		=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 # Use -lusbhsfsd instead of -lusbhsfs to use the library build with debug logging enabled
-LIBS		:=	-lusbhsfs
+LIBS		:=	-lusbhsfsd
 
 ifeq ($(filter $(MAKECMDGOALS),clean),)
     # Check BUILD_TYPE flag

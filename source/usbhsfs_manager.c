@@ -73,7 +73,7 @@ Result usbHsFsInitialize(u8 event_idx)
 #ifdef DEBUG
         /* Start new log session. */
         usbHsFsLogWriteStringToLogFile("________________________________________________________________\r\n");
-        USBHSFS_LOG_MSG(LIB_TITLE " v%u.%u.%u starting. Built on " __DATE__ " - " __TIME__ ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+        USBHSFS_LOG_MSG(LIB_TITLE " v%u.%u.%u starting. Built on " BUILD_TIMESTAMP ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
         
         /* Log Horizon OS version. */
         u32 hos_version = hosversionGet();

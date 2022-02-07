@@ -389,7 +389,7 @@ int main(int argc, char **argv)
     /* Initialize the default gamepad (which reads handheld mode inputs as well as the first connected controller. */
     padInitializeDefault(&pad);
     
-    printf(APP_TITLE ". Built on " __DATE__ " - " __TIME__ ".\nLibrary version: %u.%u.%u.\nPress + to exit.\n\n", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
+    printf(APP_TITLE ". Built on " BUILD_TIMESTAMP ".\nLibrary version: %u.%u.%u.\nPress + to exit.\n\n", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
     consoleUpdate(NULL);
     
     /* Initialize USB Mass Storage Host interface. */
