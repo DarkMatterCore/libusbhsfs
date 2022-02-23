@@ -3,8 +3,8 @@
 
 pkgbasename=ntfs-3g_ntfsprogs
 pkgname=switch-libntfs-3g
-pkgver=2017.3.23
-pkgrel=3
+pkgver=2021.8.22
+pkgrel=1
 pkgdesc='Read-Write NTFS Driver'
 baseurl='https://www.tuxera.com'
 url="${baseurl}/community/open-source-ntfs-3g/"
@@ -18,8 +18,8 @@ source=(
   "${pkgname}-${pkgver}.patch"
 )
 sha256sums=(
-  '3e5a021d7b761261836dcb305370af299793eedbded731df3d6943802e1262d5'
-  '77fea18e209b8c3a9f7a82a1a9acb0b10ba73ef9ac77e7a50a6752c2db8877a2'
+  '55b883aa05d94b2ec746ef3966cb41e66bed6db99f22ddd41d1b8b94bb202efb'
+  'f66e80896f2dba933f790804e1e21fe11e7347a6e9bd0dc1323c718d826378f4'
 )
 
 prepare() {
@@ -31,6 +31,9 @@ prepare() {
 
 build() {
   cd "${pkgbasename}-${pkgver}"
+
+  aclocal
+  automake
 
   ./configure --prefix="${PORTLIBS_PREFIX}" --libdir="${PORTLIBS_PREFIX}/lib" --host=aarch64-none-elf \
     --disable-shared --enable-static --disable-device-default-io-ops \

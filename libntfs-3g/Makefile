@@ -13,4 +13,4 @@ all:
 	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
 
 deps:
-	@pacman -S --needed --noconfirm patch > /dev/null
+	@pacman -S --needed --noconfirm patch autotools > /dev/null
