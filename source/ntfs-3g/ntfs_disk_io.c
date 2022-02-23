@@ -27,7 +27,7 @@ static s64 ntfs_io_device_pread(struct ntfs_device *dev, void *buf, s64 count, s
 static s64 ntfs_io_device_pwrite(struct ntfs_device *dev, const void *buf, s64 count, s64 offset);
 static int ntfs_io_device_sync(struct ntfs_device *dev);
 static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf);
-static int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp);
+static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, void *argp);
 
 static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 count, void *buf);
 static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 count, const void *buf);
@@ -472,14 +472,14 @@ end:
     return ret;
 }
 
-static int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp)
+static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, void *argp)
 {
     (void)argp;
     
     int ret = -1;
     
-    USBHSFS_LOG_MSG("Device %p, ioctl 0x%X, argp %p.", dev, request, argp);
-
+    USBHSFS_LOG_MSG("Device %p, ioctl 0x%lX, argp %p.", dev, request, argp);
+    
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -495,7 +495,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp
         errno = EBADF;
         goto end;
     }
-
+    
     /* Figure out which control was requested. */
     switch (request)
     {
@@ -544,7 +544,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, int request, void *argp
             break;
 #endif
         default:            /* Unimplemented control. */
-            USBHSFS_LOG_MSG("Unsupported ioctl 0x%X was requested.", request);
+            USBHSFS_LOG_MSG("Unsupported ioctl 0x%lX was requested.", request);
             errno = EOPNOTSUPP;
             break;
     }
