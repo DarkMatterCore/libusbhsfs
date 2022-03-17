@@ -42,7 +42,7 @@ typedef struct {
     ext_vd *ext;        ///< Pointer to a dynamically allocated ext_vd object. Only used if fs_type == UsbHsFsFileSystemType_EXT.
 #endif
     
-    /// TO DO: add more FS objects here after implementing support for other filesystems.
+    /// TODO: add more FS objects here after implementing support for other filesystems.
     
     u32 device_id;      ///< ID used as part of the mount name.
     char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).

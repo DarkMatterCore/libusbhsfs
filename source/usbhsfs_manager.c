@@ -1013,7 +1013,7 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
             break;
 #endif
         
-        /* TO DO: populate this after adding support for additional filesystems. */
+        /* TODO: populate this after adding support for additional filesystems. */
         
         default:
             break;

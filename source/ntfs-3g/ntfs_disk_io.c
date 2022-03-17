@@ -415,7 +415,7 @@ static int ntfs_io_device_sync(struct ntfs_device *dev)
         goto end;
     }
     
-    /* TO DO: implement write cache? */
+    /* TODO: implement write cache? */
     
     /* Mark the device as clean. */
     NDevClearDirty(dev);
@@ -514,7 +514,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
 #ifdef HDIO_GETGEO
         case HDIO_GETGEO:   /* Get hard drive geometry. */
         {
-            /* TO DO: properly define this? */
+            /* TODO: properly define this? */
             struct hd_geometry *geo = (struct hd_geometry*)argp;
             geo->cylinders = 0;
             geo->heads = 0;
@@ -538,7 +538,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
 #endif
 #if defined(BLKDISCARD)
         case BLKDISCARD:    /* Discard device sectors. */
-            /* TO DO: zero out sectors. */
+            /* TODO: zero out sectors. */
             USBHSFS_LOG_MSG("Bulk discard is not supported.");
             errno = EOPNOTSUPP;
             break;
