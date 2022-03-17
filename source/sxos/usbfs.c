@@ -1,7 +1,7 @@
 /*
  * usbfs.c
  *
- * Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Blake Warner.
  * Copyright (c) 2018, Team Xecuter.
  *

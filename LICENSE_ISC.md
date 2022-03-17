@@ -1,4 +1,4 @@
-Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
+Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
 Copyright (c) 2020-2021, XorTroll.
 Copyright (c) 2020-2021, Rhys Koedijk.
 

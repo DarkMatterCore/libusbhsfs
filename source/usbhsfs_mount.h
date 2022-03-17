@@ -1,7 +1,7 @@
 /*
  * usbhsfs_mount.h
  *
- * Copyright (c) 2020-2021, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
