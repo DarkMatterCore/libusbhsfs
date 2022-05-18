@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.12)
 
+# this may stop working if dkp decides to change the location
+# of the cmake files, in which case, pass -DCMAKE_TOOLCHAIN_FILE="the/new/path"
+if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{DEVKITPRO}/cmake/Switch.cmake")
+endif()
+
 project(libusbhsfs
     VERSION 0.2.6
     DESCRIPTION "USB Mass Storage Class Host + Filesystem Mounter static library for Nintendo Switch homebrew applications."
