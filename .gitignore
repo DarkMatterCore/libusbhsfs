@@ -15,3 +15,6 @@
 /libntfs-3g/pkg
 /liblwext4/src
 /liblwext4/pkg
+
+build
+.cache
