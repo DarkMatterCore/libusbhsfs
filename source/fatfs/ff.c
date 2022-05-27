@@ -471,7 +471,6 @@ static FILESEM Files[FF_FS_LOCK];	/* Open object lock semaphores */
 #define DEF_NAMBUF
 #define INIT_NAMBUF(fs)
 #define FREE_NAMBUF()
-#define LEAVE_MKFS(res)	return res
 
 #else					/* LFN configurations */
 #if FF_MAX_LFN < 12 || FF_MAX_LFN > 255
@@ -494,7 +493,6 @@ static WCHAR LfnBuf[FF_MAX_LFN + 1];		/* LFN working buffer */
 #define DEF_NAMBUF
 #define INIT_NAMBUF(fs)
 #define FREE_NAMBUF()
-#define LEAVE_MKFS(res)	return res
 
 #elif FF_USE_LFN == 2 	/* LFN enabled with dynamic working buffer on the stack */
 #if FF_FS_EXFAT
@@ -506,7 +504,6 @@ static WCHAR LfnBuf[FF_MAX_LFN + 1];		/* LFN working buffer */
 #define INIT_NAMBUF(fs)	{ (fs)->lfnbuf = lbuf; }
 #define FREE_NAMBUF()
 #endif
-#define LEAVE_MKFS(res)	return res
 
 #elif FF_USE_LFN == 3 	/* LFN enabled with dynamic working buffer on the heap */
 #if FF_FS_EXFAT
@@ -518,7 +515,6 @@ static WCHAR LfnBuf[FF_MAX_LFN + 1];		/* LFN working buffer */
 #define INIT_NAMBUF(fs)	{ lfn = ff_memalloc((FF_MAX_LFN+1)*2); if (!lfn) LEAVE_FF(fs, FR_NOT_ENOUGH_CORE); (fs)->lfnbuf = lfn; }
 #define FREE_NAMBUF()	ff_memfree(lfn)
 #endif
-#define LEAVE_MKFS(res)	{ if (!work) ff_memfree(buf); return res; }
 #define MAX_MALLOC	0x8000	/* Must be >=FF_MAX_SS */
 
 #else
@@ -5408,7 +5404,7 @@ static void putc_bfd (putbuff* pb, TCHAR c)
 			if ((BYTE)c < 0x80) break;					/* Single byte? */
 			if (((BYTE)c & 0xE0) == 0xC0) pb->ct = 1;	/* 2-byte sequence? */
 			if (((BYTE)c & 0xF0) == 0xE0) pb->ct = 2;	/* 3-byte sequence? */
-			if (((BYTE)c & 0xF1) == 0xF0) pb->ct = 3;	/* 4-byte sequence? */
+			if (((BYTE)c & 0xF8) == 0xF0) pb->ct = 3;	/* 4-byte sequence? */
 			return;
 		} else {				/* In the multi-byte sequence */
 			if (((BYTE)c & 0xC0) != 0x80) {	/* Broken sequence? */
@@ -5863,4 +5859,3 @@ FRESULT ff_setcp (
 	return FR_OK;
 }
 #endif	/* FF_CODE_PAGE == 0 */
-
