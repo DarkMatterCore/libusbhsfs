@@ -3,7 +3,7 @@
 pkgbasename=lwext4
 pkgname=switch-${pkgbasename}
 pkgver=733b2c40d7121900e339bee8784977467a9fe8c9
-pkgrel=3
+pkgrel=4
 pkgdesc='ext2/ext3/ext4 filesystem library for microcontrollers'
 url='https://github.com/gkostka/lwext4'
 license=('GPL')
@@ -17,7 +17,7 @@ source=(
 )
 sha256sums=(
   '7840f378f39483e5de25dbd7271652b187263c4d7e116db395effe7c6a5e692e'
-  '6bddc3ded6ba6c00c31346f48397699557c699126327afccff880004b2e755c5'
+  '6b3707684b0f83a004910a67c988ec96a38de6a34b156343644d73f22b42c47c'
 )
 
 prepare() {

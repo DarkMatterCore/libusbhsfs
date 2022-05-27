@@ -453,7 +453,7 @@ index d79febc..227b3a6 100644
  struct ext4_xattr_info {
  	uint8_t name_index;
 diff --git a/src/ext4.c b/src/ext4.c
-index b270361..656940c 100644
+index b270361..e49d490 100644
 --- a/src/ext4.c
 +++ b/src/ext4.c
 @@ -34,24 +34,24 @@
@@ -531,8 +531,45 @@ index b270361..656940c 100644
  	return r;
  }
  
+@@ -1615,7 +1614,7 @@ static int ext4_ftruncate_no_lock(ext4_file *file, uint64_t size)
+ 	/*Sync file size*/
+ 	file->fsize = ext4_inode_get_size(&file->mp->fs.sb, ref.inode);
+ 	if (file->fsize <= size) {
+-		r = EOK;
++		r = ENOTSUP;
+ 		goto Finish;
+ 	}
+ 
+@@ -1658,11 +1657,12 @@ int ext4_ftruncate(ext4_file *f, uint64_t size)
+ 	EXT4_MP_LOCK(f->mp);
+ 
+ 	ext4_trans_start(f->mp);
++
+ 	r = ext4_ftruncate_no_lock(f, size);
+-	if (r != EOK)
+-		ext4_trans_abort(f->mp);
+-	else
++	if (r == EOK || r == ENOTSUP)
+ 		ext4_trans_stop(f->mp);
++	else
++		ext4_trans_abort(f->mp);
+ 
+ 	EXT4_MP_UNLOCK(f->mp);
+ 	return r;
+@@ -3145,8 +3145,10 @@ int ext4_dir_mk(const char *path)
+ 
+ 	/*Check if exist.*/
+ 	r = ext4_generic_open(&f, path, "r", false, 0, 0);
+-	if (r == EOK)
++	if (r == EOK) {
++		r = EEXIST;
+ 		goto Finish;
++	}
+ 
+ 	/*Create new directory.*/
+ 	r = ext4_generic_open(&f, path, "w", false, 0, 0);
 diff --git a/src/ext4_balloc.c b/src/ext4_balloc.c
-index 8945554..e0e4d09 100644
+index 8945554..984ffb5 100644
 --- a/src/ext4_balloc.c
 +++ b/src/ext4_balloc.c
 @@ -38,20 +38,20 @@
@@ -570,6 +607,30 @@ index 8945554..e0e4d09 100644
  
  /**@brief Compute number of block group from block address.
   * @param sb superblock pointer.
+@@ -437,8 +437,10 @@ int ext4_balloc_alloc_block(struct ext4_inode_ref *inode_ref,
+ 			ext4_balloc_set_bitmap_csum(sb, bg, b.data);
+ 			ext4_trans_set_block_dirty(b.buf);
+ 			r = ext4_block_set(inode_ref->fs->bdev, &b);
+-			if (r != EOK)
++			if (r != EOK) {
++				ext4_fs_put_block_group_ref(&bg_ref);
+ 				return r;
++			}
+ 
+ 			alloc = ext4_fs_bg_idx_to_addr(sb, tmp_idx, bg_id);
+ 			goto success;
+@@ -452,8 +454,10 @@ int ext4_balloc_alloc_block(struct ext4_inode_ref *inode_ref,
+ 		ext4_balloc_set_bitmap_csum(sb, bg_ref.block_group, b.data);
+ 		ext4_trans_set_block_dirty(b.buf);
+ 		r = ext4_block_set(inode_ref->fs->bdev, &b);
+-		if (r != EOK)
++		if (r != EOK) {
++			ext4_fs_put_block_group_ref(&bg_ref);
+ 			return r;
++		}
+ 
+ 		alloc = ext4_fs_bg_idx_to_addr(sb, rel_blk_idx, bg_id);
+ 		goto success;
 diff --git a/src/ext4_bcache.c b/src/ext4_bcache.c
 index 9d3c7fb..26803a9 100644
 --- a/src/ext4_bcache.c
@@ -829,7 +890,7 @@ index abac59b..4dc4b6f 100644
  #include <stdlib.h>
  #include <string.h>
 diff --git a/src/ext4_fs.c b/src/ext4_fs.c
-index 8e229ef..2f60ddb 100644
+index 8e229ef..f74f437 100644
 --- a/src/ext4_fs.c
 +++ b/src/ext4_fs.c
 @@ -38,23 +38,23 @@
@@ -873,6 +934,60 @@ index 8e229ef..2f60ddb 100644
  
  #include <string.h>
  
+@@ -817,7 +817,7 @@ void ext4_fs_inode_blocks_init(struct ext4_fs *fs,
+ 		return;
+ 	}
+ 
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	/* Initialize extents if needed */
+ 	if (ext4_sb_feature_incom(&fs->sb, EXT4_FINCOM_EXTENTS)) {
+ 		ext4_inode_set_flag(inode, EXT4_INODE_FLAG_EXTENTS);
+@@ -936,7 +936,7 @@ int ext4_fs_free_inode(struct ext4_inode_ref *inode_ref)
+ 	uint32_t offset;
+ 	uint32_t suboff;
+ 	int rc;
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	/* For extents must be data block destroyed by other way */
+ 	if ((ext4_sb_feature_incom(&fs->sb, EXT4_FINCOM_EXTENTS)) &&
+ 	    (ext4_inode_has_flag(inode_ref->inode, EXT4_INODE_FLAG_EXTENTS))) {
+@@ -1224,7 +1224,7 @@ int ext4_fs_truncate_inode(struct ext4_inode_ref *inode_ref, uint64_t new_size)
+ 	uint32_t new_blocks_cnt = (uint32_t)((new_size + block_size - 1) / block_size);
+ 	uint32_t old_blocks_cnt = (uint32_t)((old_size + block_size - 1) / block_size);
+ 	uint32_t diff_blocks_cnt = old_blocks_cnt - new_blocks_cnt;
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	if ((ext4_sb_feature_incom(sb, EXT4_FINCOM_EXTENTS)) &&
+ 	    (ext4_inode_has_flag(inode_ref->inode, EXT4_INODE_FLAG_EXTENTS))) {
+ 
+@@ -1359,7 +1359,7 @@ static int ext4_fs_get_inode_dblk_idx_internal(struct ext4_inode_ref *inode_ref,
+ 	ext4_fsblk_t current_block;
+ 
+ 	(void)extent_create;
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	/* Handle i-node using extents */
+ 	if ((ext4_sb_feature_incom(&fs->sb, EXT4_FINCOM_EXTENTS)) &&
+ 	    (ext4_inode_has_flag(inode_ref->inode, EXT4_INODE_FLAG_EXTENTS))) {
+@@ -1478,7 +1478,7 @@ static int ext4_fs_set_inode_data_block_index(struct ext4_inode_ref *inode_ref,
+ {
+ 	struct ext4_fs *fs = inode_ref->fs;
+ 
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	/* Handle inode using extents */
+ 	if ((ext4_sb_feature_incom(&fs->sb, EXT4_FINCOM_EXTENTS)) &&
+ 	    (ext4_inode_has_flag(inode_ref->inode, EXT4_INODE_FLAG_EXTENTS))) {
+@@ -1642,7 +1642,7 @@ static int ext4_fs_set_inode_data_block_index(struct ext4_inode_ref *inode_ref,
+ int ext4_fs_append_inode_dblk(struct ext4_inode_ref *inode_ref,
+ 			      ext4_fsblk_t *fblock, ext4_lblk_t *iblock)
+ {
+-#if CONFIG_EXTENT_ENABLE
++#if CONFIG_EXTENT_ENABLE && CONFIG_EXTENTS_ENABLE
+ 	/* Handle extents separately */
+ 	if ((ext4_sb_feature_incom(&inode_ref->fs->sb, EXT4_FINCOM_EXTENTS)) &&
+ 	    (ext4_inode_has_flag(inode_ref->inode, EXT4_INODE_FLAG_EXTENTS))) {
 diff --git a/src/ext4_hash.c b/src/ext4_hash.c
 index ff6d031..e8be8d2 100644
 --- a/src/ext4_hash.c

@@ -3,7 +3,7 @@
 
 pkgbasename=ntfs-3g_ntfsprogs
 pkgname=switch-libntfs-3g
-pkgver=2021.8.22
+pkgver=2022.5.17
 pkgrel=1
 pkgdesc='Read-Write NTFS Driver'
 baseurl='https://www.tuxera.com'
@@ -18,8 +18,8 @@ source=(
   "${pkgname}-${pkgver}.patch"
 )
 sha256sums=(
-  '55b883aa05d94b2ec746ef3966cb41e66bed6db99f22ddd41d1b8b94bb202efb'
-  'f66e80896f2dba933f790804e1e21fe11e7347a6e9bd0dc1323c718d826378f4'
+  '0489fbb6972581e1b417ab578d543f6ae522e7fa648c3c9b49c789510fd5eb93'
+  '2fdad1baea042fb30e3e8eb5732c0d9a80a88a77c53bad33e215f42a3606826c'
 )
 
 prepare() {

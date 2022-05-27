@@ -13,4 +13,4 @@ all:
 	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
 
 deps:
-	@pacman -S --needed --noconfirm patch cmake tar bzip2 diffutils pkg-config > /dev/null
+	@pacman -S --needed --noconfirm patch cmake tar bzip2 diffutils pkgconf > /dev/null
