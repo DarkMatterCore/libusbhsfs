@@ -1,5 +1,5 @@
 diff --git a/include/ntfs-3g/ntfstime.h b/include/ntfs-3g/ntfstime.h
-index f3a89dd..ce0d458 100644
+index f3a89dd8..ce0d4586 100644
 --- a/include/ntfs-3g/ntfstime.h
 +++ b/include/ntfs-3g/ntfstime.h
 @@ -36,6 +36,10 @@
@@ -14,7 +14,7 @@ index f3a89dd..ce0d458 100644
   * assume "struct timespec" is not defined if st_mtime is not defined
   */
 diff --git a/include/ntfs-3g/param.h b/include/ntfs-3g/param.h
-index ebc8a0a..6b8c7f7 100644
+index ebc8a0ae..6c43c230 100644
 --- a/include/ntfs-3g/param.h
 +++ b/include/ntfs-3g/param.h
 @@ -22,6 +22,22 @@
@@ -34,14 +34,14 @@ index ebc8a0a..6b8c7f7 100644
 +#define minor(dev)      ((unsigned int) ((dev) & MINORMASK))
 +#endif
 +#ifndef makedev
-+#define makedev(ma,mi)	(((ma) << MINORBITS) | (mi))
++#define makedev(ma,mi)  (((ma) << MINORBITS) | (mi))
 +#endif
 +
  #define CACHE_INODE_SIZE 32	/* inode cache, zero or >= 3 and not too big */
  #define CACHE_NIDATA_SIZE 64	/* idata cache, zero or >= 3 and not too big */
  #define CACHE_LOOKUP_SIZE 64	/* lookup cache, zero or >= 3 and not too big */
 diff --git a/libntfs-3g/Makefile.am b/libntfs-3g/Makefile.am
-index 6feba7d..83493c3 100644
+index 6feba7d7..83493c3a 100644
 --- a/libntfs-3g/Makefile.am
 +++ b/libntfs-3g/Makefile.am
 @@ -55,23 +55,7 @@ libntfs_3g_la_SOURCES += unix_io.c
@@ -74,7 +74,7 @@ index 6feba7d..83493c3 100644
  endif
 -
 diff --git a/libntfs-3g/ioctl.c b/libntfs-3g/ioctl.c
-index b059a53..a3a5672 100644
+index b059a53f..a3a56722 100644
 --- a/libntfs-3g/ioctl.c
 +++ b/libntfs-3g/ioctl.c
 @@ -48,7 +48,9 @@
