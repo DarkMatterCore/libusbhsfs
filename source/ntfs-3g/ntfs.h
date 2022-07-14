@@ -20,6 +20,7 @@
 #include <ntfs-3g/layout.h>
 #include <ntfs-3g/device.h>
 #include <ntfs-3g/volume.h>
+#include <ntfs-3g/cache.h>
 #include <ntfs-3g/inode.h>
 #include <ntfs-3g/logging.h>
 #include <ntfs-3g/dir.h>
