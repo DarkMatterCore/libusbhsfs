@@ -1001,8 +1001,6 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
     fs_ctx->ntfs->id = fs_ctx->device_id;
     fs_ctx->ntfs->update_access_times = (flags & UsbHsFsMountFlags_UpdateAccessTimes);
     fs_ctx->ntfs->ignore_read_only_attr = (flags & UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute);
-    fs_ctx->ntfs->show_hidden_files = (flags & UsbHsFsMountFlags_ShowHiddenFiles);
-    fs_ctx->ntfs->show_system_files = (flags & UsbHsFsMountFlags_ShowSystemFiles);
 
     if ((flags & UsbHsFsMountFlags_ReadOnly) || lun_ctx->write_protect) fs_ctx->ntfs->flags |= NTFS_MNT_RDONLY;
     if (flags & UsbHsFsMountFlags_ReplayJournal) fs_ctx->ntfs->flags |= NTFS_MNT_RECOVER;
@@ -1022,6 +1020,17 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
 
     /* Setup volume case sensitivity. */
 	if (flags & UsbHsFsMountFlags_IgnoreCaseSensitivity) ntfs_set_ignore_case(fs_ctx->ntfs->vol);
+
+    /* Set appropriate flags for showing system/hidden files on the NTFS volume. */
+    ntfs_set_shown_files(fs_ctx->ntfs->vol, (flags & UsbHsFsMountFlags_ShowSystemFiles) != 0, (flags & UsbHsFsMountFlags_ShowHiddenFiles) != 0, false);
+
+    /* Get NTFS volume free space. */
+    /* This will speed up subsequent calls to stavfs(). */
+    if (ntfs_volume_get_free_space(fs_ctx->ntfs->vol) < 0)
+    {
+        USBHSFS_LOG_MSG("Failed to retrieve free space from NTFS volume! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
+        goto end;
+    }
 
     /* Register devoptab device. */
     if (!usbHsFsMountRegisterDevoptabDevice(fs_ctx)) goto end;
