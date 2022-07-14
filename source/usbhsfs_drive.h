@@ -41,9 +41,9 @@ typedef struct {
     ntfs_vd *ntfs;      ///< Pointer to a dynamically allocated ntfs_vd object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
     ext_vd *ext;        ///< Pointer to a dynamically allocated ext_vd object. Only used if fs_type == UsbHsFsFileSystemType_EXT.
 #endif
-    
+
     /// TODO: add more FS objects here after implementing support for other filesystems.
-    
+
     u32 device_id;      ///< ID used as part of the mount name.
     char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).
     char *cwd;          ///< Pointer to the dynamically allocated current working directory string.
@@ -121,7 +121,7 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
     bool ctx_valid = (fs_ctx && usbHsFsDriveIsValidLogicalUnitContext((UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx) && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && \
                       fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
     bool fs_valid = false;
-    
+
     if (ctx_valid)
     {
         switch(fs_ctx->fs_type)
@@ -141,7 +141,7 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
                 break;
         }
     }
-    
+
     return (ctx_valid && fs_valid);
 }
 

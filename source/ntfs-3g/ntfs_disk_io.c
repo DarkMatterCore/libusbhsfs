@@ -57,9 +57,9 @@ struct ntfs_device_operations *ntfs_disk_io_get_dops(void)
 static int ntfs_io_device_open(struct ntfs_device *dev, int flags)
 {
     int ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p, flags 0x%X.", dev, flags);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -67,7 +67,7 @@ static int ntfs_io_device_open(struct ntfs_device *dev, int flags)
         errno = EBADF;
         goto end;
     }
-    
+
     /* Check if the device isn't already open (e.g. used by another mount). */
     if (NDevOpen(dev))
     {
@@ -75,7 +75,7 @@ static int ntfs_io_device_open(struct ntfs_device *dev, int flags)
         errno = EBUSY;
         goto end;
     }
-    
+
     /* Check if the boot sector is valid. */
     if (!ntfs_boot_sector_is_ntfs(&(dd->vbr)))
     {
@@ -83,7 +83,7 @@ static int ntfs_io_device_open(struct ntfs_device *dev, int flags)
         errno = EINVALPART;
         goto end;
     }
-    
+
     /* Parse partition info from the boot sector. */
     dd->sector_offset = le32_to_cpu(dd->vbr.bpb.hidden_sectors);
     dd->sector_size = le16_to_cpu(dd->vbr.bpb.bytes_per_sector);
@@ -91,17 +91,17 @@ static int ntfs_io_device_open(struct ntfs_device *dev, int flags)
     dd->pos = 0;
     dd->len = ((u64)dd->sector_size * dd->sector_count);
     dd->ino = le64_to_cpu(dd->vbr.volume_serial_number);
-    
+
     /* Mark the device as read-only (if requested). */
     if (flags & O_RDONLY) NDevSetReadOnly(dev);
-    
+
     /* Mark the device as open. */
     NDevSetBlock(dev);
     NDevSetOpen(dev);
-    
+
     /* Update return value. */
     ret = 0;
-    
+
 end:
     return ret;
 }
@@ -109,9 +109,9 @@ end:
 static int ntfs_io_device_close(struct ntfs_device *dev)
 {
     int ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p.", dev);
-    
+
     /* Check if the device is actually open. */
     if (!NDevOpen(dev))
     {
@@ -119,21 +119,21 @@ static int ntfs_io_device_close(struct ntfs_device *dev)
         errno = EIO;
         goto end;
     }
-    
+
     /* Mark the device as closed. */
     NDevClearOpen(dev);
     NDevClearBlock(dev);
-    
+
     /* Flush the device (if dirty and not read-only). */
     if (NDevDirty(dev) && !NDevReadOnly(dev))
     {
         USBHSFS_LOG_MSG("Device %p is dirty. Synchronizing data.", dev);
         ntfs_io_device_sync(dev);
     }
-    
+
     /* Update return value. */
     ret = 0;
-    
+
 end:
     return ret;
 }
@@ -141,9 +141,9 @@ end:
 static s64 ntfs_io_device_seek(struct ntfs_device *dev, s64 offset, int whence)
 {
     s64 ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p, offset 0x%lX, whence %d.", dev, offset, whence);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -151,7 +151,7 @@ static s64 ntfs_io_device_seek(struct ntfs_device *dev, s64 offset, int whence)
         errno = EBADF;
         goto end;
     }
-    
+
     /* Set the current position on the device (in bytes). */
     switch(whence)
     {
@@ -168,10 +168,10 @@ static s64 ntfs_io_device_seek(struct ntfs_device *dev, s64 offset, int whence)
             errno = EINVAL;
             goto end;
     }
-    
+
     /* Update return value. */
     ret = 0;
-    
+
 end:
     return ret;
 }
@@ -202,9 +202,9 @@ static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 cou
     u64 sec_start = 0, sec_count = 1;
     u32 buffer_offset = 0;
     u8 *buffer = NULL;
-    
+
     USBHSFS_LOG_MSG("Device %p, offset 0x%lX, count 0x%lX.", dev, offset, count);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -212,21 +212,21 @@ static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 cou
         errno = EBADF;
         goto end;
     }
-    
+
     /* Make sure the provided offset isn't negative and the amount of bytes to read is valid. */
     if (offset < 0 || count <= 0)
     {
         errno = EINVAL;
         goto end;
     }
-    
+
     /* Fill values. */
     sec_start = dd->sector_start;
     buffer_offset = (u32)(offset % dd->sector_size);
-    
+
     /* Determine the range of sectors required for this read. */
     if (offset > 0) sec_start += (u64)floor((double)offset / (double)dd->sector_size);
-    
+
     if ((buffer_offset + count) > dd->sector_size) sec_count = (u64)ceil((double)(buffer_offset + count) / (double)dd->sector_size);
 
     /* Read data from device. */
@@ -245,7 +245,7 @@ static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 cou
     } else {
         /* Read data into a buffer and copy over only what was requested. */
         /* This shouldn't normally happen as NTFS-3G aligns addresses and sizes to sectors, but it's better to be safe than sorry. */
-        
+
         /* Allocate a buffer to hold the read data. */
         buffer = malloc(sec_count * (u64)dd->sector_size);
         if (!buffer)
@@ -253,14 +253,14 @@ static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 cou
             errno = ENOMEM;
             goto end;
         }
-        
+
         /* Read data. */
         USBHSFS_LOG_MSG("Reading 0x%lX sector(s) from sector 0x%lX in device %p (buffered read).", sec_count, sec_start, dev);
         if (ntfs_io_device_readsectors(dev, sec_start, sec_count, buffer))
         {
             /* Copy what was requested to the destination buffer. */
             memcpy(buf, buffer + buffer_offset, count);
-            
+
             /* Update return value. */
             ret = count;
         } else {
@@ -268,10 +268,10 @@ static s64 ntfs_io_device_readbytes(struct ntfs_device *dev, s64 offset, s64 cou
             errno = EIO;
         }
     }
-    
+
 end:
     if (buffer) free(buffer);
-    
+
     return ret;
 }
 
@@ -281,9 +281,9 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
     u64 sec_start = 0, sec_count = 1;
     u32 buffer_offset = 0;
     u8 *buffer = NULL;
-    
+
     USBHSFS_LOG_MSG("Device %p, offset 0x%lX, count 0x%lX.", dev, offset, count);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -291,30 +291,30 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
         errno = EBADF;
         goto end;
     }
-    
+
     /* Check if the device can be written to. */
     if (NDevReadOnly(dev))
     {
         errno = EROFS;
         goto end;
     }
-    
+
     /* Make sure the provided offset isn't negative and the amount of bytes to write is valid. */
     if (offset < 0 || count <= 0)
     {
         errno = EINVAL;
         goto end;
     }
-    
+
     /* Fill values. */
     sec_start = dd->sector_start;
     buffer_offset = (u32)(offset % dd->sector_size);
-    
+
     /* Determine the range of sectors required for this read. */
     if (offset > 0) sec_start += (u64)floor((double)offset / (double)dd->sector_size);
-    
+
     if ((buffer_offset + count) > dd->sector_size) sec_count = (u64)ceil((double)(buffer_offset + count) / (double)dd->sector_size);
-    
+
     /* Write data to device. */
     if (!buffer_offset && !(count % dd->sector_size))
     {
@@ -331,7 +331,7 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
     } else {
         /* Write data from a buffer aligned to the sector boundaries. */
         /* This shouldn't normally happen as NTFS-3G aligns addresses and sizes to sectors, but it's better to be safe than sorry. */
-        
+
         /* Allocate a buffer to hold the read data. */
         buffer = malloc(sec_count * (u64)dd->sector_size);
         if (!buffer)
@@ -339,7 +339,7 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
             errno = ENOMEM;
             goto end;
         }
-        
+
         /* Read the first and last sectors of the buffer from the device (if required). */
         /* This is done thwn the data doesn't line up with sector boundaries, so we just in the buffer edges where the data overlaps. */
         if (buffer_offset != 0 && !ntfs_io_device_readsectors(dev, sec_start, 1, buffer))
@@ -348,24 +348,24 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
             errno = EIO;
             goto end;
         }
-        
+
         if (((buffer_offset + count) % dd->sector_size) != 0 && !ntfs_io_device_readsectors(dev, sec_start + sec_count - 1, 1, buffer + ((sec_count - 1) * dd->sector_size)))
         {
             USBHSFS_LOG_MSG("Failed to read sector 0x%lX from device %p (last).", sec_start, dev);
             errno = EIO;
             goto end;
         }
-        
+
         /* Copy data into the write buffer. */
         memcpy(buffer + buffer_offset, buf, count);
-        
+
         /* Write data. */
         USBHSFS_LOG_MSG("Writing 0x%lX sector(s) at sector 0x%lX from device %p (buffered write).", sec_count, sec_start, dev);
         if (ntfs_io_device_writesectors(dev, sec_start, sec_count, buffer))
         {
             /* Write successful. Mark the device as dirty. */
             NDevSetDirty(dev);
-            
+
             /* Update return value. */
             ret = count;
         } else {
@@ -373,10 +373,10 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
             errno = EIO;
         }
     }
-    
+
 end:
     if (buffer) free(buffer);
-    
+
     return ret;
 }
 
@@ -385,7 +385,7 @@ static bool ntfs_io_device_readsectors(struct ntfs_device *dev, u64 start, u32 c
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd) return false;
-    
+
     /* Get LUN context and read sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
     return usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buf, start, count);
@@ -396,7 +396,7 @@ static bool ntfs_io_device_writesectors(struct ntfs_device *dev, u64 start, u32 
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd) return false;
-    
+
     /* Get LUN context and write sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
     return usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buf, start, count);
@@ -405,25 +405,25 @@ static bool ntfs_io_device_writesectors(struct ntfs_device *dev, u64 start, u32 
 static int ntfs_io_device_sync(struct ntfs_device *dev)
 {
     int ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p.", dev);
-    
+
     /* Check if the device can be written to. */
     if (NDevReadOnly(dev))
     {
         errno = EROFS;
         goto end;
     }
-    
+
     /* TODO: implement write cache? */
-    
+
     /* Mark the device as clean. */
     NDevClearDirty(dev);
     NDevClearSync(dev);
-    
+
     /* Update return value. */
     ret = 0;
-    
+
 end:
     return ret;
 }
@@ -431,9 +431,9 @@ end:
 static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
 {
     int ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p, buf %p.", dev, buf);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -441,7 +441,7 @@ static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
         errno = EBADF;
         goto end;
     }
-    
+
     /* Get LUN context. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
     if (!lun_ctx)
@@ -449,13 +449,13 @@ static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
         errno = EBADF;
         goto end;
     }
-    
+
     /* Build device mode. */
     mode_t mode = (S_IFBLK | S_IRUSR | S_IRGRP | S_IROTH | (!NDevReadOnly(dev) ? (S_IWUSR | S_IWGRP | S_IWOTH) : 0));
-    
+
     /* Clear the stat buffer. */
     memset(buf, 0, sizeof(struct stat));
-    
+
     /* Fill device stats. */
     buf->st_dev = lun_ctx->usb_if_id;
     buf->st_ino = dd->ino;
@@ -464,10 +464,10 @@ static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
     buf->st_size = ((u64)dd->sector_size * dd->sector_count);
     buf->st_blksize = dd->sector_size;
     buf->st_blocks = dd->sector_count;
-    
+
     /* Update return value. */
     ret = 0;
-    
+
 end:
     return ret;
 }
@@ -475,11 +475,11 @@ end:
 static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, void *argp)
 {
     (void)argp;
-    
+
     int ret = -1;
-    
+
     USBHSFS_LOG_MSG("Device %p, ioctl 0x%lX, argp %p.", dev, request, argp);
-    
+
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
     if (!dd)
@@ -487,7 +487,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
         errno = EBADF;
         goto end;
     }
-    
+
     /* Get LUN context. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
     if (!lun_ctx)
@@ -495,7 +495,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
         errno = EBADF;
         goto end;
     }
-    
+
     /* Figure out which control was requested. */
     switch (request)
     {
@@ -548,7 +548,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
             errno = EOPNOTSUPP;
             break;
     }
-    
+
 end:
     return ret;
 }

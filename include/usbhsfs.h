@@ -56,7 +56,7 @@ typedef enum {
     UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS and EXT only. Filesystem is mounted as read-only.
     UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
     UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
-    
+
     ///< Pre-generated bitmasks provided for convenience.
     UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute),
     UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation)

@@ -42,7 +42,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)p_user;
     struct ext4_blockdev *bdev = NULL;
     bool success = false;
-    
+
     /* Allocate memory for ext4_blockdev object. */
     bdev = calloc(1, sizeof(struct ext4_blockdev));
     if (!bdev)
@@ -50,7 +50,7 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
         USBHSFS_LOG_MSG("Failed to allocate memory for ext4_blockdev object!");
         goto end;
     }
-    
+
     /* Allocate memory for ext4_blockdev_iface object. */
     bdev->bdif = calloc(1, sizeof(struct ext4_blockdev_iface));
     if (!bdev->bdif)
@@ -58,10 +58,10 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
         USBHSFS_LOG_MSG("Failed to allocate memory for ext4_blockdev_iface object!");
         goto end;
     }
-    
+
     /* Copy ext4_blockdev_iface object data. */
     memcpy(bdev->bdif, &ext_blockdev_usbhsfs_iface, sizeof(struct ext4_blockdev_iface));
-    
+
     /* Allocate memory for block size buffer. */
     bdev->bdif->ph_bbuf = calloc(1, lun_ctx->block_length);
     if (!bdev->bdif->ph_bbuf)
@@ -69,46 +69,46 @@ struct ext4_blockdev *ext_disk_io_alloc_blockdev(void *p_user, u64 part_lba, u64
         USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for block size buffer!", lun_ctx->block_length);
         goto end;
     }
-    
+
     /* Fill ext4_blockdev object. */
     bdev->part_offset = (part_lba * (u64)lun_ctx->block_length);
     bdev->part_size = (part_size * (u64)lun_ctx->block_length);
-    
+
     /* Fill ext4_blockdev_iface object. */
     bdev->bdif->ph_bsize = lun_ctx->block_length;
     bdev->bdif->ph_bcnt = part_size;
     bdev->bdif->p_user = lun_ctx;
-    
+
     /* Update flag. */
     success = true;
-    
+
 end:
     if (!success && bdev)
     {
         ext_disk_io_free_blockdev(bdev);
         bdev = NULL;
     }
-    
+
     return bdev;
 }
 
 void ext_disk_io_free_blockdev(struct ext4_blockdev *bdev)
 {
     if (!bdev) return;
-    
+
     if (bdev->bdif)
     {
         if (bdev->bdif->ph_bbuf) free(bdev->bdif->ph_bbuf);
         free(bdev->bdif);
     }
-    
+
     free(bdev);
 }
 
 static int ext_blockdev_open(struct ext4_blockdev *bdev)
 {
     (void)bdev;
-    
+
     /* Low level block device initialization is handled by us. */
     return 0;
 }
@@ -130,7 +130,7 @@ static int ext_blockdev_bwrite(struct ext4_blockdev *bdev, const void *buf, uint
 static int ext_blockdev_close(struct ext4_blockdev *bdev)
 {
     (void)bdev;
-    
+
     /* Low level block device deinitialization is handled by us. */
     return 0;
 }
@@ -138,7 +138,7 @@ static int ext_blockdev_close(struct ext4_blockdev *bdev)
 static int ext_blockdev_lock(struct ext4_blockdev *bdev)
 {
     (void)bdev;
-    
+
     /* Mutex locking is handled by us. */
     return 0;
 }
@@ -146,7 +146,7 @@ static int ext_blockdev_lock(struct ext4_blockdev *bdev)
 static int ext_blockdev_unlock(struct ext4_blockdev *bdev)
 {
     (void)bdev;
-    
+
     /* Mutex unlocking is handled by us. */
     return 0;
 }
