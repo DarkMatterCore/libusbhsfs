@@ -1016,6 +1016,10 @@ static bool usbHsFsMountRegisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemCont
         goto end;
     }
 
+    /* Create all LRU caches. */
+    /* No errors returned -- if this fails internally, LRU caches simply won't be available. */
+    ntfs_create_lru_caches(fs_ctx->ntfs->vol);
+
     /* Setup volume case sensitivity. */
 	if (flags & UsbHsFsMountFlags_IgnoreCaseSensitivity) ntfs_set_ignore_case(fs_ctx->ntfs->vol);
 
@@ -1031,9 +1035,10 @@ end:
     {
         if (fs_ctx->ntfs->vol)
         {
+            /* ntfs_umount() takes care of calling both ntfs_create_lru_caches() and ntfs_device_free() for us. */
             ntfs_umount(fs_ctx->ntfs->vol, true);
             fs_ctx->ntfs->vol = NULL;
-            fs_ctx->ntfs->dev = NULL;   /* ntfs_umount() calls ntfs_device_free() for us. */
+            fs_ctx->ntfs->dev = NULL;
         }
 
         if (fs_ctx->ntfs->dev)
@@ -1058,7 +1063,7 @@ end:
 static void usbHsFsMountUnregisterNtfsVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
     /* Unmount NTFS volume. */
-    /* We don't need to manually free the NTFS device handle - ntfs_umount() does it for us. */
+    /* We don't need to manually free the NTFS device handle nor the LRU caches - ntfs_umount() does that for us. */
     ntfs_umount(fs_ctx->ntfs->vol, true);
     fs_ctx->ntfs->vol = NULL;
     fs_ctx->ntfs->dev = NULL;
