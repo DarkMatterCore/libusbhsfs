@@ -157,6 +157,19 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.7:**
+
+* **log**: use UTC timestamp generated at build time instead of `__DATE__` and `__TIME__` macros.
+* **fs-libs**: add missing Windows-specific dependencies to the Makefiles.
+* **fat**: update FatFs to latest patch from `2022-04-04`.
+* **ntfs**:
+    * Update NTFS-3G to `2022.5.17`.
+    * Create LRU caches while mounting new NTFS volumes.
+    * Use `ntfs_volume_get_free_space()` while mounting new NTFS volumes to speed up subsequent calls to `statvfs()` made by the user.
+    * Let NTFS-3G take care of filtering system files and hidden files using `ntfs_set_shown_files()`, instead of filtering them in the library's `dirnext()` implementation.
+    * Use `NVolFreeSpaceKnown()` in the library's `statvfs()` implementation to check if the number of free NTFS clusters has already been retrieved.
+* **ext**: apply cherrypicked bugfixes to lwext4 (https://github.com/cyyynthia/lwext4/commit/bf68d176d7e0a1369a0ca2b35aaad0f700f2e716, https://github.com/wzx-ipads/lwext4/commit/06b64aabc9b445f6b28a9850ed1fcf715edad418 and https://github.com/mudita/lwext4/commit/2869807352fb7c9c2ab69e8442efa0b2ce404673).
+
 **v0.2.6:**
 
 * Updated codebase to use `localtime_r()` instead of `localtime()` to avoid possible race conditions with other threads.
