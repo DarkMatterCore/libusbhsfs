@@ -62,7 +62,7 @@ typedef enum {
     UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation)
 } UsbHsFsMountFlags;
 
-/// Struct used to list mounted filesystems as devoptab devices.
+/// Struct used to list filesystems that have been mounted as virtual devices via devoptab.
 /// Everything but the manufacturer, product_name and name fields is empty/zeroed-out under SX OS.
 typedef struct {
     s32 usb_if_id;          ///< USB interface ID. Internal use.
@@ -81,7 +81,7 @@ typedef struct {
 } UsbHsFsDevice;
 
 /// Initializes the USB Mass Storage Host interface.
-/// event_idx represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the 0 - 2 range (inclusive).
+/// `event_idx` represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the [0, 2] range.
 /// If you're not using any usb:hs interface available events on your own, set this value to 0. If running under SX OS, this value will be ignored.
 /// This function will fail if the deprecated fsp-usb service is running in the background.
 Result usbHsFsInitialize(u8 event_idx);
@@ -95,17 +95,21 @@ void usbHsFsExit(void);
 /// Returns NULL if the USB Mass Storage Host interface hasn't been initialized.
 UEvent *usbHsFsGetStatusChangeUserEvent(void);
 
-/// Returns the mounted device count.
+/// Returns the number of physical UMS devices currently connected to the console with at least one underlying filesystem mounted as a virtual device.
+u32 usbHsFsGetPhysicalDeviceCount(void);
+
+/// Returns the total number of filesystems across all available UMS devices currently mounted as virtual devices via devoptab.
+/// Must be used before calling usbHsFsListMountedDevices().
 u32 usbHsFsGetMountedDeviceCount(void);
 
-/// Lists up to max_count mounted devices and stores their information in the provided UsbHsFsDevice array.
+/// Lists up to `max_count` mounted virtual devices and stores their information in the provided UsbHsFsDevice array.
 /// Returns the total number of written entries.
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 
 /// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
 /// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
 /// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
-/// If successful, and signal_status_event is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+/// If successful, and `signal_status_event` is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
 /// This function has no effect at all under SX OS.
 bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
 

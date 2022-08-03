@@ -271,6 +271,13 @@ UEvent *usbHsFsGetStatusChangeUserEvent(void)
     return event;
 }
 
+u32 usbHsFsGetPhysicalDeviceCount(void)
+{
+    u32 ret = 0;
+    SCOPED_LOCK(&g_managerMutex) ret = (g_usbHsFsInitialized ? (!g_isSXOS ? g_driveCount : (g_isSXOSDeviceAvailable ? 1 : 0)) : 0);
+    return ret;
+}
+
 u32 usbHsFsGetMountedDeviceCount(void)
 {
     u32 ret = 0;
