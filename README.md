@@ -83,7 +83,7 @@ Dual licensing is provided for this project depending on the way it is built:
     * ISC licensed builds only provide support for FAT filesystems via FatFs, which is licensed under the [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license).
 * If the library is built using the `BUILD_TYPE=GPL` parameter with `make`, it is distributed under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version. You can find a copy of this license in the [LICENSE_GPLv2.md file](https://github.com/DarkMatterCore/libusbhsfs/blob/main/LICENSE_GPLv2.md). GPLv2+ licensed builds provide support for:
     * FAT filesystems via FatFs, which is licensed under the [FatFs license](http://elm-chan.org/fsw/ff/doc/appnote.html#license).
-    * NTFS via NTFS-3G, which is licensed under the [GPLv2+ license](https://sourceforge.net/p/ntfs-3g/ntfs-3g/ci/edge/tree/COPYING).
+    * NTFS via NTFS-3G, which is licensed under the [GPLv2+ license](https://github.com/tuxera/ntfs-3g/blob/edge/COPYING).
     * EXT filesystems via lwext4, which is licensed under the [GPLv2 license](https://github.com/gkostka/lwext4/blob/master/LICENSE).
 
 How to install
@@ -145,7 +145,7 @@ Thanks to
 --------------
 
 * ChaN, for the [FatFs module](http://elm-chan.org/fsw/ff/00index_e.html).
-* Tuxera and NTFS-3G contributors, for the [NTFS-3G library](https://sourceforge.net/projects/ntfs-3g).
+* Tuxera and NTFS-3G contributors, for the [NTFS-3G library](https://github.com/tuxera/ntfs-3g).
 * Grzegorz Kostka and lwext4 contributors, for the [lwext4 library](https://github.com/gkostka/lwext4).
 * Switchbrew and libnx contributors. Code from libnx was used for devoptab device management and path handling.
 * [blawar](https://github.com/blawar), for providing the updated `usbfs` SX OS service calls.
