@@ -107,9 +107,9 @@ u32 usbHsFsGetMountedDeviceCount(void);
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 
 /// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
-/// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
-/// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
-/// If successful, and `signal_status_event` is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+/// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't mandatory.
+/// If multiple UsbHsFsDevice entries are returned for the same physical UMS device, any of them can be used as the input argument for this function.
+/// If successful, and `signal_status_event` is true, this will also fire the user-mode status change event returned by usbHsFsGetStatusChangeUserEvent().
 /// This function has no effect at all under SX OS.
 bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
 
