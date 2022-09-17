@@ -344,7 +344,7 @@ void usbHsFsMountDestroyLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFile
             break;
 #endif
 
-        /* TO DO: populate this after adding support for additional filesystems. */
+        /* TODO: populate this after adding support for additional filesystems. */
 
         default:
             break;
@@ -828,7 +828,7 @@ static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, 
             break;
 #endif
 
-        /* TO DO: populate this after adding support for additional filesystems. */
+        /* TODO: populate this after adding support for additional filesystems. */
 
         default:
             USBHSFS_LOG_MSG("Invalid FS type provided! (0x%02X) (interface %d, LUN %u, FS %u).", fs_type, lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
