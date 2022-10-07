@@ -15,7 +15,7 @@
 /* Function prototypes. */
 
 static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext *drive_ctx);
-static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_session, struct usb_interface_descriptor *interface_desc);
+static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_session, const struct usb_interface_descriptor *interface_desc);
 static bool usbHsFsDriveSetupEndpointDescriptors(UsbHsFsDriveContext *drive_ctx, u8 *config_desc_start, u8 *config_desc_end, u8 **config_desc_ptr);
 static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session, UsbHsClientEpSession *usb_ep_session, bool input, u8 ep_addr);
 
@@ -273,6 +273,7 @@ static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext
     }
 
     /* Do not proceed if the configuration descriptor is too small to hold a USB Attached SCSI interface. */
+    /* SuperSpeed endpoint companion descriptors aren't part of the math because we could be dealing with UASP over USB2. */
     if (config_desc_size < (sizeof(struct usb_config_descriptor) + sizeof(struct usb_interface_descriptor) + ((sizeof(struct usb_endpoint_descriptor) + sizeof(struct usb_pipe_usage_descriptor)) * 4)))
     {
         USBHSFS_LOG_MSG("Configuration descriptor is too small to hold a UASP interface (interface %d).", usb_if_session->ID);
@@ -347,7 +348,7 @@ end:
     return success;
 }
 
-static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_session, struct usb_interface_descriptor *interface_desc)
+static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_session, const struct usb_interface_descriptor *interface_desc)
 {
     if (!usb_if_session || !usbHsIfIsActive(usb_if_session) || !interface_desc) return false;
 
@@ -546,7 +547,7 @@ static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session,
         max_burst++;
 
         if (ep_desc->bLength && ((!ep_addr && ((input && (ep_desc->bEndpointAddress & USB_ENDPOINT_IN)) || (!input && !(ep_desc->bEndpointAddress & USB_ENDPOINT_IN)))) || \
-            (ep_addr && ep_desc->bEndpointAddress == ep_addr)) && (ep_desc->bmAttributes & 0x3F) == USB_TRANSFER_TYPE_BULK)
+            (ep_addr && ep_desc->bEndpointAddress == ep_addr)) && (ep_desc->bmAttributes & USB_TRANSFER_TYPE_MASK) == USB_TRANSFER_TYPE_BULK)
         {
             Result rc = usbHsIfOpenUsbEp(usb_if_session, usb_ep_session, 1, ep_desc->wMaxPacketSize, ep_desc);
             if (R_FAILED(rc))
