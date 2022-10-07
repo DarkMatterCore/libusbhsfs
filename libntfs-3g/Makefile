@@ -20,4 +20,4 @@ all:
 
 deps:
 	-@$(PACMAN) -R pkg-config > /dev/null
-	@$(PACMAN) -S --needed --noconfirm patch autotools tar bzip2 diffutils pkgconf > /dev/null
+	@$(PACMAN) -S --needed --noconfirm patch dkp-toolchain-vars autotools tar bzip2 diffutils pkgconf > /dev/null

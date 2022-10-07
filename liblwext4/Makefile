@@ -20,4 +20,4 @@ all:
 
 deps:
 	-@$(PACMAN) -R pkg-config > /dev/null
-	@$(PACMAN) -S --needed --noconfirm patch cmake tar bzip2 diffutils pkgconf > /dev/null
+	@$(PACMAN) -S --needed --noconfirm patch dkp-toolchain-vars cmake tar bzip2 diffutils pkgconf > /dev/null
