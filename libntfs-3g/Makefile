@@ -1,7 +1,6 @@
 ifeq ($(OS),Windows_NT)
 MAKEPKG	:=	makepkg
 PACMAN	:=	pacman
-all: deps
 else
 ifeq (,$(shell which makepkg))
 MAKEPKG	:=	dkp-makepkg
@@ -15,7 +14,10 @@ PACMAN	:=	pacman
 endif
 endif
 
-all:
+BINS	:=	$(MAKEPKG) $(PACMAN)
+EVAL	:=	$(foreach bin,$(BINS),$(if $(shell which $(bin)),placeholder,$(error "No $(bin) in PATH, consider reinstalling devkitPro")))
+
+all: deps
 	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
 
 deps:
