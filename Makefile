@@ -28,19 +28,27 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS		+=	-DBUILD_TIMESTAMP="\"${BUILD_TIMESTAMP}\"" -DLIB_TITLE=\"lib$(TARGET)\"
+CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE=\"lib$(TARGET)\"
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS		:=	-g $(ARCH)
 
+UC			=	$(strip $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst g,G,$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,\
+				$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,\
+				$(subst w,W,$(subst x,X,$(subst y,Y,$(subst z,Z,$1)))))))))))))))))))))))))))
+
 ifeq ($(filter $(MAKECMDGOALS),clean dist-src fs-libs),)
     # Check BUILD_TYPE flag
     ifneq ($(origin BUILD_TYPE),undefined)
-        ifeq (${BUILD_TYPE},ISC)
+        # Convert BUILD_TYPE flag to uppercase
+        ORIG_BUILD_TYPE		:=	$(BUILD_TYPE)
+        override BUILD_TYPE	:=	$(call UC,$(ORIG_BUILD_TYPE))
+        # Check BUILD_TYPE flag value
+        ifeq ($(BUILD_TYPE),ISC)
             # Do nothing
         else
-            ifeq (${BUILD_TYPE},GPL)
+            ifeq ($(BUILD_TYPE),GPL)
                 # Update sources, set GPL_BUILD definition
                 # We'll just assume the user has already installed the necessary libraries
                 SOURCES	+=	source/ntfs-3g source/lwext4
@@ -114,10 +122,10 @@ $(eval LIB_VERSION_MINOR = $(shell grep 'define LIBUSBHSFS_VERSION_MINOR\b' incl
 $(eval LIB_VERSION_MICRO = $(shell grep 'define LIBUSBHSFS_VERSION_MICRO\b' include/usbhsfs.h | tr -s [:blank:] | cut -d' ' -f3))
 $(eval LIB_VERSION = $(LIB_VERSION_MAJOR).$(LIB_VERSION_MINOR).$(LIB_VERSION_MICRO)-$(LIB_REV))
 
-ifeq (${BUILD_TYPE},ISC)
+ifeq ($(BUILD_TYPE),ISC)
 LIB_LICENSE	:=	ISC
 else
-LIB_LICENSE	:=	GPLv2
+LIB_LICENSE	:=	GPLv2+
 ifeq ($(MAKECMDGOALS),install)
 lib/lib$(TARGET).a: fs-libs
 lib/lib$(TARGET)d.a: fs-libs
@@ -140,12 +148,12 @@ lib-dir:
 	@mkdir -p lib
 
 example: all
-	@$(MAKE) BUILD_TYPE=${BUILD_TYPE} --no-print-directory -C example
+	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example
 
 fs-libs:
 	@echo Installing ntfs-3g
 	@$(MAKE) -C libntfs-3g
-	
+
 	@echo Installing lwext4
 	@$(MAKE) -C liblwext4
 
