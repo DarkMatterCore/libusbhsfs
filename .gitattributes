@@ -1,2 +1,4 @@
 /libntfs-3g/PKGBUILD    text eol=lf
+/libntfs-3g/*.patch     text eol=lf
 /liblwext4/PKGBUILD     text eol=lf
+/liblwext4/*.patch      text eol=lf
