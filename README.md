@@ -93,9 +93,15 @@ This section assumes you've already installed devkitA64, libnx and devkitPro pac
 
 * **ISC licensed build**: run `make BUILD_TYPE=ISC install` on the root directory from the project.
 
-* **GPLv2+ licensed build**: run `make BUILD_TYPE=GPL install` on the root directory from the project.
+* **GPLv2+ licensed build**:
+    1. Run `make fs-libs` on the root directory from the project to manually build and install the NTFS-3G and lwext4 libraries into the `portlibs` directory from devkitPro.
+    2. Run `make BUILD_TYPE=GPL install` afterwards.
 
-Regardless of the build type you choose, libusbhsfs will be installed to the `portlibs` directory from devkitPro, and it'll be ready to use by any homebrew application. If you choose to install the GPLv2+ licensed build, both NTFS-3G and lwext4 will be installed to the `portlibs` directory as well.
+Regardless of the build type you choose, libusbhsfs will be installed into the `portlibs` directory from devkitPro, and it'll be ready to use by any homebrew application.
+
+If you use the GPLv2+ licensed build, please note that in order to potentially speed up the building process, the NTFS-3G and lwext4 libraries \**are not*\* compiled every time libusbhsfs itself is built, thus making it necessary to manually run `make fs-libs` every time the libraries are updated within libusbhsfs' codebase. In other words, if you run into issues trying to build a newer version of libusbhsfs, try rebuilding and reinstalling the dependencies first.
+
+Building and installing the NTFS-3G and lwext4 libraries beforehand isn't needed if you intend to use the ISC licensed build -- it is guaranteed to not use any GPL licensed code and/or dependency at all.
 
 How to use
 --------------
