@@ -893,7 +893,6 @@ static int ffdev_translate_error(FRESULT res)
             ret = ENODEV;
             break;
         case FR_NOT_ENABLED:
-        case FR_MKFS_ABORTED:
             ret = ENOEXEC;
             break;
         case FR_NO_FILESYSTEM:
