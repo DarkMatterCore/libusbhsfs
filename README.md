@@ -163,6 +163,16 @@ Thanks to
 Changelog
 --------------
 
+**v0.2.8:**
+
+* **lib**: add `usbHsFsGetPhysicalDeviceCount()`, which returns the number of physical UMS devices currently connected to the console with at least one underlying filesystem mounted as a virtual device.
+* **fs-libs**:
+    * Update FatFs to `R0.15 w/patch2`.
+        * Furthermore, FatFs is now modified to check a runtime read-only flag for any mounted filesystems, making it possible to use the `UsbHsFsMountFlags_ReadOnly` mount flag on FAT volumes for write-free access.
+    * Update NTFS-3G to `2022.10.3`.
+    * Update lwext4 to `58bcf89a121b72d4fb66334f1693d3b30e4cb9c5` with cherrypicked patches.
+    * Improve Makefile scripts for both NTFS-3G and lwext4 by checking if `makepkg` and `(dkp-)pacman` binaries are actually available, as well as automatically removing `pkg-config` if its available and installing `dkp-toolchain-vars` as part of the required dependencies.
+
 **v0.2.7:**
 
 * **log**: use UTC timestamp generated at build time instead of `__DATE__` and `__TIME__` macros.
