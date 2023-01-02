@@ -7,10 +7,10 @@
 *.log
 *.bin
 *.pcapng
+*.elf
+*.nacp
+*.nro
 /example/build
-/example/*.elf
-/example/*.nacp
-/example/*.nro
 /libntfs-3g/src
 /libntfs-3g/pkg
 /liblwext4/src

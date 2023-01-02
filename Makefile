@@ -188,7 +188,7 @@ dist-src:
 	--exclude='example/build' --exclude='example/*.elf' --exclude='example/*.nacp' --exclude='example/*.nro' \
 	--exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
 	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
-	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2.md Makefile README.md
+	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2+.md Makefile README.md
 
 dist: dist-src dist-bin
 
