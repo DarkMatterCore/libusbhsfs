@@ -114,7 +114,10 @@ typedef char TCHAR;
 typedef struct {
 	BYTE	fs_type;		/* Filesystem type (0:not mounted) */
 	BYTE	pdrv;			/* Volume hosting physical drive */
-	BYTE	ldrv;			/* Logical drive number (used only when FF_FS_REENTRANT) */
+#if FF_FS_REENTRANT
+	BYTE	ldrv;			/* Logical drive number */
+#endif
+	BYTE	ro_flag;		/* Read-only flag */
 	BYTE	n_fats;			/* Number of FATs (1 or 2) */
 	BYTE	wflag;			/* win[] status (b0:dirty) */
 	BYTE	fsi_flag;		/* FSINFO status (b7:disabled, b0:dirty) */
@@ -130,10 +133,8 @@ typedef struct {
 #if FF_FS_EXFAT
 	BYTE*	dirbuf;			/* Directory entry block scratchpad buffer for exFAT */
 #endif
-#if !FF_FS_READONLY
 	DWORD	last_clst;		/* Last allocated cluster */
 	DWORD	free_clst;		/* Number of free clusters */
-#endif
 	DWORD	cdir;			/* Current directory start cluster (0:root) */
 #if FF_FS_EXFAT
 	DWORD	cdc_scl;		/* Containing directory start cluster (invalid when cdir is 0) */
@@ -187,10 +188,8 @@ typedef struct {
 	FSIZE_t	fptr;			/* File read/write pointer (Zeroed on file open) */
 	DWORD	clust;			/* Current cluster of fpter (invalid when fptr is 0) */
 	LBA_t	sect;			/* Sector number appearing in buf[] (0:invalid) */
-#if !FF_FS_READONLY
 	LBA_t	dir_sect;		/* Sector number containing the directory entry (not used at exFAT) */
 	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] (not used at exFAT) */
-#endif
 #if FF_USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (nulled on open, set by application) */
 #endif
@@ -330,7 +329,7 @@ TCHAR* ff_gets (TCHAR* buff, int len, FIL* fp);						/* Get a string from the fi
 	timestamp; \
 })
 
-#if !FF_FS_READONLY && !FF_FS_NORTC
+#if !FF_FS_NORTC
 DWORD get_fattime (void);	/* Get current time */
 #endif
 

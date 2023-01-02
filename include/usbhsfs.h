@@ -53,7 +53,7 @@ typedef enum {
     UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
     UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
     UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
-    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS and EXT only. Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< Filesystem is mounted as read-only.
     UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
     UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
 

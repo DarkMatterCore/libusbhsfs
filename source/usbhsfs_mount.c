@@ -868,9 +868,7 @@ end:
 
 static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, u8 *block, u64 block_addr)
 {
-#ifdef DEBUG
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx;
-#endif
 
     u8 pdrv = 0;
     char name[MOUNT_NAME_LENGTH] = {0};
@@ -903,6 +901,9 @@ static bool usbHsFsMountRegisterFatVolume(UsbHsFsDriveLogicalUnitFileSystemConte
         USBHSFS_LOG_MSG("Failed to allocate memory for FATFS object! (interface %d, LUN %u, FS %u).", lun_ctx->usb_if_id, lun_ctx->lun, fs_ctx->fs_idx);
         goto end;
     }
+
+    /* Set read-only flag. */
+    fs_ctx->fatfs->ro_flag = ((fs_ctx->flags & UsbHsFsMountFlags_ReadOnly) || lun_ctx->write_protect);
 
     /* Copy VBR data. */
     fs_ctx->fatfs->winsect = (LBA_t)block_addr;

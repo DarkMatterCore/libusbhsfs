@@ -344,7 +344,7 @@ static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
 
     /* Get stats. */
     res = ff_stat(__usbhsfs_dev_path_buf, &info);
-    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
 
     /* Fill stat info. */
     ffdev_fill_stat(st, &info);
@@ -401,7 +401,7 @@ static int ffdev_chdir(struct _reent *r, const char *name)
 
     /* Open directory. */
     res = ff_opendir(&dir, __usbhsfs_dev_path_buf);
-    if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
+    if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
 
     /* Close directory. */
     ff_closedir(&dir);

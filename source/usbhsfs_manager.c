@@ -401,7 +401,10 @@ u32 usbHsFsGetFileSystemMountFlags(void)
 
 void usbHsFsSetFileSystemMountFlags(u32 flags)
 {
-    SCOPED_LOCK(&g_managerMutex) usbHsFsMountSetFileSystemMountFlags(flags);
+    SCOPED_LOCK(&g_managerMutex) usbHsFsMountSetFileSystemMountFlags(flags & (UsbHsFsMountFlags_IgnoreCaseSensitivity | UsbHsFsMountFlags_UpdateAccessTimes | \
+                                                                              UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ShowSystemFiles | \
+                                                                              UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute | UsbHsFsMountFlags_ReadOnly | \
+                                                                              UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation));
 }
 
 /* Non-static function not meant to be disclosed to users. */

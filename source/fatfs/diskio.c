@@ -72,8 +72,6 @@ DRESULT ff_disk_read (
 /* Write Sector(s)                                                       */
 /*-----------------------------------------------------------------------*/
 
-#if FF_FS_READONLY == 0
-
 DRESULT ff_disk_write (
 	BYTE pdrv,			/* Physical drive nmuber to identify the drive */
 	const BYTE *buff,	/* Data to be written */
@@ -84,14 +82,12 @@ DRESULT ff_disk_write (
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
 
-    /* Get LUN context and read logical blocks. */
+    /* Get LUN context and write logical blocks. */
     lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
     if (lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
 
     return ret;
 }
-
-#endif
 
 
 /*-----------------------------------------------------------------------*/
@@ -133,7 +129,7 @@ DRESULT ff_disk_ioctl (
     return ret;
 }
 
-#if !FF_FS_READONLY && !FF_FS_NORTC /* Get system time */
+#if !FF_FS_NORTC /* Get system time */
 DWORD get_fattime(void)
 {
     Result rc = 0;
