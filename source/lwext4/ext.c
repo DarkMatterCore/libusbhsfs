@@ -1,7 +1,7 @@
 /*
  * ext.c
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */

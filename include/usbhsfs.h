@@ -1,7 +1,7 @@
 /*
  * usbhsfs.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
