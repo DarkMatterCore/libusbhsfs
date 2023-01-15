@@ -126,10 +126,6 @@ ifeq ($(BUILD_TYPE),ISC)
 LIB_LICENSE	:=	ISC
 else
 LIB_LICENSE	:=	GPLv2+
-ifeq ($(MAKECMDGOALS),install)
-lib/lib$(TARGET).a: fs-libs
-lib/lib$(TARGET)d.a: fs-libs
-endif
 endif
 
 all: release debug

@@ -1,7 +1,9 @@
 ifeq ($(OS),Windows_NT)
 MAKEPKG	:=	makepkg
 PACMAN	:=	pacman
+PACKAGES:=  patch dkp-toolchain-vars autotools tar bzip2 diffutils pkgconf
 else
+PACKAGES:=  patch dkp-toolchain-vars autoconf automake tar bzip2 diffutils pkgconf
 ifeq (,$(shell which makepkg))
 MAKEPKG	:=	dkp-makepkg
 else
@@ -21,5 +23,9 @@ all: deps
 	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
 
 deps:
-	-@$(PACMAN) -R pkg-config > /dev/null
-	@$(PACMAN) -S --needed --noconfirm patch dkp-toolchain-vars autotools tar bzip2 diffutils pkgconf > /dev/null
+ifeq ($(OS),Windows_NT)
+	@$(PACMAN) -R pkg-config > /dev/null
+endif
+	@for pkg in $(PACKAGES); do \
+		$(PACMAN) -Q $$pkg > /dev/null || $(PACMAN) -S --needed --noconfirm $$pkg; \
+	done
