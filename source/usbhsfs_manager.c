@@ -44,6 +44,7 @@ static u32 g_driveCount = 0;
 static UEvent g_usbStatusChangeEvent = {0};
 
 static UsbHsFsPopulateCb g_populateCb = NULL;
+static void *g_populateCbUserData = NULL;
 
 /* Function prototypes. */
 
@@ -260,6 +261,7 @@ void usbHsFsExit(void)
 
         /* Clear user-provided callback. */
         g_populateCb = NULL;
+        g_populateCbUserData = NULL;
 
 #ifdef DEBUG
         /* Close logfile. */
@@ -312,7 +314,7 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
     return ret;
 }
 
-void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb)
+void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb, void *user_data)
 {
     SCOPED_LOCK(&g_managerMutex)
     {
@@ -323,6 +325,7 @@ void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb)
         }
 
         g_populateCb = populate_cb;
+        g_populateCbUserData = user_data;
     }
 }
 
@@ -1011,12 +1014,12 @@ static void usbHsFsExecutePopulateCallback(void)
     if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count)
     {
         /* Execute the callback function with NULL inputs. */
-        g_populateCb(NULL, 0);
+        g_populateCb(NULL, 0, g_populateCbUserData);
     } else
     if (g_isSXOS)
     {
         /* Execute the callback function with SX OS inputs. */
-        g_populateCb(&g_sxOSDevice, 1);
+        g_populateCb(&g_sxOSDevice, 1, g_populateCbUserData);
     } else {
         /* Allocate buffer to hold information for all virtual devices. */
         devices = calloc(device_count, sizeof(UsbHsFsDevice));
@@ -1030,7 +1033,7 @@ static void usbHsFsExecutePopulateCallback(void)
         device_count = usbHsFsPopulateDeviceList(devices, device_count, device_count);
 
         /* Execute the callback function using the populated buffer. */
-        g_populateCb(devices, device_count);
+        g_populateCb(devices, device_count, g_populateCbUserData);
 
         /* Free devices buffer. */
         free(devices);

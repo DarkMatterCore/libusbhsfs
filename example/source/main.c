@@ -257,8 +257,10 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
     consoleUpdate(NULL);
 }
 
-static void usbMscPopulateFunc(const UsbHsFsDevice *devices, u32 device_count)
+static void usbMscPopulateFunc(const UsbHsFsDevice *devices, u32 device_count, void *user_data)
 {
+    (void)user_data;
+
     mutexLock(&g_usbDeviceMutex);
 
     printf("USB Mass Storage status change triggered!\nMounted USB Mass Storage device count: %u.\n\n", device_count);
@@ -381,7 +383,7 @@ int main(int argc, char **argv)
     consoleUpdate(NULL);
 
     /* Set populate callback function. */
-    usbHsFsSetPopulateCallback(&usbMscPopulateFunc);
+    usbHsFsSetPopulateCallback(&usbMscPopulateFunc, NULL);
 
     /* Initialize USB Mass Storage Host interface. */
     rc = usbHsFsInitialize(0);
