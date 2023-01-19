@@ -80,6 +80,9 @@ typedef struct {
     u32 flags;              ///< UsbHsFsMountFlags bitmask used at mount time.
 } UsbHsFsDevice;
 
+/// Used with usbHsFsSetPopulateCallback().
+typedef void (*UsbHsFsPopulateCb)(const UsbHsFsDevice *devices, u32 device_count);
+
 /// Initializes the USB Mass Storage Host interface.
 /// `event_idx` represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the [0, 2] range.
 /// If you're not using any usb:hs interface available events on your own, set this value to 0. If running under SX OS, this value will be ignored.
@@ -90,21 +93,65 @@ Result usbHsFsInitialize(u8 event_idx);
 /// If there are any UMS devices with mounted filesystems connected to the console when this function is called, their filesystems will be unmounted and their logical units will be stopped.
 void usbHsFsExit(void);
 
+/************************************************************************************************
+ *                                 Event-based population system                                *
+ *                                                                                              *
+ * These functions make it possible to retrieve information on demand about the available UMS   *
+ * filesystems that have been mounted as virtual devoptab devices, using a background thread    *
+ * created by the user.                                                                         *
+ *                                                                                              *
+ * This background thread can create a Waiter object using the UEvent object returned by        *
+ * usbHsFsGetStatusChangeUserEvent(), which can then be used with primitive waiting operations  *
+ * such as waitMulti() or waitObjects(). This is specially useful for applications that rely on *
+ * other Switch-specific ABIs that are also event-driven: a single background thread can be     *
+ * dedicated to handle multiple types of events, including the UMS event provided here.         *
+ *                                                                                              *
+ * Even though simultaneous usage of both event-based and callback-based systems should be      *
+ * possible, it is heavily discouraged.                                                         *
+ ************************************************************************************************/
+
 /// Returns a pointer to the user-mode status change event (with autoclear enabled).
 /// Useful to wait for USB Mass Storage status changes without having to constantly poll the interface.
 /// Returns NULL if the USB Mass Storage Host interface hasn't been initialized.
 UEvent *usbHsFsGetStatusChangeUserEvent(void);
 
+/// Lists up to `max_count` mounted virtual devices and stores their information in the provided UsbHsFsDevice array.
+/// Returns the total number of written entries.
+/// For better results, usbHsFsGetMountedDeviceCount() should be used before calling this function.
+u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
+
+/************************************************************************************************
+ *                              Callback-based population system                                *
+ *                                                                                              *
+ * Makes it possible to automatically retrieve information about the available UMS filesystems  *
+ * that have been mounted as virtual devoptab devices by providing a pointer to a user function *
+ * that acts as a callback, which is executed under the library's very own background thread.   *
+ *                                                                                              *
+ * This essentially enables the user to receive updates from the library without creating an    *
+ * additional background thread. However, in order to achieve thread-safety and avoid possible  *
+ * race conditions, the provided user callback must also handle all concurrency-related tasks   *
+ * on its own, if needed (e.g. [un]locking a mutex, etc.).                                      *
+ *                                                                                              *
+ * Even though simultaneous usage of both event-based and callback-based systems should be      *
+ * possible, it is heavily discouraged.                                                         *
+ ************************************************************************************************/
+
+/// Sets the pointer to the user-provided callback function, which will automatically provide updates whenever a USB Mass Storage status change is triggered.
+/// The provided user callback must treat all input data as read-only and short-lived -- that means, it must copy the provided UsbHsFsDevice entries into a buffer of its own.
+/// A NULL `devices` pointer and/or a `device_count` of zero are valid inputs, and must be interpreted as no virtual devoptab devices being currently available.
+void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb);
+
+/************************************************************************************************
+ *                                  Miscellaneous functions                                     *
+ *                                                                                              *
+ * These can be safely used with both population systems.                                       *
+ ************************************************************************************************/
+
 /// Returns the number of physical UMS devices currently connected to the console with at least one underlying filesystem mounted as a virtual device.
 u32 usbHsFsGetPhysicalDeviceCount(void);
 
 /// Returns the total number of filesystems across all available UMS devices currently mounted as virtual devices via devoptab.
-/// Must be used before calling usbHsFsListMountedDevices().
 u32 usbHsFsGetMountedDeviceCount(void);
-
-/// Lists up to `max_count` mounted virtual devices and stores their information in the provided UsbHsFsDevice array.
-/// Returns the total number of written entries.
-u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 
 /// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
 /// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't mandatory.

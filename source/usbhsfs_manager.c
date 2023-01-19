@@ -43,6 +43,8 @@ static u32 g_driveCount = 0;
 
 static UEvent g_usbStatusChangeEvent = {0};
 
+static UsbHsFsPopulateCb g_populateCb = NULL;
+
 /* Function prototypes. */
 
 static Result usbHsFsCreateDriveManagerThread(void);
@@ -57,6 +59,8 @@ static bool usbHsFsUpdateDriveContexts(bool remove);
 static void usbHsFsRemoveDriveContextFromListByIndex(u32 drive_ctx_idx, bool stop_lun);
 static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if);
 
+static void usbHsFsExecutePopulateCallback(void);
+static u32 usbHsFsPopulateDeviceList(UsbHsFsDevice *out, u32 device_count, u32 max_count);
 static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriveLogicalUnitContext *lun_ctx, UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx, UsbHsFsDevice *device);
 
 Result usbHsFsInitialize(u8 event_idx)
@@ -254,6 +258,9 @@ void usbHsFsExit(void)
             usbFsExit();
         }
 
+        /* Clear user-provided callback. */
+        g_populateCb = NULL;
+
 #ifdef DEBUG
         /* Close logfile. */
         usbHsFsLogCloseLogFile();
@@ -271,6 +278,54 @@ UEvent *usbHsFsGetStatusChangeUserEvent(void)
     return event;
 }
 
+u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
+{
+    u32 ret = 0;
+
+    SCOPED_LOCK(&g_managerMutex)
+    {
+        u32 device_count = usbHsFsGetMountedDeviceCount();
+
+        if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count || !out || !max_count)
+        {
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+
+        if (g_isSXOS)
+        {
+            /* Copy device data, update return value and exit right away. */
+            memcpy(out, &g_sxOSDevice, sizeof(UsbHsFsDevice));
+            ret = device_count;
+            break;
+        }
+
+        /* Populate device list. */
+        ret = usbHsFsPopulateDeviceList(out, device_count, max_count);
+    }
+
+#ifdef DEBUG
+    /* Flush logfile. */
+    usbHsFsLogFlushLogFile();
+#endif
+
+    return ret;
+}
+
+void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb)
+{
+    SCOPED_LOCK(&g_managerMutex)
+    {
+        if (!populate_cb)
+        {
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            break;
+        }
+
+        g_populateCb = populate_cb;
+    }
+}
+
 u32 usbHsFsGetPhysicalDeviceCount(void)
 {
     u32 ret = 0;
@@ -282,61 +337,6 @@ u32 usbHsFsGetMountedDeviceCount(void)
 {
     u32 ret = 0;
     SCOPED_LOCK(&g_managerMutex) ret = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_isSXOSDeviceAvailable ? 1 : 0)) : 0);
-    return ret;
-}
-
-u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count)
-{
-    u32 ret = 0;
-
-    SCOPED_LOCK(&g_managerMutex)
-    {
-        u32 device_count = (g_usbHsFsInitialized ? (!g_isSXOS ? usbHsFsMountGetDevoptabDeviceCount() : (g_isSXOSDeviceAvailable ? 1 : 0)) : 0);
-
-        if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count || !out || !max_count)
-        {
-            USBHSFS_LOG_MSG("Invalid parameters!");
-            break;
-        }
-
-        if (g_isSXOS)
-        {
-            /* Copy device data, update return value and jump to the end. */
-            memcpy(out, &g_sxOSDevice, sizeof(UsbHsFsDevice));
-            ret = device_count;
-            break;
-        }
-
-        for(u32 i = 0; i < g_driveCount; i++)
-        {
-            UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
-            if (!drive_ctx) continue;
-
-            for(u8 j = 0; j < drive_ctx->lun_count; j++)
-            {
-                UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[j];
-
-                for(u32 k = 0; k < lun_ctx->fs_count; k++)
-                {
-                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[k];
-
-                    /* Fill device element. */
-                    UsbHsFsDevice *device = &(out[ret++]);  /* Increase return value. */
-                    usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
-
-                    /* Jump out of the loops if we have reached a limit */
-                    if (ret >= max_count || ret >= device_count) goto end;
-                }
-            }
-        }
-    }
-
-end:
-#ifdef DEBUG
-    /* Flush logfile. */
-    usbHsFsLogFlushLogFile();
-#endif
-
     return ret;
 }
 
@@ -378,6 +378,9 @@ bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
             /* Signal user-mode event. */
             USBHSFS_LOG_MSG("Signaling status change event.");
             ueventSignal(&g_usbStatusChangeEvent);
+
+            /* Execute user-provided callback. */
+            usbHsFsExecutePopulateCallback();
         }
 
         /* Update return value. */
@@ -589,6 +592,9 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
                     /* Signal user-mode event. */
                     USBHSFS_LOG_MSG("Signaling status change event.");
                     ueventSignal(&g_usbStatusChangeEvent);
+
+                    /* Execute user-provided callback. */
+                    usbHsFsExecutePopulateCallback();
                 }
             } else {
                 USBHSFS_LOG_MSG("usbFsGetMountStatus failed! (0x%08X).", rc);
@@ -681,11 +687,14 @@ static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
                 eventClear(g_usbInterfaceStateChangeEvent);
             }
 
-            /* Signal user-mode event if contexts were updated. */
             if (ctx_updated)
             {
+                /* Signal user-mode event if contexts were updated. */
                 USBHSFS_LOG_MSG("Signaling status change event.");
                 ueventSignal(&g_usbStatusChangeEvent);
+
+                /* Execute user-provided callback. */
+                usbHsFsExecutePopulateCallback();
             }
         }
 
@@ -988,6 +997,84 @@ static bool usbHsFsAddDriveContextToList(UsbHsInterface *usb_if)
     }
 
 end:
+    return ret;
+}
+
+static void usbHsFsExecutePopulateCallback(void)
+{
+    /* Don't proceed if there's no valid callback pointer. */
+    if (!g_populateCb) return;
+
+    UsbHsFsDevice *devices = NULL;
+    u32 device_count = usbHsFsGetMountedDeviceCount();
+
+    if ((!g_isSXOS && (!g_driveCount || !g_driveContexts)) || !device_count)
+    {
+        /* Execute the callback function with NULL inputs. */
+        g_populateCb(NULL, 0);
+    } else
+    if (g_isSXOS)
+    {
+        /* Execute the callback function with SX OS inputs. */
+        g_populateCb(&g_sxOSDevice, 1);
+    } else {
+        /* Allocate buffer to hold information for all virtual devices. */
+        devices = calloc(device_count, sizeof(UsbHsFsDevice));
+        if (!devices)
+        {
+            USBHSFS_LOG_MSG("Failed to allocate memory for devices buffer! (%u device[s]).", device_count);
+            return;
+        }
+
+        /* Populate device list. */
+        device_count = usbHsFsPopulateDeviceList(devices, device_count, device_count);
+
+        /* Execute the callback function using the populated buffer. */
+        g_populateCb(devices, device_count);
+
+        /* Free devices buffer. */
+        free(devices);
+    }
+}
+
+static u32 usbHsFsPopulateDeviceList(UsbHsFsDevice *out, u32 device_count, u32 max_count)
+{
+    bool end = false;
+    u32 ret = 0;
+
+    for(u32 i = 0; i < g_driveCount; i++)
+    {
+        UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+        if (!drive_ctx) continue;
+
+        for(u8 j = 0; j < drive_ctx->lun_count; j++)
+        {
+            UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[j];
+            if (!lun_ctx) continue;
+
+            for(u32 k = 0; k < lun_ctx->fs_count; k++)
+            {
+                UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[k];
+                if (!fs_ctx) continue;
+
+                /* Fill device element. */
+                UsbHsFsDevice *device = &(out[ret++]);  /* Increase return value. */
+                usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, device);
+
+                /* Jump out of the loops if we have reached a limit. */
+                if (ret >= max_count || ret >= device_count)
+                {
+                    end = true;
+                    break;
+                }
+            }
+
+            if (end) break;
+        }
+
+        if (end) break;
+    }
+
     return ret;
 }
 

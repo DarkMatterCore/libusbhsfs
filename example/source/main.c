@@ -4,15 +4,15 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <dirent.h>
-#include <threads.h>
+#include <unistd.h>
 #include <usbhsfs.h>
 
-static UEvent *g_statusChangeEvent = NULL, g_exitEvent = {0};
-
+static Mutex g_usbDeviceMutex = 0;
 static u32 g_usbDeviceCount = 0;
 static UsbHsFsDevice *g_usbDevices = NULL;
+static bool g_updated = false;
 
-void usbMscFileSystemTest(UsbHsFsDevice *device)
+static void usbMscFileSystemTest(UsbHsFsDevice *device)
 {
     if (!device) return;
 
@@ -257,117 +257,106 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
     consoleUpdate(NULL);
 }
 
-int usbMscThreadFunc(void *arg)
+static void usbMscPopulateFunc(const UsbHsFsDevice *devices, u32 device_count)
 {
-    (void)arg;
+    mutexLock(&g_usbDeviceMutex);
 
-    Result rc = 0;
-    int idx = 0;
-    u32 listed_device_count = 0;
+    printf("USB Mass Storage status change triggered!\nMounted USB Mass Storage device count: %u.\n\n", device_count);
+    consoleUpdate(NULL);
 
-    /* Generate waiters for our user events. */
-    Waiter status_change_event_waiter = waiterForUEvent(g_statusChangeEvent);
-    Waiter exit_event_waiter = waiterForUEvent(&g_exitEvent);
-
-    while(true)
+    /* Free mounted devices buffer. */
+    if (g_usbDevices)
     {
-        /* Wait until an event is triggered. */
-        rc = waitMulti(&idx, -1, status_change_event_waiter, exit_event_waiter);
-        if (R_FAILED(rc)) continue;
+        free(g_usbDevices);
+        g_usbDevices = NULL;
+    }
 
-        /* Free mounted devices buffer. */
-        if (g_usbDevices)
-        {
-            free(g_usbDevices);
-            g_usbDevices = NULL;
-        }
+    g_usbDeviceCount = 0;
 
-        /* Exit event triggered. */
-        if (idx == 1)
-        {
-            printf("Exit event triggered!\n");
-            break;
-        }
-
-        /* Get mounted device count. */
-        g_usbDeviceCount = usbHsFsGetMountedDeviceCount();
-
-        printf("USB Mass Storage status change event triggered!\nMounted USB Mass Storage device count: %u.\n\n", g_usbDeviceCount);
-        consoleUpdate(NULL);
-
-        if (!g_usbDeviceCount) continue;
-
+    if (devices && device_count)
+    {
         /* Allocate mounted devices buffer. */
-        g_usbDevices = calloc(g_usbDeviceCount, sizeof(UsbHsFsDevice));
+        g_usbDevices = calloc(device_count, sizeof(UsbHsFsDevice));
         if (!g_usbDevices)
         {
             printf("Failed to allocate memory for mounted USB Mass Storage devices buffer!\n\n");
             consoleUpdate(NULL);
-            continue;
+        } else {
+            /* Copy input data. */
+            memcpy(g_usbDevices, devices, device_count * sizeof(UsbHsFsDevice));
+            g_usbDeviceCount = device_count;
         }
-
-        /* List mounted devices. */
-        if (!(listed_device_count = usbHsFsListMountedDevices(g_usbDevices, g_usbDeviceCount)))
-        {
-            printf("Failed to list mounted USB Mass Storage devices!\n\n");
-            consoleUpdate(NULL);
-            continue;
-        }
-
-        /* Print info from mounted devices. */
-        for(u32 i = 0; i < listed_device_count; i++)
-        {
-            UsbHsFsDevice *device = &(g_usbDevices[i]);
-
-            printf("Device #%u:\n" \
-                        "\t- USB interface ID: %d.\n" \
-                        "\t- Logical Unit Number: %u.\n" \
-                        "\t- Filesystem index: %u.\n" \
-                        "\t- Write protected: %s.\n" \
-                        "\t- Vendor ID: 0x%04X.\n" \
-                        "\t- Product ID: 0x%04X.\n" \
-                        "\t- Manufacturer: \"%s\".\n" \
-                        "\t- Product Name: \"%s\".\n" \
-                        "\t- Serial Number: \"%s\".\n" \
-                        "\t- Logical Unit Capacity: 0x%lX bytes.\n" \
-                        "\t- Mount name: \"%s\".\n" \
-                        "\t- Filesystem type: %s.\n" \
-                        "\t- Mount flags: 0x%08X.\n" \
-                        "\t- Filesystem tests:\n", \
-                        i + 1, \
-                        device->usb_if_id, \
-                        device->lun, \
-                        device->fs_idx, \
-                        device->write_protect ? "yes" : "no", \
-                        device->vid, \
-                        device->pid, \
-                        device->manufacturer, \
-                        device->product_name, \
-                        device->serial_number, \
-                        device->capacity, \
-                        device->name, \
-                        LIBUSBHSFS_FS_TYPE_STR(device->fs_type), \
-                        device->flags);
-
-            consoleUpdate(NULL);
-
-            /* Perform filesystem tests on current device. */
-            usbMscFileSystemTest(device);
-        }
-
-        /* Unmount devices. */
-        for(u32 i = 0; i < listed_device_count; i++)
-        {
-            UsbHsFsDevice *device = &(g_usbDevices[i]);
-            usbHsFsUnmountDevice(device, false);
-        }
-
-        printf("%u device(s) safely unmounted. You may now disconnect them from the console.\n\n", listed_device_count);
-        consoleUpdate(NULL);
     }
 
-    /* Exit thread. */
-    return 0;
+    g_updated = true;
+
+    mutexUnlock(&g_usbDeviceMutex);
+}
+
+static void usbMscTestDevices(void)
+{
+    mutexLock(&g_usbDeviceMutex);
+
+    if (!g_updated || !g_usbDevices || !g_usbDeviceCount)
+    {
+        mutexUnlock(&g_usbDeviceMutex);
+        return;
+    }
+
+    g_updated = false;
+
+    /* Print info from mounted devices. */
+    for(u32 i = 0; i < g_usbDeviceCount; i++)
+    {
+        UsbHsFsDevice *device = &(g_usbDevices[i]);
+
+        printf("Device #%u:\n" \
+                    "\t- USB interface ID: %d.\n" \
+                    "\t- Logical Unit Number: %u.\n" \
+                    "\t- Filesystem index: %u.\n" \
+                    "\t- Write protected: %s.\n" \
+                    "\t- Vendor ID: 0x%04X.\n" \
+                    "\t- Product ID: 0x%04X.\n" \
+                    "\t- Manufacturer: \"%s\".\n" \
+                    "\t- Product Name: \"%s\".\n" \
+                    "\t- Serial Number: \"%s\".\n" \
+                    "\t- Logical Unit Capacity: 0x%lX bytes.\n" \
+                    "\t- Mount name: \"%s\".\n" \
+                    "\t- Filesystem type: %s.\n" \
+                    "\t- Mount flags: 0x%08X.\n" \
+                    "\t- Filesystem tests:\n", \
+                    i + 1, \
+                    device->usb_if_id, \
+                    device->lun, \
+                    device->fs_idx, \
+                    device->write_protect ? "yes" : "no", \
+                    device->vid, \
+                    device->pid, \
+                    device->manufacturer, \
+                    device->product_name, \
+                    device->serial_number, \
+                    device->capacity, \
+                    device->name, \
+                    LIBUSBHSFS_FS_TYPE_STR(device->fs_type), \
+                    device->flags);
+
+        consoleUpdate(NULL);
+
+        /* Perform filesystem tests on current device. */
+        usbMscFileSystemTest(device);
+    }
+
+    /* Unmount devices. */
+    for(u32 i = 0; i < g_usbDeviceCount; i++)
+    {
+        UsbHsFsDevice *device = &(g_usbDevices[i]);
+        usbHsFsUnmountDevice(device, false);
+    }
+
+    printf("%u device(s) safely unmounted. You may now disconnect them from the console.\n\n", g_usbDeviceCount);
+    consoleUpdate(NULL);
+
+    mutexUnlock(&g_usbDeviceMutex);
 }
 
 int main(int argc, char **argv)
@@ -377,7 +366,6 @@ int main(int argc, char **argv)
 
     Result rc = 0;
     int ret = 0;
-    thrd_t thread = {0};
     PadState pad = {0};
 
     /* Initialize console output. */
@@ -392,6 +380,9 @@ int main(int argc, char **argv)
     printf(APP_TITLE ". Built on " BUILD_TIMESTAMP ".\nLibrary version: %u.%u.%u.\nPress + to exit.\n\n", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
     consoleUpdate(NULL);
 
+    /* Set populate callback function. */
+    usbHsFsSetPopulateCallback(&usbMscPopulateFunc);
+
     /* Initialize USB Mass Storage Host interface. */
     rc = usbHsFsInitialize(0);
     if (R_FAILED(rc))
@@ -401,15 +392,6 @@ int main(int argc, char **argv)
         goto end1;
     }
 
-    /* Get USB Mass Storage status change event. */
-    g_statusChangeEvent = usbHsFsGetStatusChangeUserEvent();
-
-    /* Create usermode thread exit event. */
-    ueventCreate(&g_exitEvent, true);
-
-    /* Create thread. */
-    thrd_create(&thread, usbMscThreadFunc, NULL);
-
     while(appletMainLoop())
     {
         padUpdate(&pad);
@@ -417,19 +399,20 @@ int main(int argc, char **argv)
         u64 keys_down = padGetButtonsDown(&pad);
         if (keys_down & HidNpadButton_Plus)
         {
-            /* Signal background thread. */
-            ueventSignal(&g_exitEvent);
-
-            /* Wait for the background thread to exit on its own. */
-            thrd_join(thread, NULL);
-
-            /* Break out of this loop. */
+            printf("Exiting...\n");
+            consoleUpdate(NULL);
             break;
         }
+
+        /* Test available UMS devices. */
+        usbMscTestDevices();
     }
 
     /* Deinitialize USB Mass Storage Host interface. */
     usbHsFsExit();
+
+    /* Free UMS devices buffer. */
+    if (g_usbDevices) free(g_usbDevices);
 
 end1:
     /* Update console output. */
