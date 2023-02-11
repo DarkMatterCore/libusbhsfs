@@ -144,7 +144,8 @@ lib-dir:
 	@mkdir -p lib
 
 example: all
-	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example
+	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_callback
+	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_event
 
 fs-libs:
 	@echo Installing ntfs-3g
@@ -170,21 +171,24 @@ lib/lib$(TARGET)d.a: debug-dir lib-dir $(SOURCES) $(INCLUDES)
 	-f $(CURDIR)/Makefile
 
 dist-bin: example
-	@cp example/libusbhsfs-example.nro libusbhsfs-example.nro
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md libusbhsfs-example.nro
-	@rm libusbhsfs-example.nro
+	@cp example_callback/libusbhsfs-example-callback.nro libusbhsfs-example-callback.nro
+	@cp example_event/libusbhsfs-example-event.nro libusbhsfs-example-event.nro
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md libusbhsfs-example-callback.nro libusbhsfs-example-event.nro
+	@rm libusbhsfs-example-callback.nro libusbhsfs-example-event.nro
 
 clean:
 	@echo clean ...
 	@rm -fr release debug lib *.bz2
-	@$(MAKE) --no-print-directory -C example clean
+	@$(MAKE) --no-print-directory -C example_callback clean
+	@$(MAKE) --no-print-directory -C example_event clean
 
 dist-src:
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 \
-	--exclude='example/build' --exclude='example/*.elf' --exclude='example/*.nacp' --exclude='example/*.nro' \
+	--exclude='example_callback/build' --exclude='example_callback/*.elf' --exclude='example_callback/*.nacp' --exclude='example_callback/*.nro' \
+	--exclude='example_event/build' --exclude='example_event/*.elf' --exclude='example_event/*.nacp' --exclude='example_event/*.nro' \
 	--exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
 	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
-	example include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2+.md Makefile README.md
+	example_callback example_event include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2+.md Makefile README.md
 
 dist: dist-src dist-bin
 

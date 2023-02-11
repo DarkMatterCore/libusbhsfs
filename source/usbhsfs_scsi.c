@@ -820,7 +820,7 @@ static bool usbHsFsScsiSendModeSense10Command(UsbHsFsDriveContext *drive_ctx, u8
     cbw.CBWCB[1] = (long_lba ? (1 << 4) : 0);                           /* Set LLBAA bit (if needed), always clear DBD bit. */
     cbw.CBWCB[2] = (((page_control << 6) & 0xC0) | (page_code & 0x3F)); /* Mask Page Control and Page Code values. */
     cbw.CBWCB[3] = subpage_code;                                        /* Set Subpage Code. */
-    memcpy(&(cbw.CBWCB[7]), &allocation_length, sizeof(u16));           /* Set allocation length. */
+    memcpy(&(cbw.CBWCB[7]), &allocation_length, sizeof(u16));           /* Allocation length (big endian). */
 
     /* Send command. */
     USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
@@ -906,7 +906,7 @@ static bool usbHsFsScsiSendReadCapacity16Command(UsbHsFsDriveContext *drive_ctx,
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_ServiceActionIn;    /* Operation code. */
     cbw.CBWCB[1] = SCSI_SERVICE_ACTION_IN_READ_CAPACITY_16;     /* Service action. */
-    memcpy(&(cbw.CBWCB[10]), &allocation_length, sizeof(u32));  /* Set allocation length. */
+    memcpy(&(cbw.CBWCB[10]), &allocation_length, sizeof(u32));  /* Allocation length (big endian). */
 
     /* Send command. */
     USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);

@@ -108,20 +108,24 @@ How to use
 
 This section assumes you've already built the library by following the steps from the previous section.
 
-* Update the `Makefile` from your homebrew application to reference the library.
+1. Update the `Makefile` from your homebrew application to reference the library.
     * Two different builds can be generated: a release build (`-lusbhsfs`) and a debug build with logging enabled (`-lusbhsfsd`).
     * If you're using a GPLv2+ licensed build, you'll also need to link your application against both NTFS-3G and lwext4: `-lusbhsfs -lntfs-3g -llwext4`.
     * In case you need to report any bugs, please make sure you're using the debug build and provide its logfile.
-* Include the `usbhsfs.h` header file somewhere in your code.
-* Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.
-* Retrieve a pointer to the user-mode UMS status change event with `usbHsFsGetStatusChangeUserEvent()` and wait for that event to be signaled (e.g. under a different thread).
-* Get the mounted device count with `usbHsFsGetMountedDeviceCount()`.
-* List mounted devices with `usbHsFsListMountedDevices()`.
-* Perform I/O operations using the returned mount names from the listed devices.
-* If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it and without shutting down the whole library interface, use `usbHsFsUnmountDevice()`.
-* Close the USB Mass Storage Class Host interface with `usbHsFsExit()` when you're done.
+2. Include the `usbhsfs.h` header file somewhere in your code.
+3. Initialize the USB Mass Storage Class Host interface with `usbHsFsInitialize()`.
+4. Choose the population system you'll use to retrieve information from the library. For further details about the pros and cons of each system, please refer to the `usbhsfs.h` header file.
+    * Event-driven system:
+        * Retrieve a pointer to the user-mode UMS status change event with `usbHsFsGetStatusChangeUserEvent()` and wait for that event to be signaled (e.g. under a different thread).
+        * Get the mounted device count with `usbHsFsGetMountedDeviceCount()`.
+        * List mounted devices with `usbHsFsListMountedDevices()`.
+    * Callback-based system:
+        * Set a pointer to a callback function of your own with `usbHsFsSetPopulateCallback()`, which will receive a short-lived array of mounted devices and their count.
+5. Perform I/O operations using the returned mount names from the listed devices.
+6. If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it and without shutting down the whole library interface, use `usbHsFsUnmountDevice()`.
+7. Close the USB Mass Storage Class Host interface with `usbHsFsExit()` when you're done.
 
-Please check both the header file located at `/include/usbhsfs.h` and the provided test application in `/example` for additional information.
+Please check both the header file located at `/include/usbhsfs.h` and the provided test applications in `/example_event` (event-driven system) and `/example_callback` (callback-based system) for additional information.
 
 Relative path support
 --------------

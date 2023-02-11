@@ -42,9 +42,9 @@ BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
 
 VERSION_MAJOR	:=	0
 VERSION_MINOR	:=	0
-VERSION_MICRO	:=	1
+VERSION_MICRO	:=	2
 
-APP_TITLE		:=	libusbhsfs-example
+APP_TITLE		:=	libusbhsfs-example-callback
 APP_AUTHOR		:=	DarkMatterCore, XorTroll, Rhys Koedijk
 APP_VERSION		:=	${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_MICRO}
 
@@ -61,7 +61,7 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -O2 -ffunction-sections $(ARCH) $(DEFINES) $(INCLUDE) -D__SWITCH__
-CFLAGS		+=	-DBUILD_TIMESTAMP="\"${BUILD_TIMESTAMP}\"" -DAPP_TITLE=\"${APP_TITLE}\"
+CFLAGS		+=	-DAPP_TITLE=\"${APP_TITLE}\" -DBUILD_TIMESTAMP="\"${BUILD_TIMESTAMP}\""
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 

@@ -10,7 +10,8 @@
 *.elf
 *.nacp
 *.nro
-/example/build
+/example_callback/build
+/example_event/build
 /libntfs-3g/src
 /libntfs-3g/pkg
 /liblwext4/src
