@@ -140,6 +140,7 @@ u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 /// The provided user callback must treat all input data as read-only and short-lived -- that means, it must copy the provided UsbHsFsDevice entries into a buffer of its own.
 /// A NULL `devices` pointer and/or a `device_count` of zero are valid inputs, and must be interpreted as no virtual devoptab devices being currently available.
 /// Optionally, a `user_data` pointer may be passed into this function, which will in turn be passed to the provided callback whenever it is executed.
+/// `populate_cb` may be a NULL pointer, in which case a previously set callback will just be unset.
 void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb, void *user_data);
 
 /************************************************************************************************

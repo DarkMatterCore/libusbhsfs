@@ -318,12 +318,6 @@ void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb, void *user_data)
 {
     SCOPED_LOCK(&g_managerMutex)
     {
-        if (!populate_cb)
-        {
-            USBHSFS_LOG_MSG("Invalid parameters!");
-            break;
-        }
-
         g_populateCb = populate_cb;
         g_populateCbUserData = user_data;
     }
