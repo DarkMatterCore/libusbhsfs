@@ -20,12 +20,13 @@ BINS	:=	$(MAKEPKG) $(PACMAN)
 EVAL	:=	$(foreach bin,$(BINS),$(if $(shell which $(bin)),placeholder,$(error "No $(bin) in PATH, consider reinstalling devkitPro")))
 
 all: deps
-	@$(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null
+	@su -s /bin/bash nobody -c "$(MAKEPKG) -c -C -f"
+	@$(PACMAN) -U --needed --noconfirm *.pkg.tar.*
 
 deps:
 ifeq ($(OS),Windows_NT)
 	@$(PACMAN) -R pkg-config > /dev/null
 endif
-	@for pkg in $(PACKAGES); do \
-		$(PACMAN) -Q $$pkg > /dev/null || $(PACMAN) -S --needed --noconfirm $$pkg; \
+	-@for pkg in $(PACKAGES); do \
+		$(PACMAN) -Q $$pkg > /dev/null || $(PACMAN) -S --needed --noconfirm $$pkg > /dev/null; \
 	done
