@@ -94,14 +94,24 @@ This section assumes you've already installed devkitA64, libnx and devkitPro pac
 * **ISC licensed build**: run `make BUILD_TYPE=ISC install` on the root directory from the project.
 
 * **GPLv2+ licensed build**:
-    1. Run `make fs-libs` on the root directory from the project to manually build and install the NTFS-3G and lwext4 libraries into the `portlibs` directory from devkitPro.
-    2. Run `make BUILD_TYPE=GPL install` afterwards.
+    1. You'll need to install some system dependencies before proceeding any further, which means this step slightly varies depending on the package manager you're using. Under most Linux distributions, using the following list should be enough:
+        ```
+        patch autoconf automake tar bzip2 diffutils pkgconf
+        ```
+        If you're using msys2 + devkitPro pacman under Windows, then run the following commands:
+        ```
+        pacman -R --noconfirm pkg-config
+        pacman -S --needed --noconfirm patch autotools tar bzip2 diffutils pkgconf
+        ```
+        You'll only need to carry out this step once. There's no need to manually reinstall these dependencies each time you intend to build libusbhsfs.
+    2. Run `make fs-libs` on the root directory from the project to manually build the filesystem support libraries and install them into the `portlibs` directory from devkitPro.
+    3. Finally, run `make BUILD_TYPE=GPL install`.
 
 Regardless of the build type you choose, libusbhsfs will be installed into the `portlibs` directory from devkitPro, and it'll be ready to use by any homebrew application.
 
-If you use the GPLv2+ licensed build, please note that in order to potentially speed up the building process, the NTFS-3G and lwext4 libraries \**are not*\* compiled every time libusbhsfs itself is built, thus making it necessary to manually run `make fs-libs` every time the libraries are updated within libusbhsfs' codebase. In other words, if you run into issues trying to build a newer version of libusbhsfs, try rebuilding and reinstalling the dependencies first.
+If you use the GPLv2+ licensed build, please note that in order to potentially speed up the building process, the filesystem support libraries \**are not*\* compiled every time libusbhsfs itself is built, thus making it necessary to manually run `make fs-libs` every time these libraries are updated within the libusbhsfs codebase -- if that happens, it'll be announced in the project's changelog.
 
-Building and installing the NTFS-3G and lwext4 libraries beforehand isn't needed if you intend to use the ISC licensed build -- it is guaranteed to not use any GPL licensed code and/or dependency at all.
+Building and installing the filesystem support libraries beforehand isn't needed if you intend to use the ISC licensed build -- it is guaranteed to not use any GPL licensed code and/or dependency at all.
 
 How to use
 --------------

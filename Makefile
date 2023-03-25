@@ -128,6 +128,16 @@ else
 LIB_LICENSE	:=	GPLv2+
 endif
 
+ifeq ($(OS),Windows_NT)
+MAKEPKG	:=	makepkg
+else
+ifeq (,$(shell which makepkg))
+MAKEPKG	:=	dkp-makepkg
+else
+MAKEPKG	:=	makepkg
+endif
+endif
+
 all: release debug
 
 release: lib/lib$(TARGET).a
@@ -148,11 +158,13 @@ example: all
 	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_event
 
 fs-libs:
-	@echo Installing ntfs-3g
-	@$(MAKE) -C libntfs-3g
+	$(if $(shell which $(MAKEPKG)),,$(error "No $(MAKEPKG) in PATH, consider reinstalling devkitPro"))
+
+	@echo Installing NTFS-3G
+	@cd libntfs-3g; $(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null; cd ..
 
 	@echo Installing lwext4
-	@$(MAKE) -C liblwext4
+	@cd liblwext4; $(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null; cd ..
 
 lib/lib$(TARGET).a: release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
