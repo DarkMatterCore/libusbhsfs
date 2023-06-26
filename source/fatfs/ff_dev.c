@@ -638,6 +638,9 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
 {
     FRESULT res = FR_OK;
 
+    FSIZE_t cur_offset = 0;
+    bool restore_offset = false;
+
     ff_declare_error_state;
     ff_declare_file_state;
     ff_lock_drive_ctx;
@@ -650,15 +653,27 @@ static int ffdev_ftruncate(struct _reent *r, void *fd, off_t len)
 
     USBHSFS_LOG_MSG("Truncating file in \"%u:\" to 0x%lX bytes.", file->obj.fs->pdrv, len);
 
+    /* Backup current file offset. */
+    cur_offset = ff_tell(file);
+
     /* Seek to the provided offset. */
     res = ff_lseek(file, (FSIZE_t)len);
     if (res != FR_OK) ff_set_error_and_exit(ffdev_translate_error(res));
+
+    restore_offset = true;
 
     /* Truncate file. */
     res = ff_truncate(file);
     if (res != FR_OK) ff_set_error(ffdev_translate_error(res));
 
 end:
+    /* Restore file offset (if needed). */
+    if (restore_offset)
+    {
+        res = ff_lseek(file, cur_offset);
+        if (res != FR_OK && _errno == 0) ff_set_error(ffdev_translate_error(res));
+    }
+
     ff_unlock_drive_ctx;
     ff_return(0);
 }
