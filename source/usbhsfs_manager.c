@@ -337,7 +337,7 @@ u32 usbHsFsGetMountedDeviceCount(void)
     return ret;
 }
 
-bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event)
+bool usbHsFsUnmountDevice(const UsbHsFsDevice *device, bool signal_status_event)
 {
     bool ret = false;
 

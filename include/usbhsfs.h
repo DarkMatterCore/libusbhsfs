@@ -160,7 +160,7 @@ u32 usbHsFsGetMountedDeviceCount(void);
 /// If multiple UsbHsFsDevice entries are returned for the same physical UMS device, any of them can be used as the input argument for this function.
 /// If successful, and `signal_status_event` is true, this will also fire the user-mode status change event returned by usbHsFsGetStatusChangeUserEvent() and, if available, execute the user callback set with usbHsFsSetPopulateCallback().
 /// This function has no effect at all under SX OS.
-bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
+bool usbHsFsUnmountDevice(const UsbHsFsDevice *device, bool signal_status_event);
 
 /// Returns a bitmask with the current filesystem mount flags.
 /// Can be used even if the USB Mass Storage Host interface hasn't been initialized.
