@@ -11,8 +11,8 @@
 #include "usbhsfs_utils.h"
 
 #define LOG_FILE_NAME   "/" LIB_TITLE ".log"
-#define LOG_BUF_SIZE    0x400000            /* 4 MiB. */
-#define LOG_FORCE_FLUSH 0                   /* Forces a log buffer flush each time the logfile is written to. */
+#define LOG_BUF_SIZE    0x400000                /* 4 MiB. */
+#define LOG_FORCE_FLUSH 0                       /* Forces a log buffer flush each time the logfile is written to. */
 
 /* Global variables. */
 
@@ -27,13 +27,15 @@ static char *g_logBuffer = NULL;
 static size_t g_logBufferLength = 0;
 
 static const char *g_utf8Bom = "\xEF\xBB\xBF";
-static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%09lu] %s -> ";
-static const char *g_logLineBreak = "\r\n";
+static const char *g_lineBreak = "\r\n";
+
+static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%09lu] %s:%d:%s -> ";
+static const char *g_logSessionSeparator = "________________________________________________________________\r\n";
 
 /* Function prototypes. */
 
 static void _usbHsFsLogWriteStringToLogFile(const char *src);
-static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, const char *fmt, va_list args);
+static void _usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int line, const char *func_name, const char *fmt, va_list args);
 
 static void _usbHsFsLogFlushLogFile(void);
 
@@ -47,15 +49,15 @@ void usbHsFsLogWriteStringToLogFile(const char *src)
     SCOPED_LOCK(&g_logMutex) _usbHsFsLogWriteStringToLogFile(src);
 }
 
-__attribute__((format(printf, 2, 3))) void usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, const char *fmt, ...)
+__attribute__((format(printf, 4, 5))) void usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int line, const char *func_name, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    SCOPED_LOCK(&g_logMutex) _usbHsFsLogWriteFormattedStringToLogFile(func_name, fmt, args);
+    SCOPED_LOCK(&g_logMutex) _usbHsFsLogWriteFormattedStringToLogFile(file_name, line, func_name, fmt, args);
     va_end(args);
 }
 
-__attribute__((format(printf, 4, 5))) void usbHsFsLogWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *func_name, const char *fmt, ...)
+__attribute__((format(printf, 6, 7))) void usbHsFsLogWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *file_name, int line, const char *func_name, const char *fmt, ...)
 {
     if (!data || !data_size || !func_name || !*func_name || !fmt || !*fmt) return;
 
@@ -69,13 +71,13 @@ __attribute__((format(printf, 4, 5))) void usbHsFsLogWriteBinaryDataToLogFile(co
 
     /* Generate hex string representation. */
     usbHsFsLogGenerateHexStringFromData(data_str, data_str_size, data, data_size);
-    strcat(data_str, g_logLineBreak);
+    strcat(data_str, g_lineBreak);
 
     SCOPED_LOCK(&g_logMutex)
     {
         /* Write formatted string. */
         va_start(args, fmt);
-        _usbHsFsLogWriteFormattedStringToLogFile(func_name, fmt, args);
+        _usbHsFsLogWriteFormattedStringToLogFile(file_name, line, func_name, fmt, args);
         va_end(args);
 
         /* Write hex string representation. */
@@ -171,10 +173,10 @@ static void _usbHsFsLogWriteStringToLogFile(const char *src)
 #endif
 }
 
-static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, const char *fmt, va_list args)
+static void _usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int line, const char *func_name, const char *fmt, va_list args)
 {
     /* Make sure we have allocated memory for the log buffer and opened the logfile. */
-    if (!func_name || !*func_name || !fmt || !*fmt || !usbHsFsLogAllocateLogBuffer() || !usbHsFsLogOpenLogFile()) return;
+    if (!file_name || !*file_name || !func_name || !*func_name || !fmt || !*fmt || !usbHsFsLogAllocateLogBuffer() || !usbHsFsLogOpenLogFile()) return;
 
     Result rc = 0;
 
@@ -196,7 +198,7 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
     ts.tm_mon++;
 
     /* Get formatted string length. */
-    str1_len = snprintf(NULL, 0, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
+    str1_len = snprintf(NULL, 0, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, file_name, line, func_name);
     if (str1_len <= 0) return;
 
     str2_len = vsnprintf(NULL, 0, fmt, args);
@@ -215,9 +217,11 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
         }
 
         /* Nice and easy string formatting using the log buffer. */
-        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
+        sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, file_name, line, func_name);
         vsprintf(g_logBuffer + g_logBufferLength + (size_t)str1_len, fmt, args);
-        strcat(g_logBuffer, g_logLineBreak);
+        strcat(g_logBuffer, g_lineBreak);
+
+        /* Update log buffer length. */
         g_logBufferLength += log_str_len;
     } else {
         /* Flush log buffer. */
@@ -229,9 +233,9 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, cons
         if (!tmp_str) return;
 
         /* Generate formatted string. */
-        sprintf(tmp_str, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, func_name);
+        sprintf(tmp_str, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, file_name, line, func_name);
         vsprintf(tmp_str + (size_t)str1_len, fmt, args);
-        strcat(tmp_str, g_logLineBreak);
+        strcat(tmp_str, g_lineBreak);
 
         /* Write formatted string data until it no longer exceeds the log buffer size. */
         while(log_str_len >= LOG_BUF_SIZE)
@@ -304,16 +308,28 @@ static bool usbHsFsLogOpenLogFile(void)
         rc = fsFileGetSize(&g_logFile, &g_logFileOffset);
         if (R_SUCCEEDED(rc))
         {
-            /* Write UTF-8 BOM right away (if needed). */
+            size_t len = 0;
+
             if (!g_logFileOffset)
             {
-                size_t utf8_bom_len = strlen(g_utf8Bom);
-                fsFileWrite(&g_logFile, g_logFileOffset, g_utf8Bom, utf8_bom_len, FsWriteOption_Flush);
-                g_logFileOffset += (s64)utf8_bom_len;
+                /* Write UTF-8 BOM if the logfile is empty. */
+                len = strlen(g_utf8Bom);
+                rc = fsFileWrite(&g_logFile, g_logFileOffset, g_utf8Bom, len, FsWriteOption_Flush);
+            } else {
+                /* Write session separator if the logfile isn't empty. */
+                len = strlen(g_logSessionSeparator);
+                rc = fsFileWrite(&g_logFile, g_logFileOffset, g_logSessionSeparator, len, FsWriteOption_Flush);
             }
-        } else {
-            fsFileClose(&g_logFile);
+
+            if (R_SUCCEEDED(rc)) g_logFileOffset += (s64)len;
         }
+    }
+
+    /* Close file if we successfully opened it, but an error occurred afterwards. */
+    if (R_FAILED(rc) && serviceIsActive(&(g_logFile.s)))
+    {
+        fsFileClose(&g_logFile);
+        memset(&g_logFile, 0, sizeof(FsFile));
     }
 
     return R_SUCCEEDED(rc);

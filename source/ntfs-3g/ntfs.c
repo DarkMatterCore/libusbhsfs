@@ -54,7 +54,7 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
         if (formatted_str[formatted_str_len - 1] == '.') formatted_str[--formatted_str_len] = '\0';
 
         /* Log message. */
-        usbHsFsLogWriteFormattedStringToLogFile(function, "%s (file \"%s\", line %d, level 0x%X).", formatted_str, file, line, level);
+        usbHsFsLogWriteFormattedStringToLogFile(file, line, function, "%s (level %d).", formatted_str, level);
     }
 
     /* Free allocated buffer. */

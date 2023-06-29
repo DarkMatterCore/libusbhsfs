@@ -14,17 +14,17 @@
 #ifdef DEBUG
 
 /// Helper macros.
-#define USBHSFS_LOG_MSG(fmt, ...)                   usbHsFsLogWriteFormattedStringToLogFile(__func__, fmt, ##__VA_ARGS__)
-#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) usbHsFsLogWriteBinaryDataToLogFile(data, data_size, __func__, fmt, ##__VA_ARGS__)
+#define USBHSFS_LOG_MSG(fmt, ...)                   usbHsFsLogWriteFormattedStringToLogFile(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) usbHsFsLogWriteBinaryDataToLogFile(data, data_size, __FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
 
 /// Writes the provided string to the logfile.
 void usbHsFsLogWriteStringToLogFile(const char *src);
 
 /// Writes a formatted log string to the logfile.
-__attribute__((format(printf, 2, 3))) void usbHsFsLogWriteFormattedStringToLogFile(const char *func_name, const char *fmt, ...);
+__attribute__((format(printf, 4, 5))) void usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int line, const char *func_name, const char *fmt, ...);
 
 /// Writes a formatted log string + a hex string representation of the provided binary data to the logfile.
-__attribute__((format(printf, 4, 5))) void usbHsFsLogWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *func_name, const char *fmt, ...);
+__attribute__((format(printf, 6, 7))) void usbHsFsLogWriteBinaryDataToLogFile(const void *data, size_t data_size, const char *file_name, int line, const char *func_name, const char *fmt, ...);
 
 /// Forces a flush operation on the logfile.
 void usbHsFsLogFlushLogFile(void);

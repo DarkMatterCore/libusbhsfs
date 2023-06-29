@@ -655,7 +655,7 @@ static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsClientIfSession *
         goto end;
     }
 
-    USBHSFS_LOG_MSG("Converted string (interface %d, language ID 0x%04X, index %u): \"%s\".", usb_if_session->ID, lang_id, idx, utf8_str);
+    USBHSFS_LOG_MSG("Converted string (interface %d, language ID 0x%04X, index 0x%02X): \"%s\".", usb_if_session->ID, lang_id, idx, utf8_str);
 
     /* Update output. */
     *out_buf = utf8_str;

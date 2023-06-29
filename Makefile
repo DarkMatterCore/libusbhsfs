@@ -15,6 +15,8 @@ include $(DEVKITPRO)/libnx/switch_rules
 # INCLUDES is a list of directories containing header files
 #---------------------------------------------------------------------------------
 
+ROOTDIR			?=	$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
 
 TARGET			:=	usbhsfs
@@ -28,7 +30,7 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE=\"lib$(TARGET)\"
+CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE=\"lib$(TARGET)\" -fmacro-prefix-map=$(ROOTDIR)=
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -170,6 +172,7 @@ lib/lib$(TARGET).a: release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
+	ROOTDIR=$(ROOTDIR) \
 	DEPSDIR=$(CURDIR)/release \
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile
@@ -178,6 +181,7 @@ lib/lib$(TARGET)d.a: debug-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo debug
 	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
 	BUILD_CFLAGS="-DDEBUG=1 -Og" \
+	ROOTDIR=$(ROOTDIR) \
 	DEPSDIR=$(CURDIR)/debug \
 	--no-print-directory -C debug \
 	-f $(CURDIR)/Makefile
