@@ -48,7 +48,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_GET_MAX_LUN, 0, if_num, len, max_lun, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
         goto end;
     }
 
@@ -87,7 +87,7 @@ Result usbHsFsRequestMassStorageReset(UsbHsClientIfSession *usb_if_session)
 
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_CLASS | USB_RECIPIENT_INTERFACE, USB_REQUEST_BOT_RESET, 0, if_num, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
 
 end:
     return rc;
@@ -124,7 +124,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, len, config_desc, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (minimal) (interface %d, index %u).", rc, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (minimal) (interface %d, index %u).", rc, usb_if_session->ID, idx);
         goto end;
     }
 
@@ -160,7 +160,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, 0, config_desc->wTotalLength, buf, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (full) (interface %d, index %u).", rc, usb_if_session->ID, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (full) (interface %d, index %u).", rc, usb_if_session->ID, idx);
         goto end;
     }
 
@@ -226,7 +226,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_DEVICE, USB_REQUEST_GET_DESCRIPTOR, desc, lang_id, len, string_desc, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, language ID 0x%04X, index 0x%02X).", rc, usb_if_session->ID, lang_id, idx);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d, language ID 0x%04X, index 0x%02X).", rc, usb_if_session->ID, lang_id, idx);
         goto end;
     }
 
@@ -301,7 +301,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_IN | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_GET_STATUS, 0, ep_addr, len, status, &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         goto end;
     }
 
@@ -339,7 +339,7 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsClientIfSession *usb_if_sessi
 
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_ENDPOINT, USB_REQUEST_CLEAR_FEATURE, USB_FEATURE_ENDPOINT_HALT, ep_addr, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
 
 end:
     return rc;
@@ -364,7 +364,7 @@ Result usbHsFsRequestSetInterface(UsbHsClientIfSession *usb_if_session)
 
     /* Perform control transfer. */
     rc = usbHsIfCtrlXfer(usb_if_session, USB_ENDPOINT_OUT | USB_REQUEST_TYPE_STANDARD | USB_RECIPIENT_INTERFACE, USB_REQUEST_SET_INTERFACE, if_alt_setting, if_num, 0, NULL, &xfer_size);
-    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%08X) (interface %d, number %u, alt %u).", rc, usb_if_session->ID, if_num, if_alt_setting);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfCtrlXfer failed! (0x%X) (interface %d, number %u, alt %u).", rc, usb_if_session->ID, if_num, if_alt_setting);
 
 end:
     return rc;
@@ -394,7 +394,7 @@ Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void
     if (hosversionBefore(2,0,0))
     {
         rc = __usbHsEpSubmitRequest(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT / 1000000, xfer_size);
-        if (R_FAILED(rc)) USBHSFS_LOG_MSG("__usbHsEpSubmitRequest failed! (0x%08X).", rc);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("__usbHsEpSubmitRequest failed! (0x%X).", rc);
         goto end;
     }
 
@@ -405,7 +405,7 @@ Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void
     rc = usbHsEpPostBufferAsync(usb_ep_session, buf, size, 0, &xfer_id);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsEpPostBufferAsync failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("usbHsEpPostBufferAsync failed! (0x%X).", rc);
         goto end;
     }
 
@@ -423,7 +423,7 @@ Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void
     rc = usbHsEpGetXferReport(usb_ep_session, &report, 1, &report_count);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsEpGetXferReport failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("usbHsEpGetXferReport failed! (0x%X).", rc);
         goto end;
     }
 
@@ -464,7 +464,7 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
     rc = usbHsFsRequestEndpointDataXfer(usb_ep_session, buf, size, xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
 
         /* Attempt to clear this endpoint if it was STALLed. */
         rc_halt = usbHsFsRequestGetEndpointStatus(usb_if_session, usb_ep_session, &status);
@@ -478,7 +478,7 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
         if (R_SUCCEEDED(rc_halt) && retry)
         {
             rc = usbHsFsRequestEndpointDataXfer(usb_ep_session, buf, size, xfer_size);
-            if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+            if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         }
     }
 

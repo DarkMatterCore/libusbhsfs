@@ -49,7 +49,7 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     rc = usbHsAcquireUsbIf(usb_if_session, usb_if);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+        USBHSFS_LOG_MSG("usbHsAcquireUsbIf failed! (0x%X) (interface %d).", rc, usb_if->inf.ID);
         goto end;
     }
 
@@ -268,7 +268,7 @@ static bool usbHsFsDriveSetupInterfaceAndEndpointDescriptors(UsbHsFsDriveContext
     rc = usbHsFsRequestGetConfigurationDescriptor(usb_if_session, 0, &config_desc_start, &config_desc_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsFsRequestGetConfigurationDescriptor failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsFsRequestGetConfigurationDescriptor failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
         goto end;
     }
 
@@ -373,7 +373,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
         rc = usbHsIfSetInterface(usb_if_session, NULL, new_if_num);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsIfSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+            USBHSFS_LOG_MSG("usbHsIfSetInterface failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
             return false;
         }
     }
@@ -384,7 +384,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
         rc = usbHsIfGetAlternateInterface(usb_if_session, NULL, new_if_alt_setting);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsIfGetAlternateInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+            USBHSFS_LOG_MSG("usbHsIfGetAlternateInterface failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
             return false;
         }
     }
@@ -394,7 +394,7 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
     /*rc = usbHsFsRequestSetInterface(usb_if_session);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsFsRequestSetInterface failed! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("usbHsFsRequestSetInterface failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
         return false;
     }*/
 
@@ -552,7 +552,7 @@ static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session,
             Result rc = usbHsIfOpenUsbEp(usb_if_session, usb_ep_session, 1, ep_desc->wMaxPacketSize, ep_desc);
             if (R_FAILED(rc))
             {
-                USBHSFS_LOG_MSG("usbHsIfOpenUsbEp failed! (0x%08X) (interface %d, endpoint 0x%02X, %u URB(s)).", rc, usb_if_session->ID, ep_desc->bEndpointAddress, max_burst);
+                USBHSFS_LOG_MSG("usbHsIfOpenUsbEp failed! (0x%X) (interface %d, endpoint 0x%02X, %u URB(s)).", rc, usb_if_session->ID, ep_desc->bEndpointAddress, max_burst);
                 break;
             }
 
@@ -588,7 +588,7 @@ static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx)
     rc = usbHsFsRequestGetStringDescriptor(usb_if_session, 0, 0, &lang_ids, &lang_ids_count);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("Unable to retrieve supported language IDs! (0x%08X) (interface %d).", rc, usb_if_session->ID);
+        USBHSFS_LOG_MSG("Unable to retrieve supported language IDs! (0x%X) (interface %d).", rc, usb_if_session->ID);
         return;
     }
 

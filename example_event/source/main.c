@@ -396,7 +396,7 @@ int main(int argc, char **argv)
     rc = usbHsFsInitialize(0);
     if (R_FAILED(rc))
     {
-        printf("usbHsFsInitialize() failed! (0x%08X).\n", rc);
+        printf("usbHsFsInitialize() failed! (0x%X).\n", rc);
         ret = - 1;
         goto end;
     }

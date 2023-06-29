@@ -144,7 +144,7 @@ Result usbHsFsInitialize(u8 event_idx)
             rc = usbHsInitialize();
             if (R_FAILED(rc))
             {
-                USBHSFS_LOG_MSG("usbHsInitialize failed! (0x%08X).", rc);
+                USBHSFS_LOG_MSG("usbHsInitialize failed! (0x%X).", rc);
                 goto end;
             }
 
@@ -160,7 +160,7 @@ Result usbHsFsInitialize(u8 event_idx)
             rc = usbHsCreateInterfaceAvailableEvent(&g_usbInterfaceAvailableEvent, false, event_idx, &g_usbInterfaceFilter);
             if (R_FAILED(rc))
             {
-                USBHSFS_LOG_MSG("usbHsCreateInterfaceAvailableEvent failed! (0x%08X).", rc);
+                USBHSFS_LOG_MSG("usbHsCreateInterfaceAvailableEvent failed! (0x%X).", rc);
                 goto end;
             }
 
@@ -177,7 +177,7 @@ Result usbHsFsInitialize(u8 event_idx)
             rc = usbFsInitialize();
             if (R_FAILED(rc))
             {
-                USBHSFS_LOG_MSG("usbFsInitialize failed! (0x%08X).", rc);
+                USBHSFS_LOG_MSG("usbFsInitialize failed! (0x%X).", rc);
                 goto end;
             }
 
@@ -491,7 +491,7 @@ static Result usbHsFsCreateDriveManagerThread(void)
     rc = svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("svcGetInfo failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("svcGetInfo failed! (0x%X).", rc);
         goto end;
     }
 
@@ -500,7 +500,7 @@ static Result usbHsFsCreateDriveManagerThread(void)
     rc = threadCreate(&g_usbDriveManagerThread, g_isSXOS ? usbHsFsDriveManagerThreadFuncSXOS : usbHsFsDriveManagerThreadFuncAtmosphere, NULL, NULL, stack_size, 0x3B, -2);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("threadCreate failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("threadCreate failed! (0x%X).", rc);
         goto end;
     }
 
@@ -508,13 +508,13 @@ static Result usbHsFsCreateDriveManagerThread(void)
     rc = svcSetThreadCoreMask(g_usbDriveManagerThread.handle, -1, core_mask);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("svcSetThreadCoreMask failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("svcSetThreadCoreMask failed! (0x%X).", rc);
         goto end;
     }
 
     /* Start thread. */
     rc = threadStart(&g_usbDriveManagerThread);
-    if (R_FAILED(rc)) USBHSFS_LOG_MSG("threadStart failed! (0x%08X).", rc);
+    if (R_FAILED(rc)) USBHSFS_LOG_MSG("threadStart failed! (0x%X).", rc);
 
 end:
     /* Close thread if something went wrong. */
@@ -536,7 +536,7 @@ static Result usbHsFsCloseDriveManagerThread(void)
     rc = threadWaitForExit(&g_usbDriveManagerThread);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("threadWaitForExit failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("threadWaitForExit failed! (0x%X).", rc);
         goto end;
     }
 
@@ -594,7 +594,7 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
                     usbHsFsExecutePopulateCallback();
                 }
             } else {
-                USBHSFS_LOG_MSG("usbFsGetMountStatus failed! (0x%08X).", rc);
+                USBHSFS_LOG_MSG("usbFsGetMountStatus failed! (0x%X).", rc);
             }
         }
 
@@ -740,7 +740,7 @@ static void usbHsFsResetDrives(void)
     rc = usbHsQueryAvailableInterfaces(&g_usbInterfaceFilter, g_usbInterfaces, g_usbInterfacesMaxSize, &usb_if_count);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsQueryAvailableInterfaces failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("usbHsQueryAvailableInterfaces failed! (0x%X).", rc);
         return;
     }
 
@@ -766,13 +766,13 @@ static void usbHsFsResetDrives(void)
         rc = usbHsAcquireUsbIf(&usb_if_session, usb_if);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsAcquireUsbIf failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+            USBHSFS_LOG_MSG("usbHsAcquireUsbIf failed! (0x%X) (interface %d).", rc, usb_if->inf.ID);
             continue;
         }
 
         /* Perform a bus reset on this UMS device. */
         rc = usbHsIfResetDevice(&usb_if_session);
-        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfResetDevice failed! (0x%08X) (interface %d).", rc, usb_if->inf.ID);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsIfResetDevice failed! (0x%X) (interface %d).", rc, usb_if->inf.ID);
 
         /* Close interface. */
         usbHsIfClose(&usb_if_session);
@@ -806,7 +806,7 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
         rc = usbHsQueryAcquiredInterfaces(g_usbInterfaces, g_usbInterfacesMaxSize, &usb_if_count);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsQueryAcquiredInterfaces failed! (0x%08X).", rc);
+            USBHSFS_LOG_MSG("usbHsQueryAcquiredInterfaces failed! (0x%X).", rc);
             goto end;
         }
 
@@ -846,7 +846,7 @@ static bool usbHsFsUpdateDriveContexts(bool remove)
         rc = usbHsQueryAvailableInterfaces(&g_usbInterfaceFilter, g_usbInterfaces, g_usbInterfacesMaxSize, &usb_if_count);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsQueryAvailableInterfaces failed! (0x%08X).", rc);
+            USBHSFS_LOG_MSG("usbHsQueryAvailableInterfaces failed! (0x%X).", rc);
             goto end;
         }
 

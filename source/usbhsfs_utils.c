@@ -70,7 +70,7 @@ static bool usbHsFsUtilsCheckRunningServiceByName(const char *name)
     SCOPED_LOCK(&g_atmosphereVersionMutex)
     {
         Result rc = usbHsFsUtilsAtmosphereHasService(&ret, smEncodeName(name));
-        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsAtmosphereHasService failed for \"%s\"! (0x%08X).", name, rc);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsAtmosphereHasService failed for \"%s\"! (0x%X).", name, rc);
     }
 
     return ret;
@@ -88,7 +88,7 @@ static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name)
     if (!g_atmosphereVersion)
     {
         rc = usbHsFsUtilsGetExosphereApiVersion(&g_atmosphereVersion);
-        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsGetExosphereApiVersion failed! (0x%08X).", rc);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsGetExosphereApiVersion failed! (0x%X).", rc);
     }
 
     /* Check if service is running. */
@@ -118,7 +118,7 @@ static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out)
     rc = splInitialize();
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("splInitialize failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("splInitialize failed! (0x%X).", rc);
         return rc;
     }
 
@@ -133,7 +133,7 @@ static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out)
         *out = version = (u32)((cfg >> 40) & 0xFFFFFF);
         USBHSFS_LOG_MSG("Exosphère API version: %u.%u.%u.", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));
     } else {
-        USBHSFS_LOG_MSG("splGetConfig failed! (0x%08X).", rc);
+        USBHSFS_LOG_MSG("splGetConfig failed! (0x%X).", rc);
     }
 
     return rc;

@@ -962,7 +962,7 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         rc = usbHsFsRequestPostBuffer(usb_if_session, usb_ep_session, xfer_buf, xfer_size, &rest_size, false);
         if (R_FAILED(rc))
         {
-            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%08X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
 
             /* Try to receive a CSW. */
             if (usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw))
@@ -1089,7 +1089,7 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     rc = usbHsFsRequestEndpointDataXfer(&(drive_ctx->usb_out_ep_session[0]), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
 
@@ -1109,7 +1109,7 @@ ep_chk:
     rc = usbHsFsRequestGetEndpointStatus(&(drive_ctx->usb_if_session), &(drive_ctx->usb_out_ep_session[0]), &status);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("Failed to get output endpoint status! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("Failed to get output endpoint status! (0x%X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
 
@@ -1136,7 +1136,7 @@ static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ct
     rc = usbHsFsRequestPostBuffer(&(drive_ctx->usb_if_session), &(drive_ctx->usb_in_ep_session[0]), csw, sizeof(ScsiCommandStatusWrapper), &xfer_size, true);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed! (0x%X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto end;
     }
 
