@@ -9,6 +9,10 @@
 #include "usbhsfs_utils.h"
 #include "usbhsfs_request.h"
 
+/* Function prototypes. */
+
+static Result __usbHsEpSubmitRequest(UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 timeout_ms, u32 *xfer_size);
+
 void *usbHsFsRequestAllocateXferBuffer(void)
 {
     return memalign(USB_XFER_BUF_ALIGNMENT, USB_XFER_BUF_SIZE);
@@ -384,6 +388,16 @@ Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void
         goto end;
     }
 
+    *xfer_size = 0;
+
+    /* If we're running under a HOS version below 2.0.0, use __usbHsEpSubmitRequest() instead. */
+    if (hosversionBefore(2,0,0))
+    {
+        rc = __usbHsEpSubmitRequest(usb_ep_session, buf, size, USB_POSTBUFFER_TIMEOUT / 1000000, xfer_size);
+        if (R_FAILED(rc)) USBHSFS_LOG_MSG("__usbHsEpSubmitRequest failed! (0x%08X).", rc);
+        goto end;
+    }
+
     /* Get endpoint transfer event. */
     xfer_event = usbHsEpGetXferEvent(usb_ep_session);
 
@@ -469,5 +483,28 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
     }
 
 end:
+    return rc;
+}
+
+static Result __usbHsEpSubmitRequest(UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 timeout_ms, u32 *xfer_size)
+{
+    bool dir = ((usb_ep_session->desc.bEndpointAddress & USB_ENDPOINT_IN) != 0);
+    size_t bufsize = ((size + 0xFFF) & ~0xFFF);
+
+    armDCacheFlush(buf, size);
+
+    const struct {
+        u32 size;
+        u32 timeout_ms;
+    } in = { size, timeout_ms };
+
+    serviceAssumeDomain(&(usb_ep_session->s));
+
+    Result rc = serviceDispatchInOut(&(usb_ep_session->s), dir ? 1 : 0, in, *xfer_size, \
+                                     .buffer_attrs = { SfBufferAttr_HipcMapAlias | (dir ? SfBufferAttr_Out : SfBufferAttr_In) }, \
+                                     .buffers = { { buf, bufsize } });
+
+    if (dir) armDCacheFlush(buf, size);
+
     return rc;
 }
