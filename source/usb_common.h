@@ -21,6 +21,8 @@
 
 #define USB_FEATURE_ENDPOINT_HALT               0x00
 
+#define USB_POSTBUFFER_TIMEOUT                  (u64)10000000000     /* 10 seconds. Expressed in nanoseconds. */
+
 #define USB_DT_PIPE_USAGE                       0x24
 
 #define USB_DT_STRING_MAXLEN                    0x7E

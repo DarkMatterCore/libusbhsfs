@@ -1084,19 +1084,19 @@ static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, S
     memcpy(drive_ctx->xfer_buf, cbw, sizeof(ScsiCommandBlockWrapper));
 
     /* Send CBW. */
-    /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled exactly the same as CSW or data stage transfers. */
+    /* usbHsFsRequestPostBuffer() isn't used here because CBW transfers are not handled in exactly the same way as CSW or data stage transfers. */
     /* A reset recovery must be performed if something goes wrong and the output endpoint is STALLed by the device. */
-    rc = usbHsEpPostBuffer(&(drive_ctx->usb_out_ep_session[0]), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
+    rc = usbHsFsRequestEndpointDataXfer(&(drive_ctx->usb_out_ep_session[0]), drive_ctx->xfer_buf, sizeof(ScsiCommandBlockWrapper), &xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (interface %d, LUN %u).", rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
 
     /* Check transfer size. */
     if (xfer_size != sizeof(ScsiCommandBlockWrapper))
     {
-        USBHSFS_LOG_MSG("usbHsEpPostBuffer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
+        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer transferred 0x%X byte(s), expected 0x%lX! (interface %d, LUN %u).", xfer_size, sizeof(ScsiCommandBlockWrapper), drive_ctx->usb_if_id, cbw->bCBWLUN);
         goto ep_chk;
     }
 

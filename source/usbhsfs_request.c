@@ -366,6 +366,70 @@ end:
     return rc;
 }
 
+/* Based on usbHsEpPostBuffer() from libnx. */
+Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 *xfer_size)
+{
+    Result rc = 0;
+
+    Event *xfer_event = NULL;
+    u32 xfer_id = 0;
+
+    UsbHsXferReport report = {0};
+    u32 report_count = 0;
+
+    if (!usb_ep_session || !serviceIsActive(&(usb_ep_session->s)) || !buf || !size || !xfer_size)
+    {
+        USBHSFS_LOG_MSG("Invalid parameters!");
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+        goto end;
+    }
+
+    /* Get endpoint transfer event. */
+    xfer_event = usbHsEpGetXferEvent(usb_ep_session);
+
+    /* Perform asynchronous USB data transfer. */
+    rc = usbHsEpPostBufferAsync(usb_ep_session, buf, size, 0, &xfer_id);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG_MSG("usbHsEpPostBufferAsync failed! (0x%08X).", rc);
+        goto end;
+    }
+
+    /* Wait until USB data transfer is complete. */
+    rc = eventWait(xfer_event, USB_POSTBUFFER_TIMEOUT);
+    if (R_SUCCEEDED(rc) || R_VALUE(rc) == KERNELRESULT(TimedOut)) eventClear(xfer_event);
+
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG_MSG("eventWait failed! (0%08X).", rc);
+        goto end;
+    }
+
+    /* Retrieve USB transfer report. */
+    rc = usbHsEpGetXferReport(usb_ep_session, &report, 1, &report_count);
+    if (R_FAILED(rc))
+    {
+        USBHSFS_LOG_MSG("usbHsEpGetXferReport failed! (0x%08X).", rc);
+        goto end;
+    }
+
+    if (report_count < 1)
+    {
+        USBHSFS_LOG_MSG("usbHsEpGetXferReport returned an invalid report count value! (%u).", report_count);
+        rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+        goto end;
+    }
+
+    /* Save transferred data size. */
+    *xfer_size = report.transferredSize;
+
+    /* Update return value. */
+    rc = report.res;
+
+end:
+    return rc;
+}
+
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (pages: 19 - 22). */
 Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 *xfer_size, bool retry)
 {
@@ -383,10 +447,10 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
     u8 ep_addr = usb_ep_session->desc.bEndpointAddress;
 #endif
 
-    rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
+    rc = usbHsFsRequestEndpointDataXfer(usb_ep_session, buf, size, xfer_size);
     if (R_FAILED(rc))
     {
-        USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+        USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
 
         /* Attempt to clear this endpoint if it was STALLed. */
         rc_halt = usbHsFsRequestGetEndpointStatus(usb_if_session, usb_ep_session, &status);
@@ -399,8 +463,8 @@ Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClien
         /* Retry the transfer if needed. */
         if (R_SUCCEEDED(rc_halt) && retry)
         {
-            rc = usbHsEpPostBuffer(usb_ep_session, buf, size, xfer_size);
-            if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsEpPostBuffer failed! (0x%08X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
+            rc = usbHsFsRequestEndpointDataXfer(usb_ep_session, buf, size, xfer_size);
+            if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsRequestEndpointDataXfer failed! (0x%08X) (retry) (interface %d, endpoint 0x%02X).", rc, usb_if_session->ID, ep_addr);
         }
     }
 

@@ -398,7 +398,7 @@ int main(int argc, char **argv)
     {
         printf("usbHsFsInitialize() failed! (0x%08X).\n", rc);
         ret = - 1;
-        goto end1;
+        goto end;
     }
 
     /* Get USB Mass Storage status change event. */
@@ -426,12 +426,14 @@ int main(int argc, char **argv)
             /* Break out of this loop. */
             break;
         }
+
+        svcSleepThread(10000000ULL);
     }
 
     /* Deinitialize USB Mass Storage Host interface. */
     usbHsFsExit();
 
-end1:
+end:
     /* Update console output. */
     consoleUpdate(NULL);
 

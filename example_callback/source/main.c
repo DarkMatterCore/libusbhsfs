@@ -391,7 +391,7 @@ int main(int argc, char **argv)
     {
         printf("usbHsFsInitialize() failed! (0x%08X).\n", rc);
         ret = - 1;
-        goto end1;
+        goto end;
     }
 
     while(appletMainLoop())
@@ -408,6 +408,8 @@ int main(int argc, char **argv)
 
         /* Test available UMS devices. */
         usbMscTestDevices();
+
+        svcSleepThread(10000000ULL);
     }
 
     /* Deinitialize USB Mass Storage Host interface. */
@@ -416,7 +418,7 @@ int main(int argc, char **argv)
     /* Free UMS devices buffer. */
     if (g_usbDevices) free(g_usbDevices);
 
-end1:
+end:
     /* Update console output. */
     consoleUpdate(NULL);
 
