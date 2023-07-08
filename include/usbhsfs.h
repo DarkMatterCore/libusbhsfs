@@ -44,22 +44,23 @@ typedef enum {
 
 /// Filesystem mount flags.
 /// Not all supported filesystems are compatible with these flags.
-/// The default mount bitmask is `UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ReplayJournal`.
 /// It can be overriden via usbHsFsSetFileSystemMountFlags() (see below).
 typedef enum {
-    UsbHsFsMountFlags_None                        = 0x00000000, ///< No special action is taken.
-    UsbHsFsMountFlags_IgnoreCaseSensitivity       = 0x00000001, ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
-    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS only. File/directory access times are updated after each successful R/W operation.
-    UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
-    UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
-    UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
-    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< Filesystem is mounted as read-only.
-    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
-    UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
+    UsbHsFsMountFlags_None                        = 0,      ///< No special action is taken.
+    UsbHsFsMountFlags_ReadOnly                    = BIT(0), ///< Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReplayJournal               = BIT(1), ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
+    UsbHsFsMountFlags_IgnoreCaseSensitivity       = BIT(2), ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
+    UsbHsFsMountFlags_UpdateAccessTimes           = BIT(3), ///< NTFS only. File/directory access times are updated after each successful R/W operation.
+    UsbHsFsMountFlags_ShowHiddenFiles             = BIT(4), ///< NTFS only. Hidden file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_ShowSystemFiles             = BIT(5), ///< NTFS only. System file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = BIT(6), ///< NTFS only. Allows writing to files even if they are marked as read-only.
+    UsbHsFsMountFlags_IgnoreHibernation           = BIT(7), ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
 
     ///< Pre-generated bitmasks provided for convenience.
-    UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute),
-    UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation)
+    UsbHsFsMountFlags_Default                     = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ReplayJournal),
+    UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_Default),
+    UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_IgnoreHibernation | UsbHsFsMountFlags_Default),
+    UsbHsFsMountFlags_All                         = (UsbHsFsMountFlags_IgnoreHibernation | (UsbHsFsMountFlags_IgnoreHibernation - 1))
 } UsbHsFsMountFlags;
 
 /// Struct used to list filesystems that have been mounted as virtual devices via devoptab.

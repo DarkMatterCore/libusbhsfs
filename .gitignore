@@ -11,6 +11,7 @@
 *.elf
 *.nacp
 *.nro
+*.code-workspace
 /example_callback/build
 /example_event/build
 /libntfs-3g/src
