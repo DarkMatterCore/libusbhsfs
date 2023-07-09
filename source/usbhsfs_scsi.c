@@ -398,8 +398,8 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if there's write protection in place and if the FUA feature is supported. */
-    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, sizeof(ScsiModeParameterHeader6), \
-                                         &mode_parameter_header_6))
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+                                         sizeof(ScsiModeParameterHeader6), &mode_parameter_header_6))
     {
         USBHSFS_LOG_DATA(&mode_parameter_header_6, sizeof(ScsiModeParameterHeader6), "Mode Sense (6) data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
 
@@ -1071,7 +1071,7 @@ end:
     return ret;
 }
 
-/* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 17). */
+/* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (pages 17 through 22). */
 static bool usbHsFsScsiSendCommandBlockWrapper(UsbHsFsDriveContext *drive_ctx, ScsiCommandBlockWrapper *cbw)
 {
     Result rc = 0;
@@ -1124,7 +1124,7 @@ end:
     return ret;
 }
 
-/* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 17). */
+/* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (pages 15 through 22). */
 static bool usbHsFsScsiReceiveCommandStatusWrapper(UsbHsFsDriveContext *drive_ctx, ScsiCommandBlockWrapper *cbw, ScsiCommandStatusWrapper *out_csw)
 {
     Result rc = 0;
@@ -1189,6 +1189,7 @@ end:
     return ret;
 }
 
+/* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 16). */
 static void usbHsFsScsiResetRecovery(UsbHsFsDriveContext *drive_ctx)
 {
     /* Perform BOT mass storage reset. */
