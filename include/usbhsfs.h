@@ -72,9 +72,9 @@ typedef struct {
     bool write_protect;     ///< Set to true if the logical unit is protected against write operations.
     u16 vid;                ///< Vendor ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
     u16 pid;                ///< Product ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
-    char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
-    char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
-    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from the device descriptor. May be empty.
+    char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
+    char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
+    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from the USB device descriptor. May be empty.
     u64 capacity;           ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
     char name[32];          ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
     u8 fs_type;             ///< UsbHsFsDeviceFileSystemType.

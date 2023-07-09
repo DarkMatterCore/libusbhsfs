@@ -77,7 +77,6 @@ Result usbHsFsInitialize(u8 event_idx)
 
 #ifdef DEBUG
         /* Start new log session. */
-        usbHsFsLogWriteStringToLogFile("________________________________________________________________\r\n");
         USBHSFS_LOG_MSG(LIB_TITLE " v%u.%u.%u starting. Built on " BUILD_TIMESTAMP ".", LIBUSBHSFS_VERSION_MAJOR, LIBUSBHSFS_VERSION_MINOR, LIBUSBHSFS_VERSION_MICRO);
 
         /* Log Horizon OS version. */
@@ -1083,8 +1082,8 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
     device->vid = drive_ctx->vid;
     device->pid = drive_ctx->pid;
 
-    snprintf(device->manufacturer, sizeof(device->manufacturer), "%s", (drive_ctx->manufacturer ? drive_ctx->manufacturer : lun_ctx->vendor_id));
-    snprintf(device->product_name, sizeof(device->product_name), "%s", (drive_ctx->product_name ? drive_ctx->product_name : lun_ctx->product_id));
+    snprintf(device->manufacturer, sizeof(device->manufacturer), "%s", (lun_ctx->vendor_id[0] ? lun_ctx->vendor_id : (drive_ctx->manufacturer ? drive_ctx->manufacturer : "")));
+    snprintf(device->product_name, sizeof(device->product_name), "%s", (lun_ctx->product_id[0] ? lun_ctx->product_id : (drive_ctx->product_name ? drive_ctx->product_name : "")));
     if (drive_ctx->serial_number) snprintf(device->serial_number, sizeof(device->serial_number), "%s", drive_ctx->serial_number);
 
     device->capacity = lun_ctx->capacity;

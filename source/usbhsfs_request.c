@@ -213,7 +213,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
         goto end;
     }
 
-    /* Allocate memory for the minimal configuration descriptor. */
+    /* Allocate memory for the string descriptor. */
     string_desc = memalign(USB_XFER_BUF_ALIGNMENT, len);
     if (!string_desc)
     {
