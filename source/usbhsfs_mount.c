@@ -47,6 +47,8 @@ typedef struct {
 } DOS_2_0_BPB;
 #pragma pack(pop)
 
+LIB_ASSERT(DOS_2_0_BPB, 0xD);
+
 /// DOS 3.31 BIOS Parameter Block. Used for FAT12, FAT16 and FAT16B (25 bytes).
 #pragma pack(push, 1)
 typedef struct {
@@ -57,6 +59,8 @@ typedef struct {
     u32 total_sectors;          ///< Large total logical sectors.
 } DOS_3_31_BPB;
 #pragma pack(pop)
+
+LIB_ASSERT(DOS_3_31_BPB, 0x19);
 
 /// DOS 7.1 Extended BIOS Parameter Block (full variant). Used for FAT32 (79 bytes).
 #pragma pack(push, 1)
@@ -78,6 +82,8 @@ typedef struct {
 } DOS_7_1_EBPB;
 #pragma pack(pop)
 
+LIB_ASSERT(DOS_7_1_EBPB, 0x4F);
+
 /// Volume Boot Record (VBR). Represents the first sector from every FAT and NTFS filesystem. If a drive is formatted using Super Floppy Drive (SFD) configuration, this is located at LBA 0.
 typedef struct {
     u8 jmp_boot[0x3];           ///< Jump boot code. First byte must match 0xEB (short jump), 0xE9 (near jump) or 0xE8 (near call). Set to "\xEB\x76\x90" is this is an exFAT VBR.
@@ -87,6 +93,8 @@ typedef struct {
     u8 pdrv;                    ///< Physical drive number.
     u16 boot_sig;               ///< Matches BOOT_SIGNATURE for FAT32, exFAT and NTFS. Serves a different purpose under other FAT filesystems.
 } VolumeBootRecord;
+
+LIB_ASSERT(VolumeBootRecord, 0x200);
 
 /// Master Boot Record (MBR) partition types. All these types support logical block addresses. CHS addressing only and hidden types have been excluded.
 typedef enum {
@@ -115,6 +123,8 @@ typedef struct {
     u32 block_count;    ///< Logical block count in the partition.
 } MasterBootRecordPartitionEntry;
 
+LIB_ASSERT(MasterBootRecordPartitionEntry, 0x10);
+
 /// Master Boot Record (MBR). Always located at LBA 0, as long as SFD configuration isn't used (VBR at LBA 0).
 #pragma pack(push, 1)
 typedef struct {
@@ -124,7 +134,10 @@ typedef struct {
 } MasterBootRecord;
 #pragma pack(pop)
 
+LIB_ASSERT(MasterBootRecord, 0x200);
+
 /// Extended Boot Record (EBR). Represents a way to store more than 4 partitions in a MBR-formatted logical unit using linked lists.
+#pragma pack(push, 1)
 typedef struct {
     u8 code_area[0x1BE];                        ///< Bootstrap code area. Normally empty.
     MasterBootRecordPartitionEntry partition;   ///< Primary partition entry.
@@ -132,6 +145,9 @@ typedef struct {
     u8 reserved[0x20];                          ///< Normally empty.
     u16 boot_sig;                               ///< Boot signature. Must match BOOT_SIGNATURE.
 } ExtendedBootRecord;
+#pragma pack(pop)
+
+LIB_ASSERT(ExtendedBootRecord, 0x200);
 
 /// Globally Unique ID Partition Table (GPT) entry. These usually start at LBA 2.
 typedef struct {
@@ -142,6 +158,8 @@ typedef struct {
     u64 flags;              ///< Attribute flags.
     u16 name[0x24];         ///< Partition name (36 UTF-16LE code units).
 } GuidPartitionTableEntry;
+
+LIB_ASSERT(GuidPartitionTableEntry, 0x80);
 
 /// Globally Unique ID Partition Table (GPT) header. If available, it's always located at LBA 1.
 typedef struct {
@@ -162,14 +180,7 @@ typedef struct {
     u8 reserved_2[0x1A4];           ///< Reserved; must be zeroes for the rest of the block.
 } GuidPartitionTableHeader;
 
-static_assert(sizeof(DOS_2_0_BPB) == 0xD, "Bad DOS_2_0_BPB size! Expected 0xD.");
-static_assert(sizeof(DOS_3_31_BPB) == 0x19, "Bad DOS_3_31_BPB size! Expected 0x19.");
-static_assert(sizeof(DOS_7_1_EBPB) == 0x4F, "Bad DOS_7_1_EBPB size! Expected 0x4F.");
-static_assert(sizeof(VolumeBootRecord) == 0x200, "Bad VolumeBootRecord size! Expected 0x200.");
-static_assert(sizeof(MasterBootRecord) == 0x200, "Bad MasterBootRecord size! Expected 0x200.");
-static_assert(sizeof(MasterBootRecordPartitionEntry) == 0x10, "Bad MasterBootRecordPartitionEntry size! Expected 0x10.");
-static_assert(sizeof(GuidPartitionTableEntry) == 0x80, "Bad GuidPartitionTableEntry size! Expected 0x80.");
-static_assert(sizeof(GuidPartitionTableHeader) == 0x200, "Bad GuidPartitionTableHeader size! Expected 0x200.");
+LIB_ASSERT(GuidPartitionTableHeader, 0x200);
 
 /* Global variables. */
 

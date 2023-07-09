@@ -27,19 +27,6 @@
 
 /* Type definitions. */
 
-/// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 13).
-#pragma pack(push, 1)
-typedef struct {
-    u32 dCBWSignature;
-    u32 dCBWTag;
-    u32 dCBWDataTransferLength;
-    u8 bmCBWFlags;
-    u8 bCBWLUN;
-    u8 bCBWCBLength;
-    u8 CBWCB[0x10];
-} ScsiCommandBlockWrapper;
-#pragma pack(pop)
-
 typedef enum {
     ScsiCommandOperationCode_TestUnitReady             = 0x00,
     ScsiCommandOperationCode_RequestSense              = 0x03,
@@ -58,15 +45,20 @@ typedef enum {
     ScsiCommandOperationCode_ServiceActionIn           = 0x9E
 } ScsiCommandOperationCode;
 
-/// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
+/// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 13).
 #pragma pack(push, 1)
 typedef struct {
-    u32 dCSWSignature;
-    u32 dCSWTag;
-    u32 dCSWDataResidue;
-    u8 bCSWStatus;
-} ScsiCommandStatusWrapper;
+    u32 dCBWSignature;
+    u32 dCBWTag;
+    u32 dCBWDataTransferLength;
+    u8 bmCBWFlags;
+    u8 bCBWLUN;
+    u8 bCBWCBLength;
+    u8 CBWCB[0x10];             ///< First byte represents a ScsiCommandOperationCode value.
+} ScsiCommandBlockWrapper;
 #pragma pack(pop)
+
+LIB_ASSERT(ScsiCommandBlockWrapper, 0x1F);
 
 /// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 15).
 typedef enum {
@@ -75,26 +67,17 @@ typedef enum {
     ScsiCommandStatus_PhaseError = 0x02
 } ScsiCommandStatus;
 
-/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 56).
-/// Followed by additional sense data (not requested).
+/// Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 14).
+#pragma pack(push, 1)
 typedef struct {
-    u8 response_code;                       ///< Must either be 0x70 or 0x71.
-    u8 segment_number;
-    struct {
-        u8 sense_key  : 4;
-        u8 reserved_1 : 1;
-        u8 ili        : 1;                  ///< Incorrect length indicator.
-        u8 eom        : 1;                  ///< End-of-medium.
-        u8 file_mark  : 1;
-    };
-    u8 information[0x4];
-    u8 additional_sense_length;
-    u8 cmd_specific_info[0x4];
-    u8 additional_sense_code;
-    u8 additional_sense_code_qualifier;
-    u8 field_replaceable_unit_code;
-    u8 sense_key_specific[0x3];
-} ScsiRequestSenseDataFixedFormat;
+    u32 dCSWSignature;
+    u32 dCSWTag;
+    u32 dCSWDataResidue;
+    u8 bCSWStatus;          ///< ScsiCommandStatus.
+} ScsiCommandStatusWrapper;
+#pragma pack(pop)
+
+LIB_ASSERT(ScsiCommandStatusWrapper, 0xD);
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 59).
 /// Reference: https://www.stix.id.au/wiki/SCSI_Sense_Data.
@@ -117,53 +100,106 @@ typedef enum {
     ScsiSenseKey_Completed      = 0x0F
 } ScsiSenseKey;
 
-/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 95).
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 56).
+/// Followed by additional sense data (not requested).
+typedef struct {
+    u8 response_code;                       ///< Must either be 0x70 or 0x71.
+    u8 segment_number;
+    struct {
+        u8 sense_key  : 4;                  ///< ScsiSenseKey.
+        u8 reserved_1 : 1;
+        u8 ili        : 1;                  ///< Incorrect length indicator.
+        u8 eom        : 1;                  ///< End-of-medium.
+        u8 file_mark  : 1;
+    };
+    u8 information[0x4];
+    u8 additional_sense_length;
+    u8 cmd_specific_info[0x4];
+    u8 additional_sense_code;
+    u8 additional_sense_code_qualifier;
+    u8 field_replaceable_unit_code;
+    u8 sense_key_specific[0x3];
+} ScsiRequestSenseDataFixedFormat;
+
+LIB_ASSERT(ScsiRequestSenseDataFixedFormat, 0x12);
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 468). */
+/// ASCII Information page codes intentionally omitted.
 typedef enum {
-    ScsiPeripheralQualifier_Connected       = 0,
-    ScsiPeripheralQualifier_NotConnected    = 1,
-    ScsiPeripheralQualifier_Reserved        = 2,
-    ScsiPeripheralQualifier_Unsupported     = 3,
-    ScsiPeripheralQualifier_VendorSpecific1 = 4,
-    ScsiPeripheralQualifier_VendorSpecific2 = 5,
-    ScsiPeripheralQualifier_VendorSpecific3 = 6,
-    ScsiPeripheralQualifier_VendorSpecific4 = 7
-} ScsiPeripheralQualifier;
+    ScsiInquiryVitalProductDataPageCode_None                                    = 0x00, ///< Placeholder. Used with EVPD == 0.
+    ScsiInquiryVitalProductDataPageCode_SupportedVpdPages                       = 0x00,
+    ScsiInquiryVitalProductDataPageCode_UnitSerialNumber                        = 0x80,
+    ScsiInquiryVitalProductDataPageCode_DeviceIdentification                    = 0x83,
+    ScsiInquiryVitalProductDataPageCode_SoftwareInterfaceIdentification         = 0x84,
+    ScsiInquiryVitalProductDataPageCode_ManagementNetworkAddresses              = 0x85,
+    ScsiInquiryVitalProductDataPageCode_ExtendedInquiryData                     = 0x86,
+    ScsiInquiryVitalProductDataPageCode_ModePagePolicy                          = 0x87,
+    ScsiInquiryVitalProductDataPageCode_ScsiPorts                               = 0x88,
+    ScsiInquiryVitalProductDataPageCode_PowerCondition                          = 0x8A,
+    ScsiInquiryVitalProductDataPageCode_DeviceConstituents                      = 0x8B,
+    ScsiInquiryVitalProductDataPageCode_CfaProfileInformation                   = 0x8C,
+    ScsiInquiryVitalProductDataPageCode_PowerConsumption                        = 0x8D,
+    ScsiInquiryVitalProductDataPageCode_BlockLimits                             = 0xB0,
+    ScsiInquiryVitalProductDataPageCode_BlockDeviceCharacteristics              = 0xB1,
+    ScsiInquiryVitalProductDataPageCode_LogicalBlockProvisioning                = 0xB2,
+    ScsiInquiryVitalProductDataPageCode_Referrals                               = 0xB3,
+    ScsiInquiryVitalProductDataPageCode_SupportedBlockLengthsAndProtectionTypes = 0xB4,
+    ScsiInquiryVitalProductDataPageCode_BlockDeviceCharacteristicsExtension     = 0xB5,
+    ScsiInquiryVitalProductDataPageCode_ZonedBlockDeviceCharacteristics         = 0xB6,
+    ScsiInquiryVitalProductDataPageCode_BlockLimitsExtension                    = 0xB7,
+    ScsiInquiryVitalProductDataPageCode_FirmwareNumbers                         = 0xC0,
+    ScsiInquiryVitalProductDataPageCode_DateCode                                = 0xC1,
+    ScsiInquiryVitalProductDataPageCode_JumperSettings                          = 0xC2,
+    ScsiInquiryVitalProductDataPageCode_DeviceBehavior                          = 0xC3
+} ScsiInquiryVitalProductDataPageCode;
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 96).
 typedef enum {
-    ScsiPeripheralDeviceType_DirectAccessBlock       = 0x00,
-    ScsiPeripheralDeviceType_SequentialAccess        = 0x01,
-    ScsiPeripheralDeviceType_Printer                 = 0x02,
-    ScsiPeripheralDeviceType_Processor               = 0x03,
-    ScsiPeripheralDeviceType_WriteOnce               = 0x04,
-    ScsiPeripheralDeviceType_CdDvd                   = 0x05,
-    ScsiPeripheralDeviceType_Obsolete1               = 0x06,
-    ScsiPeripheralDeviceType_OpticalMemory           = 0x07,
-    ScsiPeripheralDeviceType_MediumChanger           = 0x08,
-    ScsiPeripheralDeviceType_Obsolete2               = 0x09,
-    ScsiPeripheralDeviceType_Obsolete3               = 0x0A,
-    ScsiPeripheralDeviceType_Obsolete4               = 0x0B,
-    ScsiPeripheralDeviceType_StorageArrayController  = 0x0C,
-    ScsiPeripheralDeviceType_EnclosureServices       = 0x0D,
-    ScsiPeripheralDeviceType_SimplifiedDirectAccess  = 0x0E,
-    ScsiPeripheralDeviceType_OpticalCardReaderWriter = 0x0F,
-    ScsiPeripheralDeviceType_BridgeControllerCommands = 0x10,
-    ScsiPeripheralDeviceType_ObjectBasedStorage       = 0x11,
-    ScsiPeripheralDeviceType_AutomationDriveInterface = 0x12,
-    ScsiPeripheralDeviceType_Reserved1                = 0x13,
-    ScsiPeripheralDeviceType_Reserved2                = 0x14,
-    ScsiPeripheralDeviceType_Reserved3                = 0x15,
-    ScsiPeripheralDeviceType_Reserved4                = 0x16,
-    ScsiPeripheralDeviceType_Reserved5                = 0x17,
-    ScsiPeripheralDeviceType_Reserved6                = 0x18,
-    ScsiPeripheralDeviceType_Reserved7                = 0x19,
-    ScsiPeripheralDeviceType_Reserved8                = 0x1A,
-    ScsiPeripheralDeviceType_Reserved9                = 0x1B,
-    ScsiPeripheralDeviceType_Reserved10               = 0x1C,
-    ScsiPeripheralDeviceType_Reserved11               = 0x1D,
-    ScsiPeripheralDeviceType_WellKnownLogicalUnit     = 0x1E,
-    ScsiPeripheralDeviceType_Unknown                  = 0x1F
-} ScsiPeripheralDeviceType;
+    ScsiInquiryPeripheralDeviceType_DirectAccessBlock       = 0x00,
+    ScsiInquiryPeripheralDeviceType_SequentialAccess        = 0x01,
+    ScsiInquiryPeripheralDeviceType_Printer                 = 0x02,
+    ScsiInquiryPeripheralDeviceType_Processor               = 0x03,
+    ScsiInquiryPeripheralDeviceType_WriteOnce               = 0x04,
+    ScsiInquiryPeripheralDeviceType_CdDvd                   = 0x05,
+    ScsiInquiryPeripheralDeviceType_Obsolete1               = 0x06,
+    ScsiInquiryPeripheralDeviceType_OpticalMemory           = 0x07,
+    ScsiInquiryPeripheralDeviceType_MediumChanger           = 0x08,
+    ScsiInquiryPeripheralDeviceType_Obsolete2               = 0x09,
+    ScsiInquiryPeripheralDeviceType_Obsolete3               = 0x0A,
+    ScsiInquiryPeripheralDeviceType_Obsolete4               = 0x0B,
+    ScsiInquiryPeripheralDeviceType_StorageArrayController  = 0x0C,
+    ScsiInquiryPeripheralDeviceType_EnclosureServices       = 0x0D,
+    ScsiInquiryPeripheralDeviceType_SimplifiedDirectAccess  = 0x0E,
+    ScsiInquiryPeripheralDeviceType_OpticalCardReaderWriter = 0x0F,
+    ScsiInquiryPeripheralDeviceType_BridgeControllerCommands = 0x10,
+    ScsiInquiryPeripheralDeviceType_ObjectBasedStorage       = 0x11,
+    ScsiInquiryPeripheralDeviceType_AutomationDriveInterface = 0x12,
+    ScsiInquiryPeripheralDeviceType_Reserved1                = 0x13,
+    ScsiInquiryPeripheralDeviceType_Reserved2                = 0x14,
+    ScsiInquiryPeripheralDeviceType_Reserved3                = 0x15,
+    ScsiInquiryPeripheralDeviceType_Reserved4                = 0x16,
+    ScsiInquiryPeripheralDeviceType_Reserved5                = 0x17,
+    ScsiInquiryPeripheralDeviceType_Reserved6                = 0x18,
+    ScsiInquiryPeripheralDeviceType_Reserved7                = 0x19,
+    ScsiInquiryPeripheralDeviceType_Reserved8                = 0x1A,
+    ScsiInquiryPeripheralDeviceType_Reserved9                = 0x1B,
+    ScsiInquiryPeripheralDeviceType_Reserved10               = 0x1C,
+    ScsiInquiryPeripheralDeviceType_Reserved11               = 0x1D,
+    ScsiInquiryPeripheralDeviceType_WellKnownLogicalUnit     = 0x1E,
+    ScsiInquiryPeripheralDeviceType_Unknown                  = 0x1F
+} ScsiInquiryPeripheralDeviceType;
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 95).
+typedef enum {
+    ScsiInquiryPeripheralQualifier_Connected       = 0,
+    ScsiInquiryPeripheralQualifier_NotConnected    = 1,
+    ScsiInquiryPeripheralQualifier_Reserved        = 2,
+    ScsiInquiryPeripheralQualifier_Unsupported     = 3,
+    ScsiInquiryPeripheralQualifier_VendorSpecific1 = 4,
+    ScsiInquiryPeripheralQualifier_VendorSpecific2 = 5,
+    ScsiInquiryPeripheralQualifier_VendorSpecific3 = 6,
+    ScsiInquiryPeripheralQualifier_VendorSpecific4 = 7
+} ScsiInquiryPeripheralQualifier;
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 97).
 typedef enum {
@@ -178,8 +214,8 @@ typedef enum {
 /// Truncated at the product revision level field to just request the bare minimum - we don't need anything else past that point.
 typedef struct {
     struct {
-        u8 peripheral_device_type : 5;  ///< ScsiPeripheralDeviceType.
-        u8 peripheral_qualifier   : 3;  ///< ScsiPeripheralQualifier.
+        u8 peripheral_device_type : 5;  ///< ScsiInquiryPeripheralDeviceType.
+        u8 peripheral_qualifier   : 3;  ///< ScsiInquiryPeripheralQualifier.
     };
     struct {
         u8 reserved_1 : 7;
@@ -218,13 +254,15 @@ typedef struct {
     char product_revision[0x4];
 } ScsiInquiryStandardData;
 
+LIB_ASSERT(ScsiInquiryStandardData, 0x24);
+
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 111).
 typedef enum {
-    ScsiModePageControl_CurrentValues    = 0,
-    ScsiModePageControl_ChangeableValues = 1,
-    ScsiModePageControl_DefaultValues    = 2,
-    ScsiModePageControl_SavedValues      = 3
-} ScsiModePageControl;
+    ScsiModeSensePageControl_CurrentValues    = 0,
+    ScsiModeSensePageControl_ChangeableValues = 1,
+    ScsiModeSensePageControl_DefaultValues    = 2,
+    ScsiModeSensePageControl_SavedValues      = 3
+} ScsiModeSensePageControl;
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 378).
 typedef struct {
@@ -238,6 +276,8 @@ typedef struct {
     };
     u8 block_desc_length;   ///< Length in bytes of all of the block descriptors.
 } ScsiModeParameterHeader6;
+
+LIB_ASSERT(ScsiModeParameterHeader6, 0x4);
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 378).
 typedef struct {
@@ -257,11 +297,15 @@ typedef struct {
     u16 block_desc_length;  ///< Length in bytes of all of the block descriptors. Stored using big endian byte ordering.
 } ScsiModeParameterHeader10;
 
+LIB_ASSERT(ScsiModeParameterHeader10, 0x8);
+
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 156).
 typedef struct {
     u32 block_count;    ///< Stored using big endian byte ordering.
     u32 block_length;   ///< Stored using big endian byte ordering.
 } ScsiReadCapacity10Data;
+
+LIB_ASSERT(ScsiReadCapacity10Data, 0x8);
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (pages 158 and 159).
 typedef struct {
@@ -285,14 +329,7 @@ typedef struct {
     u8 reserved_2[0x10];
 } ScsiReadCapacity16Data;
 
-static_assert(sizeof(ScsiCommandBlockWrapper) == 0x1F, "Bad ScsiCommandBlockWrapper size! Expected 0x1F.");
-static_assert(sizeof(ScsiCommandStatusWrapper) == 0xD, "Bad ScsiCommandStatusWrapper size! Expected 0xD.");
-static_assert(sizeof(ScsiRequestSenseDataFixedFormat) == 0x12, "Bad ScsiRequestSenseDataFixedFormat size! Expected 0x12.");
-static_assert(sizeof(ScsiInquiryStandardData) == 0x24, "Bad ScsiInquiryStandardData size! Expected 0x24.");
-static_assert(sizeof(ScsiModeParameterHeader6) == 0x4, "Bad ScsiModeParameterHeader6 size! Expected 0x4.");
-static_assert(sizeof(ScsiModeParameterHeader10) == 0x8, "Bad ScsiModeParameterHeader10 size! Expected 0x8.");
-static_assert(sizeof(ScsiReadCapacity10Data) == 0x8, "Bad ScsiReadCapacity10Data size! Expected 0x8.");
-static_assert(sizeof(ScsiReadCapacity16Data) == 0x20, "Bad ScsiReadCapacity16Data size! Expected 0x20.");
+LIB_ASSERT(ScsiReadCapacity16Data, 0x20);
 
 /* Global variables. */
 
@@ -302,7 +339,7 @@ static __thread bool g_mediumPresent = true;
 
 static bool usbHsFsScsiSendTestUnitReadyCommand(UsbHsFsDriveContext *drive_ctx, u8 lun);
 static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiRequestSenseDataFixedFormat *sense_data);
-static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiInquiryStandardData *inquiry_data);
+static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool evpd, u8 vpd_page_code, u16 allocation_length, void *buf);
 static bool usbHsFsScsiSendModeSense6Command(UsbHsFsDriveContext *drive_ctx, u8 lun, u8 page_control, u8 page_code, u8 subpage_code, u8 allocation_length, void *buf);
 static bool usbHsFsScsiSendStartStopUnitCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool start);
 static bool usbHsFsScsiSendPreventAllowMediumRemovalCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool prevent);
@@ -352,7 +389,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     g_mediumPresent = true;
 
     /* Send Inquiry SCSI command. */
-    if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, &inquiry_data))
+    if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, false, ScsiInquiryVitalProductDataPageCode_None, sizeof(ScsiInquiryStandardData), &inquiry_data))
     {
         USBHSFS_LOG_MSG("Inquiry failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
         goto end;
@@ -361,7 +398,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     USBHSFS_LOG_DATA(&inquiry_data, sizeof(ScsiInquiryStandardData), "Inquiry data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
 
     /* Check if we're dealing with an available Direct Access Block device. */
-    if (inquiry_data.peripheral_qualifier != ScsiPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiPeripheralDeviceType_DirectAccessBlock)
+    if (inquiry_data.peripheral_qualifier != ScsiInquiryPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiInquiryPeripheralDeviceType_DirectAccessBlock)
     {
         USBHSFS_LOG_MSG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
         goto end;
@@ -398,7 +435,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
     /* Send Mode Sense (6) SCSI command. */
     /* We'll only request the mode parameter header to determine if there's write protection in place and if the FUA feature is supported. */
-    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+    if (usbHsFsScsiSendModeSense6Command(drive_ctx, lun, ScsiModeSensePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
                                          sizeof(ScsiModeParameterHeader6), &mode_parameter_header_6))
     {
         USBHSFS_LOG_DATA(&mode_parameter_header_6, sizeof(ScsiModeParameterHeader6), "Mode Sense (6) data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
@@ -411,7 +448,7 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
         /* Send Mode Sense (10) SCSI command. */
         /* Odds are we're dealing with a device that doesn't support Mode Sense (6). */
-        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
+        if (usbHsFsScsiSendModeSense10Command(drive_ctx, lun, false, ScsiModeSensePageControl_CurrentValues, SCSI_MODE_PAGE_CODE_ALL, SCSI_MODE_SUBPAGE_CODE_ALL_NO_SUBPAGES, \
                                                sizeof(ScsiModeParameterHeader10), &mode_parameter_header_10))
         {
             USBHSFS_LOG_DATA(&mode_parameter_header_10, sizeof(ScsiModeParameterHeader10), "Mode Sense (10) data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
@@ -648,25 +685,25 @@ static bool usbHsFsScsiSendRequestSenseCommand(UsbHsFsDriveContext *drive_ctx, u
     return usbHsFsScsiTransferCommand(drive_ctx, &cbw, sense_data);
 }
 
-/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 92). */
-static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, ScsiInquiryStandardData *inquiry_data)
+/* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (pages 92, 93 and 100). */
+static bool usbHsFsScsiSendInquiryCommand(UsbHsFsDriveContext *drive_ctx, u8 lun, bool evpd, u8 vpd_page_code, u16 allocation_length, void *buf)
 {
     /* Prepare CBW. */
     ScsiCommandBlockWrapper cbw = {0};
-    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, (u32)sizeof(ScsiInquiryStandardData), true, lun, 6);
+    usbHsFsScsiPrepareCommandBlockWrapper(&cbw, allocation_length, true, lun, 6);
 
     /* Byteswap data. */
-    u16 allocation_length = __builtin_bswap16((u16)cbw.dCBWDataTransferLength);
+    allocation_length = __builtin_bswap16(allocation_length);
 
     /* Prepare CB. */
     cbw.CBWCB[0] = ScsiCommandOperationCode_Inquiry;            /* Operation code. */
-    cbw.CBWCB[1] = 0;                                           /* Request standard inquiry data. */
-    cbw.CBWCB[2] = 0;                                           /* Mandatory for standard inquiry data request. */
+    cbw.CBWCB[1] = (evpd ? 1 : 0);                              /* Enable Vital Product Data (EVPD) bit (if needed). */
+    cbw.CBWCB[2] = (evpd ? vpd_page_code : 0);                  /* Set Vital Product Data page code if EVPD is set to 1. */
     memcpy(&(cbw.CBWCB[3]), &allocation_length, sizeof(u16));   /* Set allocation length. */
 
     /* Send command. */
     USBHSFS_LOG_MSG("Sending command (interface %d, LUN %u).", drive_ctx->usb_if_id, lun);
-    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, inquiry_data);
+    return usbHsFsScsiTransferCommand(drive_ctx, &cbw, buf);
 }
 
 /* Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 111). */
