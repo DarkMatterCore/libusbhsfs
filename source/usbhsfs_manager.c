@@ -1084,7 +1084,7 @@ static void usbHsFsFillDeviceElement(UsbHsFsDriveContext *drive_ctx, UsbHsFsDriv
 
     snprintf(device->manufacturer, sizeof(device->manufacturer), "%s", (lun_ctx->vendor_id[0] ? lun_ctx->vendor_id : (drive_ctx->manufacturer ? drive_ctx->manufacturer : "")));
     snprintf(device->product_name, sizeof(device->product_name), "%s", (lun_ctx->product_id[0] ? lun_ctx->product_id : (drive_ctx->product_name ? drive_ctx->product_name : "")));
-    if (drive_ctx->serial_number) snprintf(device->serial_number, sizeof(device->serial_number), "%s", drive_ctx->serial_number);
+    snprintf(device->serial_number, sizeof(device->serial_number), "%s", (lun_ctx->serial_number[0] ? lun_ctx->serial_number : (drive_ctx->serial_number ? drive_ctx->serial_number : "")));
 
     device->capacity = lun_ctx->capacity;
     sprintf(device->name, "%s:", fs_ctx->name);

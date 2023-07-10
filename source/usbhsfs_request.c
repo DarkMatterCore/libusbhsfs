@@ -410,6 +410,7 @@ Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void
     }
 
     /* Wait until USB data transfer is complete. */
+    /* TODO: find a way to properly cancel an async transfer. If left unhandled, this may trigger a fatal error within the usb sysmodule. */
     rc = eventWait(xfer_event, USB_POSTBUFFER_TIMEOUT);
     if (R_SUCCEEDED(rc) || R_VALUE(rc) == KERNELRESULT(TimedOut)) eventClear(xfer_event);
 

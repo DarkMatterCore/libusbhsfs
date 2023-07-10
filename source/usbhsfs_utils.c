@@ -47,6 +47,22 @@ void usbHsFsUtilsTrimString(char *str)
     if (start != str) memmove(str, start, end - start + 1);
 }
 
+bool usbHsFsUtilsIsAsciiString(const char *str, size_t strsize)
+{
+    if (!str || !*str) return false;
+
+    /* Retrieve string length if it wasn't provided. */
+    if (!strsize) strsize = strlen(str);
+
+    for(size_t i = 0; i < strsize; i++)
+    {
+        char cp = str[i];
+        if (cp < 0x20 || cp > 0x7E) return false;
+    }
+
+    return true;
+}
+
 bool usbHsFsUtilsIsFspUsbRunning(void)
 {
     return usbHsFsUtilsCheckRunningServiceByName("fsp-usb");

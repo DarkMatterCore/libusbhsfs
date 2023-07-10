@@ -211,7 +211,7 @@ typedef enum {
 } ScsiInquirySPCVersion;
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 94).
-/// Truncated at the product revision level field to just request the bare minimum - we don't need anything else past that point.
+/// Truncated at the drive serial number field to just request the bare minimum - we don't need anything else past that point.
 typedef struct {
     struct {
         u8 peripheral_device_type : 5;  ///< ScsiInquiryPeripheralDeviceType.
@@ -252,9 +252,23 @@ typedef struct {
     char vendor_id[0x8];
     char product_id[0x10];
     char product_revision[0x4];
+    char serial_number[0x8];
 } ScsiInquiryStandardData;
 
-LIB_ASSERT(ScsiInquiryStandardData, 0x24);
+LIB_ASSERT(ScsiInquiryStandardData, 0x2C);
+
+/// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 510).
+typedef struct {
+    struct {
+        u8 peripheral_device_type : 5;  ///< ScsiInquiryPeripheralDeviceType.
+        u8 peripheral_qualifier   : 3;  ///< ScsiInquiryPeripheralQualifier.
+    };
+    u8 page_code;
+    u8 reserved;
+    u8 page_length;
+} ScsiInquiryUnitSerialNumberPageHeader;
+
+LIB_ASSERT(ScsiInquiryUnitSerialNumberPageHeader, 0x4);
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 111).
 typedef enum {
@@ -374,6 +388,10 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
     ScsiInquiryStandardData inquiry_data = {0};
 
+    u8 inquiry_vpd_buf[0x110] = {0};
+    char *serial_number = NULL;
+    u16 serial_number_length = 0;
+
     ScsiModeParameterHeader6 mode_parameter_header_6 = {0};
     ScsiModeParameterHeader10 mode_parameter_header_10 = {0};
 
@@ -388,14 +406,40 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
     /* Reset medium present flag. */
     g_mediumPresent = true;
 
-    /* Send Inquiry SCSI command. */
+    /* Send standard Inquiry SCSI command. */
     if (!usbHsFsScsiSendInquiryCommand(drive_ctx, lun, false, ScsiInquiryVitalProductDataPageCode_None, sizeof(ScsiInquiryStandardData), &inquiry_data))
     {
         USBHSFS_LOG_MSG("Inquiry failed! (interface %d, LUN %d).", drive_ctx->usb_if_id, lun);
         goto end;
     }
 
-    USBHSFS_LOG_DATA(&inquiry_data, sizeof(ScsiInquiryStandardData), "Inquiry data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
+    USBHSFS_LOG_DATA(&inquiry_data, sizeof(ScsiInquiryStandardData), "Standard Inquiry data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
+
+    /* Send Unit Serial Number VPD Inquiry SCSI command. */
+    /* We'll first retrieve the Unit Serial Number VPD page header (in order to get the serial number length), then we'll retrieve the full VPD page. */
+    if (usbHsFsScsiSendInquiryCommand(drive_ctx, lun, true, ScsiInquiryVitalProductDataPageCode_UnitSerialNumber, sizeof(ScsiInquiryUnitSerialNumberPageHeader), inquiry_vpd_buf))
+    {
+        USBHSFS_LOG_DATA(inquiry_vpd_buf, sizeof(ScsiInquiryUnitSerialNumberPageHeader), "Unit Serial Number VPD Inquiry data (partial) (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
+
+        serial_number_length = ((ScsiInquiryUnitSerialNumberPageHeader*)inquiry_vpd_buf)->page_length;
+        u16 page_length = (sizeof(ScsiInquiryUnitSerialNumberPageHeader) + serial_number_length);
+
+        if (serial_number_length && usbHsFsScsiSendInquiryCommand(drive_ctx, lun, true, ScsiInquiryVitalProductDataPageCode_UnitSerialNumber, page_length, inquiry_vpd_buf))
+        {
+            USBHSFS_LOG_DATA(inquiry_vpd_buf, page_length, "Unit Serial Number VPD Inquiry data (full) (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
+
+            /* Update serial number parameters. */
+            serial_number = (char*)(inquiry_vpd_buf + sizeof(ScsiInquiryUnitSerialNumberPageHeader));
+            serial_number_length = strnlen(serial_number, serial_number_length);
+        }
+    }
+
+    if (!serial_number || !*serial_number || !serial_number_length)
+    {
+        /* Use the serial number from the standard Inquiry command as a fallback. */
+        serial_number = inquiry_data.serial_number;
+        serial_number_length = strnlen(serial_number, sizeof(inquiry_data.serial_number));
+    }
 
     /* Check if we're dealing with an available Direct Access Block device. */
     if (inquiry_data.peripheral_qualifier != ScsiInquiryPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiInquiryPeripheralDeviceType_DirectAccessBlock)
@@ -529,6 +573,13 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
     memcpy(lun_ctx->product_id, inquiry_data.product_id, sizeof(inquiry_data.product_id));
     usbHsFsUtilsTrimString(lun_ctx->product_id);
+
+    /* We'll only copy the serial number string if it holds printable data. */
+    if (usbHsFsUtilsIsAsciiString(serial_number, serial_number_length))
+    {
+        snprintf(lun_ctx->serial_number, sizeof(lun_ctx->serial_number), "%.*s", (int)serial_number_length, serial_number);
+        usbHsFsUtilsTrimString(lun_ctx->serial_number);
+    }
 
     lun_ctx->long_lba = long_lba;
     lun_ctx->block_count = block_count;
@@ -991,32 +1042,27 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
     {
         u32 rest_size = (data_size - data_transferred);
         u32 xfer_size = (rest_size > blksize ? blksize : rest_size);
+        bool xfer_success = false;
 
         /* If we're sending data, copy it to the USB transfer buffer. */
         if (!receive) memcpy(xfer_buf, data_buf + data_transferred, xfer_size);
 
         /* Transfer data. */
         rc = usbHsFsRequestPostBuffer(usb_if_session, usb_ep_session, xfer_buf, xfer_size, &rest_size, false);
-        if (R_FAILED(rc))
-        {
-            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, drive_ctx->usb_if_id, cbw->bCBWLUN);
 
-            /* Try to receive a CSW. */
-            if (usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw))
+        /* Check data transfer result. */
+        xfer_success = (R_SUCCEEDED(rc) && rest_size == xfer_size);
+        if (!xfer_success)
+        {
+            if (R_FAILED(rc))
             {
-                /* Update unexpected CSW flag and jump straight to the Request Sense section. */
-                unexpected_csw = true;
-                goto req_sense;
+                USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer failed to %s 0x%X byte-long block! (0x%X) (interface %d, LUN %u).", receive ? "receive" : "send", xfer_size, rc, \
+                                drive_ctx->usb_if_id, cbw->bCBWLUN);
+            } else
+            if (rest_size != xfer_size)
+            {
+                USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
             }
-
-            /* Nothing else to do. */
-            goto end;
-        }
-
-        /* Check transferred data size. */
-        if (rest_size != xfer_size)
-        {
-            USBHSFS_LOG_MSG("usbHsFsRequestPostBuffer transferred 0x%X byte(s), expected 0x%X! (interface %d, LUN %u).", rest_size, xfer_size, drive_ctx->usb_if_id, cbw->bCBWLUN);
 
             /* Check if we received an unexpected CSW. */
             if (receive && rest_size == sizeof(ScsiCommandStatusWrapper))
@@ -1033,13 +1079,53 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
                         usbHsFsScsiResetRecovery(drive_ctx);
                     }
 
-                    /* Update unexpected CSW flag and jump straight to the Request Sense section. */
+                    /* Update unexpected CSW flag. */
                     unexpected_csw = true;
-                    goto req_sense;
                 }
             }
 
-            goto end;
+            if (!unexpected_csw)
+            {
+                /* If we're receiving data, copy it to the provided buffer. */
+                /* Otherwise, we'll lose any potential meaningful data while trying to retrieve a CSW in the next step. */
+                if (receive && rest_size) memcpy(data_buf + data_transferred, xfer_buf, rest_size);
+
+                /* Try to receive a CSW. */
+                /* TODO: some devices STALL their endpoints if dCBWDataTransferLength exceeds the amount of data that can be provided for the current SCSI command. */
+                /* This means that reading a CSW at this point may fail. We need a way to properly clear the STALL status from any endpoint before trying to start another transfer. */
+                /* I suspect reading a CSW on these devices fails because of an unidentified behavior within the usb sysmodule. */
+                USBHSFS_LOG_MSG("Attempting to receive a CSW (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
+                unexpected_csw = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
+            }
+
+            if (unexpected_csw)
+            {
+                /* Jump straight to the Request Sense section if we're dealing with a Phase Error status. We can't trust data residue values from such CSWs. */
+                if (csw.bCSWStatus == ScsiCommandStatus_PhaseError) goto req_sense;
+
+                /* Check if all meaningful data was transferred and processed. */
+                if (!csw.dCSWDataResidue || csw.dCSWDataResidue == data_size)
+                {
+                    /* Surprisingly, it seems all the data was transferred. Let's update our transfer parameters and call it quits. */
+                    /* We'll also clear the rest of the output buffer if we're receiving data. */
+                    u32 progress = (data_transferred + rest_size);
+                    u32 diff = (data_size - progress);
+
+                    data_size = progress;
+                    data_transferred += rest_size;
+
+                    if (receive && diff) memset(data_buf + progress, 0, diff);
+                }
+
+                /* Break out of the loop and go into the Request Sense section, regardless of the meaningful data condition. */
+                /* This is because we can't continue the data transfer stage after getting a CSW without sending an updated CBW first. */
+                /* We'll just let the caller take care of that. */
+                break;
+            } else {
+                /* Nothing else to do. */
+                USBHSFS_LOG_MSG("Unable to retrieve unexpected CSW data! (interface %d, LUN %u).", drive_ctx->usb_if_id, cbw->bCBWLUN);
+                goto end;
+            }
         }
 
         /* If we're receiving data, copy it to the provided buffer. */
@@ -1049,8 +1135,8 @@ static bool usbHsFsScsiTransferCommand(UsbHsFsDriveContext *drive_ctx, ScsiComma
         data_transferred += xfer_size;
     }
 
-    /* Receive CSW. */
-    ret = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
+    /* Receive CSW, but only if an unexpected CSW wasn't received beforehand. */
+    if (!unexpected_csw) ret = usbHsFsScsiReceiveCommandStatusWrapper(drive_ctx, cbw, &csw);
 
 req_sense:
     if (((ret && csw.bCSWStatus != ScsiCommandStatus_Passed) || unexpected_csw) && cbw->CBWCB[0] != ScsiCommandOperationCode_RequestSense)
@@ -1075,8 +1161,8 @@ req_sense:
                 /* Proceed normally. */
                 USBHSFS_LOG_MSG("Proceeding normally (0x%X) (interface %d, LUN %u).", sense_data.sense_key, drive_ctx->usb_if_id, cbw->bCBWLUN);
 
-                /* Retry Inquiry command if we're dealing with an unexpected CSW with no sense data. */
-                if (unexpected_csw && cbw->CBWCB[0] == ScsiCommandOperationCode_Inquiry) ret = usbHsFsScsiTransferCommand(drive_ctx, cbw, buf);
+                /* Update return flag if we dealt with an unexpected non-Phase-Error CSW and all meaningful data was transferred and processed. */
+                if (!ret && unexpected_csw && csw.bCSWStatus < ScsiCommandStatus_PhaseError && data_transferred >= data_size) ret = true;
 
                 break;
             case ScsiSenseKey_NotReady:

@@ -42,6 +42,10 @@ typedef struct {
 /// Trims whitespace characters from the provided string.
 void usbHsFsUtilsTrimString(char *str);
 
+/// Returns true if the provided string only holds ASCII codepoints.
+/// If strsize == 0, strlen() will be used to retrieve the string length.
+bool usbHsFsUtilsIsAsciiString(const char *str, size_t strsize);
+
 /// Returns true if the fsp-usb service is running in the background.
 bool usbHsFsUtilsIsFspUsbRunning(void);
 
