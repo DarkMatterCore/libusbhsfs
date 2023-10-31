@@ -130,13 +130,21 @@ else
 LIB_LICENSE	:=	GPLv2+
 endif
 
+MAKEPKG_AS_ROOT := no
+
 ifeq ($(OS),Windows_NT)
 MAKEPKG	:=	makepkg
+PACMAN  :=  pacman
 else
 ifeq (,$(shell which makepkg))
 MAKEPKG	:=	dkp-makepkg
+PACMAN  :=  dkp-pacman
 else
 MAKEPKG	:=	makepkg
+PACMAN  :=  pacman
+endif
+ifeq (0,$(shell id -u))
+MAKEPKG_AS_ROOT := yes
 endif
 endif
 
@@ -159,14 +167,25 @@ example: all
 	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_callback
 	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_event
 
+ifeq (no,$(MAKEPKG_AS_ROOT))
 fs-libs:
 	$(if $(shell which $(MAKEPKG)),,$(error "No $(MAKEPKG) in PATH, consider reinstalling devkitPro"))
 
 	@echo Installing NTFS-3G
-	@cd libntfs-3g; $(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null; cd ..
+	@cd libntfs-3g; $(MAKEPKG) -cCfis --noconfirm > /dev/null; cd ..
 
 	@echo Installing lwext4
-	@cd liblwext4; $(MAKEPKG) -c -C -f -i -s --noconfirm > /dev/null; cd ..
+	@cd liblwext4; $(MAKEPKG) -cCfis --noconfirm > /dev/null; cd ..
+else
+fs-libs:
+	$(if $(shell which $(MAKEPKG)),,$(error "No $(MAKEPKG) in PATH, consider reinstalling devkitPro"))
+
+	@echo Installing NTFS-3G
+	@cd libntfs-3g; chmod 777 -R .; su -s /bin/bash nobody -c "$(MAKEPKG) -cCf --noconfirm" > /dev/null && $(PACMAN) --noconfirm -U ./*.tar.zst > /dev/null; cd ..
+
+	@echo Installing lwext4
+	@cd liblwext4; chmod 777 -R .; su -s /bin/bash nobody -c "$(MAKEPKG) -cCf --noconfirm" > /dev/null && $(PACMAN) --noconfirm -U ./*.tar.zst > /dev/null; cd ..
+endif
 
 lib/lib$(TARGET).a: release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
