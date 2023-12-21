@@ -107,7 +107,7 @@ void ext_disk_io_free_blockdev(struct ext4_blockdev *bdev)
 
 static int ext_blockdev_open(struct ext4_blockdev *bdev)
 {
-    (void)bdev;
+    NX_IGNORE_ARG(bdev);
 
     /* Low level block device initialization is handled by us. */
     return 0;
@@ -129,7 +129,7 @@ static int ext_blockdev_bwrite(struct ext4_blockdev *bdev, const void *buf, uint
 
 static int ext_blockdev_close(struct ext4_blockdev *bdev)
 {
-    (void)bdev;
+    NX_IGNORE_ARG(bdev);
 
     /* Low level block device deinitialization is handled by us. */
     return 0;
@@ -137,7 +137,7 @@ static int ext_blockdev_close(struct ext4_blockdev *bdev)
 
 static int ext_blockdev_lock(struct ext4_blockdev *bdev)
 {
-    (void)bdev;
+    NX_IGNORE_ARG(bdev);
 
     /* Mutex locking is handled by us. */
     return 0;
@@ -145,7 +145,7 @@ static int ext_blockdev_lock(struct ext4_blockdev *bdev)
 
 static int ext_blockdev_unlock(struct ext4_blockdev *bdev)
 {
-    (void)bdev;
+    NX_IGNORE_ARG(bdev);
 
     /* Mutex unlocking is handled by us. */
     return 0;

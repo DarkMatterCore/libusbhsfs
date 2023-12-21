@@ -474,7 +474,7 @@ end:
 
 static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, void *argp)
 {
-    (void)argp;
+    NX_IGNORE_ARG(argp);
 
     int ret = -1;
 

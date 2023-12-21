@@ -259,7 +259,7 @@ void usbMscFileSystemTest(UsbHsFsDevice *device)
 
 int usbMscThreadFunc(void *arg)
 {
-    (void)arg;
+    NX_IGNORE_ARG(arg);
 
     Result rc = 0;
     int idx = 0;
@@ -372,8 +372,8 @@ int usbMscThreadFunc(void *arg)
 
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    NX_IGNORE_ARG(argc);
+    NX_IGNORE_ARG(argv);
 
     Result rc = 0;
     int ret = 0;

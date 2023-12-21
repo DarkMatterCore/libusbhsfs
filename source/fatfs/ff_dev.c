@@ -118,7 +118,7 @@ const devoptab_t *ffdev_get_devoptab()
 
 static int ffdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     BYTE ffdev_flags = 0;
     FRESULT res = FR_OK;
@@ -318,8 +318,8 @@ end:
 
 static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
 {
-    (void)fd;
-    (void)st;
+    NX_IGNORE_ARG(fd);
+    NX_IGNORE_ARG(st);
 
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
@@ -356,8 +356,8 @@ end:
 
 static int ffdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
-    (void)existing;
-    (void)newLink;
+    NX_IGNORE_ARG(existing);
+    NX_IGNORE_ARG(newLink);
 
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
@@ -449,7 +449,7 @@ end:
 
 static int ffdev_mkdir(struct _reent *r, const char *path, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     FRESULT res = FR_OK;
 
@@ -592,7 +592,7 @@ end:
 
 static int ffdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    (void)path;
+    NX_IGNORE_ARG(path);
 
     char name[MOUNT_NAME_LENGTH] = {0};
     DWORD free_clusters = 0;
@@ -702,8 +702,8 @@ end:
 
 static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
 {
-    (void)path;
-    (void)mode;
+    NX_IGNORE_ARG(path);
+    NX_IGNORE_ARG(mode);
 
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;
@@ -712,8 +712,8 @@ static int ffdev_chmod(struct _reent *r, const char *path, mode_t mode)
 
 static int ffdev_fchmod(struct _reent *r, void *fd, mode_t mode)
 {
-    (void)fd;
-    (void)mode;
+    NX_IGNORE_ARG(fd);
+    NX_IGNORE_ARG(mode);
 
     /* Not supported by FatFs. */
     r->_errno = ENOSYS;

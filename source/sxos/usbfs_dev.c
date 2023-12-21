@@ -155,7 +155,7 @@ void usbfsdev_unregister(void)
 
 static int usbfsdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     Result rc = 0;
     char *path_start = NULL;
@@ -322,8 +322,8 @@ end:
 
 static int usbfsdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
-    (void)existing;
-    (void)newLink;
+    NX_IGNORE_ARG(existing);
+    NX_IGNORE_ARG(newLink);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -350,7 +350,7 @@ end:
 
 static int usbfsdev_chdir(struct _reent *r, const char *name)
 {
-    (void)name;
+    NX_IGNORE_ARG(name);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -359,8 +359,8 @@ static int usbfsdev_chdir(struct _reent *r, const char *name)
 
 static int usbfsdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    (void)oldName;
-    (void)newName;
+    NX_IGNORE_ARG(oldName);
+    NX_IGNORE_ARG(newName);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -369,7 +369,7 @@ static int usbfsdev_rename(struct _reent *r, const char *oldName, const char *ne
 
 static int usbfsdev_mkdir(struct _reent *r, const char *path, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     Result rc = 0;
     char *path_start = NULL;
@@ -416,7 +416,7 @@ end:
 
 static int usbfsdev_dirreset(struct _reent *r, DIR_ITER *dirState)
 {
-    (void)dirState;
+    NX_IGNORE_ARG(dirState);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -472,7 +472,7 @@ end:
 
 static int usbfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    (void)path;
+    NX_IGNORE_ARG(path);
 
     Result rc = 0;
     u64 freespace = 0, totalspace = 0;
@@ -546,8 +546,8 @@ end:
 
 static int usbfsdev_chmod(struct _reent *r, const char *path, mode_t mode)
 {
-    (void)path;
-    (void)mode;
+    NX_IGNORE_ARG(path);
+    NX_IGNORE_ARG(mode);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -556,8 +556,8 @@ static int usbfsdev_chmod(struct _reent *r, const char *path, mode_t mode)
 
 static int usbfsdev_fchmod(struct _reent *r, void *fd, mode_t mode)
 {
-    (void)fd;
-    (void)mode;
+    NX_IGNORE_ARG(fd);
+    NX_IGNORE_ARG(mode);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;
@@ -584,8 +584,8 @@ end:
 
 static int usbfsdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2])
 {
-    (void)filename;
-    (void)times;
+    NX_IGNORE_ARG(filename);
+    NX_IGNORE_ARG(times);
 
     /* Not supported by usbfs. */
     r->_errno = ENOSYS;

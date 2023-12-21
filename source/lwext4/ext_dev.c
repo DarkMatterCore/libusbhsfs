@@ -119,7 +119,7 @@ const devoptab_t *extdev_get_devoptab()
 
 static int extdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     int ret = -1;
 
@@ -419,7 +419,7 @@ end:
 
 static int extdev_mkdir(struct _reent *r, const char *path, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     int ret = -1;
 
@@ -575,7 +575,7 @@ end:
 
 static int extdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    (void)path;
+    NX_IGNORE_ARG(path);
 
     char mount_point[CONFIG_EXT4_MAX_MP_NAME + 3] = {0};
     struct ext4_mount_stats mount_stats = {0};
@@ -641,7 +641,7 @@ end:
 
 static int extdev_fsync(struct _reent *r, void *fd)
 {
-    (void)fd;
+    NX_IGNORE_ARG(fd);
 
     /* Not supported by lwext4. */
     r->_errno = ENOSYS;

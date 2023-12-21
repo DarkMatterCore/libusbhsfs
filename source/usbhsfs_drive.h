@@ -45,7 +45,7 @@ typedef struct {
     /// TODO: add more FS objects here after implementing support for other filesystems.
 
     u32 device_id;      ///< ID used as part of the mount name.
-    char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).
+    char *name;         ///< Pointer to the dynamically allocated mount name string, without a trailing colon (:).
     char *cwd;          ///< Pointer to the dynamically allocated current working directory string.
     devoptab_t *device; ///< Pointer to the dynamically allocated devoptab virtual device interface. Used to provide a way to use libcstd I/O calls on the mounted filesystem.
 } UsbHsFsDriveLogicalUnitFileSystemContext;

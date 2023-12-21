@@ -547,7 +547,7 @@ end:
 
 static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
 {
-    (void)arg;
+    NX_IGNORE_ARG(arg);
 
     Result rc = 0;
     u64 prev_status = USBFS_UNMOUNTED, cur_status = prev_status;
@@ -612,7 +612,7 @@ static void usbHsFsDriveManagerThreadFuncSXOS(void *arg)
 
 static void usbHsFsDriveManagerThreadFuncAtmosphere(void *arg)
 {
-    (void)arg;
+    NX_IGNORE_ARG(arg);
 
     Result rc = 0;
     int idx = 0;

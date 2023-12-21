@@ -151,7 +151,7 @@ const devoptab_t *ntfsdev_get_devoptab()
 
 static int ntfsdev_open(struct _reent *r, void *fd, const char *path, int flags, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     ntfs_declare_error_state;
     ntfs_declare_file_state;
@@ -609,7 +609,7 @@ end:
 
 static int ntfsdev_mkdir(struct _reent *r, const char *path, int mode)
 {
-    (void)mode;
+    NX_IGNORE_ARG(mode);
 
     ntfs_inode *ni = NULL;
 
@@ -807,7 +807,7 @@ end:
 
 static int ntfsdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
 {
-    (void)path;
+    NX_IGNORE_ARG(path);
 
     s64 size = 0;
     s8 delta_bits = 0;
@@ -923,8 +923,8 @@ end:
 
 static int ntfsdev_chmod(struct _reent *r, const char *path, mode_t mode)
 {
-    (void)path;
-    (void)mode;
+    NX_IGNORE_ARG(path);
+    NX_IGNORE_ARG(mode);
 
     /* Not implemented. */
     r->_errno = ENOSYS;
@@ -933,8 +933,8 @@ static int ntfsdev_chmod(struct _reent *r, const char *path, mode_t mode)
 
 static int ntfsdev_fchmod(struct _reent *r, void *fd, mode_t mode)
 {
-    (void)fd;
-    (void)mode;
+    NX_IGNORE_ARG(fd);
+    NX_IGNORE_ARG(mode);
 
     /* Not implemented. */
     r->_errno = ENOSYS;
@@ -1170,8 +1170,8 @@ static void ntfsdev_fill_stat(ntfs_vd *vd, ntfs_inode *ni, struct stat *st)
 
 static int ntfsdev_dirnext_filldir(void *dirent, const ntfschar *name, const int name_len, const int name_type, const s64 pos, const MFT_REF mref, const unsigned dt_type)
 {
-    (void)pos;
-    (void)dt_type;
+    NX_IGNORE_ARG(pos);
+    NX_IGNORE_ARG(dt_type);
 
     DIR_ITER *dirState = (DIR_ITER*)dirent;
     ntfs_inode *ni = NULL;

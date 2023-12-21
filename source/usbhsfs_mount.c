@@ -789,7 +789,7 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveLogicalUnitContext *
 static bool usbHsFsMountRegisterVolume(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 block_addr, u64 block_count, u8 fs_type)
 {
 #ifndef GPL_BUILD
-    (void)block_count;
+    NX_IGNORE_ARG(block_count);
 #endif
 
     UsbHsFsDriveLogicalUnitFileSystemContext **tmp_fs_ctx = NULL, *fs_ctx = NULL;

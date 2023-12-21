@@ -259,7 +259,7 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
 
 static void usbMscPopulateFunc(const UsbHsFsDevice *devices, u32 device_count, void *user_data)
 {
-    (void)user_data;
+    NX_IGNORE_ARG(user_data);
 
     mutexLock(&g_usbDeviceMutex);
 
@@ -363,8 +363,8 @@ static void usbMscTestDevices(void)
 
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    NX_IGNORE_ARG(argc);
+    NX_IGNORE_ARG(argv);
 
     Result rc = 0;
     int ret = 0;
