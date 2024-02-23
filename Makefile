@@ -30,7 +30,7 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE=\"lib$(TARGET)\" -fmacro-prefix-map=$(ROOTDIR)=
+CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE="\"lib$(TARGET)\"" -fmacro-prefix-map=$(ROOTDIR)=
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -40,7 +40,7 @@ UC			=	$(strip $(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(sub
 				$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,\
 				$(subst w,W,$(subst x,X,$(subst y,Y,$(subst z,Z,$1)))))))))))))))))))))))))))
 
-ifeq ($(filter $(MAKECMDGOALS),clean dist-src fs-libs),)
+ifeq ($(filter $(MAKECMDGOALS),clean dist-src),)
     # Check BUILD_TYPE flag
     ifneq ($(origin BUILD_TYPE),undefined)
         # Convert BUILD_TYPE flag to uppercase
@@ -78,7 +78,7 @@ ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+					$(foreach dir,$(DATA),$(CURDIR)/$(dir))
 
 CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
@@ -101,12 +101,12 @@ endif
 
 export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
 export OFILES_SRC	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
-export OFILES 	:=	$(OFILES_BIN) $(OFILES_SRC)
-export HFILES	:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
+export OFILES		:=	$(OFILES_BIN) $(OFILES_SRC)
+export HFILES		:=	$(addsuffix .h,$(subst .,_,$(BINFILES)))
 
-export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD)
+export INCLUDE		:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
+						$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+						-I$(CURDIR)/$(BUILD)
 
 .PHONY: clean all release release-dir debug debug-dir lib-dir example
 
@@ -130,24 +130,6 @@ else
 LIB_LICENSE	:=	GPLv2+
 endif
 
-MAKEPKG_AS_ROOT := no
-
-ifeq ($(OS),Windows_NT)
-MAKEPKG	:=	makepkg
-PACMAN  :=  pacman
-else
-ifeq (,$(shell which makepkg))
-MAKEPKG	:=	dkp-makepkg
-PACMAN  :=  dkp-pacman
-else
-MAKEPKG	:=	makepkg
-PACMAN  :=  pacman
-endif
-ifeq (0,$(shell id -u))
-MAKEPKG_AS_ROOT := yes
-endif
-endif
-
 all: release debug
 
 release: lib/lib$(TARGET).a
@@ -166,26 +148,6 @@ lib-dir:
 example: all
 	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_callback
 	@$(MAKE) BUILD_TYPE=$(BUILD_TYPE) --no-print-directory -C example_event
-
-ifeq (no,$(MAKEPKG_AS_ROOT))
-fs-libs:
-	$(if $(shell which $(MAKEPKG)),,$(error "No $(MAKEPKG) in PATH, consider reinstalling devkitPro"))
-
-	@echo Installing NTFS-3G
-	@cd libntfs-3g; $(MAKEPKG) -cCfis --noconfirm > /dev/null; cd ..
-
-	@echo Installing lwext4
-	@cd liblwext4; $(MAKEPKG) -cCfis --noconfirm > /dev/null; cd ..
-else
-fs-libs:
-	$(if $(shell which $(MAKEPKG)),,$(error "No $(MAKEPKG) in PATH, consider reinstalling devkitPro"))
-
-	@echo Installing NTFS-3G
-	@cd libntfs-3g; chmod 777 -R .; su -s /bin/bash nobody -c "$(MAKEPKG) -cCf --noconfirm" > /dev/null && $(PACMAN) --noconfirm -U ./*.tar.zst > /dev/null; cd ..
-
-	@echo Installing lwext4
-	@cd liblwext4; chmod 777 -R .; su -s /bin/bash nobody -c "$(MAKEPKG) -cCf --noconfirm" > /dev/null && $(PACMAN) --noconfirm -U ./*.tar.zst > /dev/null; cd ..
-endif
 
 lib/lib$(TARGET).a: release-dir lib-dir $(SOURCES) $(INCLUDES)
 	@echo release
@@ -208,7 +170,8 @@ lib/lib$(TARGET)d.a: debug-dir lib-dir $(SOURCES) $(INCLUDES)
 dist-bin: example
 	@cp example_callback/libusbhsfs-example-callback.nro libusbhsfs-example-callback.nro
 	@cp example_event/libusbhsfs-example-event.nro libusbhsfs-example-event.nro
-	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md libusbhsfs-example-callback.nro libusbhsfs-example-event.nro
+	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)_$(LIB_LICENSE).tar.bz2 include lib LICENSE_$(LIB_LICENSE).md README.md CHANGELOG.md \
+	libusbhsfs-example-callback.nro libusbhsfs-example-event.nro
 	@rm libusbhsfs-example-callback.nro libusbhsfs-example-event.nro
 
 clean:
@@ -221,9 +184,7 @@ dist-src:
 	@tar --exclude=*~ -cjf lib$(TARGET)_$(LIB_VERSION)-src.tar.bz2 \
 	--exclude='example_callback/build' --exclude='example_callback/*.elf' --exclude='example_callback/*.nacp' --exclude='example_callback/*.nro' \
 	--exclude='example_event/build' --exclude='example_event/*.elf' --exclude='example_event/*.nacp' --exclude='example_event/*.nro' \
-	--exclude='libntfs-3g/*.tgz' --exclude='libntfs-3g/*.tar.*' --exclude='libntfs-3g/pkg' --exclude='libntfs-3g/src' \
-	--exclude='liblwext4/*.zip' --exclude='liblwext4/*.tar.*' --exclude='liblwext4/pkg' --exclude='liblwext4/src' \
-	example_callback example_event include libntfs-3g liblwext4 source LICENSE_ISC.md LICENSE_GPLv2+.md Makefile README.md
+	example_callback example_event include source LICENSE_ISC.md LICENSE_GPLv2+.md Makefile README.md CHANGELOG.md
 
 dist: dist-src dist-bin
 

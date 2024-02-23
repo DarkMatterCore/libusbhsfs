@@ -11,12 +11,12 @@
 #ifndef __EXT_H__
 #define __EXT_H__
 
-#include <lwext4/ext4.h>
-#include <lwext4/ext4_super.h>
-#include <lwext4/ext4_debug.h>
-#include <lwext4/ext4_fs.h>
-#include <lwext4/ext4_inode.h>
-#include <lwext4/ext4_journal.h>
+#include <ext4.h>
+#include <ext4_super.h>
+#include <ext4_debug.h>
+#include <ext4_fs.h>
+#include <ext4_inode.h>
+#include <ext4_journal.h>
 
 #include "../usbhsfs_utils.h"
 
