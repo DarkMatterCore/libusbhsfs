@@ -22,7 +22,7 @@ extern "C" {
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    2
-#define LIBUSBHSFS_VERSION_MICRO    8
+#define LIBUSBHSFS_VERSION_MICRO    9
 
 /// Helper macro to generate a string based on a filesystem type value.
 #define LIBUSBHSFS_FS_TYPE_STR(x)   ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \
@@ -74,7 +74,7 @@ typedef struct {
     u16 pid;                ///< Product ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
     char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
     char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
-    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from the USB device descriptor. May be empty.
+    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
     u64 capacity;           ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
     char name[32];          ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
     u8 fs_type;             ///< UsbHsFsDeviceFileSystemType.

@@ -1,5 +1,33 @@
 # Changelog
 
+v0.2.9:
+--------------
+
+* **lib**:
+    * Implement a callback-based population system, which can be used as an alternative to the event-based system that has been available up until now. For more information, please read the `How to use` section from the README.
+    * Add a reimplementation of libnx's `usbHsEpPostBuffer()`, called `usbHsFsRequestEndpointDataXfer()`, which calls `usbHsEpPostBufferAsync()` with a hardcoded timeout value of 10 seconds (using the `USB_POSTBUFFER_TIMEOUT` define).
+    * Port log handler QoL improvements from nxdumptool.
+    * Log result codes in unpadded hexadecimal notation.
+    * Reorganize `UsbHsFsMountFlags` enum.
+    * SCSI INQUIRY strings now have prevalence over USB device descriptor strings, which affects the `manufacturer`, `product_name` and `serial_number` strings from `UsbHsFsDevice` elements.
+    * Add `LIB_ASSERT` macro and update all static assertions throughout the codebase to use it.
+    * Use `NX_IGNORE_ARG` macro where needed throughout the codebase.
+    * SCSI driver:
+        * Reorganize structs and enums.
+        * Add missing comments/references.
+        * Add `ScsiInquiryVitalProductDataPageCode` enum and rework `usbHsFsScsiSendInquiryCommand()` to make it possible to request Vital Product Data pages from attached LUNs.
+        * Update `ScsiInquiryStandardData` struct to also retrieve serial number data from attached LUNs.
+        * Add `ScsiInquiryUnitSerialNumberPageHeader` struct.
+        * Update `usbHsFsScsiStartDriveLogicalUnit()` to make it read serial number information from the Unit Serial Number VPD page. Fallbacks to the serial number returned by the standard SCSI Inquiry command if not available.
+        * Overhaul `usbHsFsScsiTransferCommand()` to make it handle both unexpected CSWs and CSW data residue values in a better way.
+* **fs-libs**: remove all build scripts for both NTFS-3G and lwext4, as well as the `fs-libs` Makefile target. Please use the now available devkitPro pacman packages `switch-ntfs-3g` and `switch-lwext4`. The `How to install` section of the README has been updated to reflect this change.
+* **fat**: calls to `ftruncate()` on FAT filesystems now restore the current file position after truncation.
+
+**P.S.**: remember to remove previous installations of NTFS-3G and lwext4 \*before\* installing the official devkitPro pacman packages by running:
+```
+sudo (dkp-)pacman -R switch-libntfs-3g switch-lwext4
+```
+
 v0.2.8:
 --------------
 
