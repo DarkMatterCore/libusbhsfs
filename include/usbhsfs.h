@@ -173,6 +173,10 @@ u32 usbHsFsGetFileSystemMountFlags(void);
 /// This function has no effect at all under SX OS.
 void usbHsFsSetFileSystemMountFlags(u32 flags);
 
+/// Fills the output UsbHsFsDevice element with information about the mounted volume pointed to by the input path (e.g. "ums0:/switch/").
+/// This function has no effect at all under SX OS.
+bool usbHsFsGetDeviceByPath(const char *path, UsbHsFsDevice *out);
+
 #ifdef __cplusplus
 }
 #endif

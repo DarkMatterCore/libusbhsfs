@@ -19,8 +19,6 @@
 #include "lwext4/ext_dev.h"
 #endif
 
-#define MOUNT_NAME_PREFIX      "ums"
-
 #define BOOT_SIGNATURE          0xAA55
 
 #define MBR_PARTITION_COUNT     4
