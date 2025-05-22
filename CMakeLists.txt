@@ -83,7 +83,7 @@ if (USBHSFS_GPL)
     find_library(lwext4_lib lwext4)
     find_path(lwext4_inc ext4.h)
 
-    if (NOT ntfs-3g_lib OR NOT ntfs-3g_inc)
+    if (NOT ntfs_3g_lib OR NOT ntfs_3g_inc)
         message(FATAL_ERROR "ntfs-3g is not installed!")
     endif()
 
