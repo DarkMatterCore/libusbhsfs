@@ -31,7 +31,10 @@
 
 #define UMS_MAX_LUN                             16                  /* Max returned value is actually a zero-based index to the highest LUN. */
 
+#define MOUNT_NAME_PREFIX                       "ums"
+#define MOUNT_NAME_PREFIX_LENGTH                (sizeof(MOUNT_NAME_PREFIX) - 1)
 #define MOUNT_NAME_LENGTH                       32
+
 #define MAX_PATH_LENGTH                         (FS_MAX_PATH + 1)
 
 #define BLKDEV_MIN_BLOCK_SIZE                   512

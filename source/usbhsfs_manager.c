@@ -403,6 +403,59 @@ void usbHsFsSetFileSystemMountFlags(u32 flags)
     SCOPED_LOCK(&g_managerMutex) usbHsFsMountSetFileSystemMountFlags(flags & UsbHsFsMountFlags_All);
 }
 
+bool usbHsFsGetDeviceByPath(const char *path, UsbHsFsDevice *out)
+{
+    bool ret = false;
+
+    SCOPED_LOCK(&g_managerMutex)
+    {
+        char *name_end = NULL, dev_name[MOUNT_NAME_LENGTH] = {0};
+
+        if (!g_usbHsFsInitialized || g_isSXOS || !g_driveCount || !g_driveContexts || !path || !*path || \
+            strncmp(path, MOUNT_NAME_PREFIX, MOUNT_NAME_PREFIX_LENGTH) != 0 || !(name_end = strchr(path, ':')) || *(name_end + 1) != '/' || \
+            (name_end - path) >= MOUNT_NAME_LENGTH || !out)
+        {
+            USBHSFS_LOG_MSG("Invalid parameters!");
+            return false;
+        }
+
+        /* Copy device name. */
+        snprintf(dev_name, sizeof(dev_name), "%.*s", (int)(name_end - path), path);
+
+        /* Look for the right mounted device. */
+        for(u32 i = 0; i < g_driveCount; i++)
+        {
+            UsbHsFsDriveContext *drive_ctx = g_driveContexts[i];
+            if (!drive_ctx) continue;
+
+            for(u8 j = 0; j < drive_ctx->lun_count; j++)
+            {
+                UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[j];
+                if (!lun_ctx) continue;
+
+                for(u32 k = 0; k < lun_ctx->fs_count; k++)
+                {
+                    UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[k];
+                    if (!fs_ctx || strcmp(fs_ctx->name, dev_name) != 0) continue;
+
+                    /* Fill device element and exit right away. */
+                    usbHsFsFillDeviceElement(drive_ctx, lun_ctx, fs_ctx, out);
+                    ret = true;
+                    break;
+                }
+
+                if (ret) break;
+            }
+
+            if (ret) break;
+        }
+
+        if (!ret) USBHSFS_LOG_MSG("Failed to locate filesystem context with name \"%s\".", dev_name);
+    }
+
+    return ret;
+}
+
 /* Non-static function not meant to be disclosed to users. */
 bool usbHsFsManagerIsDriveContextPointerValid(UsbHsFsDriveContext *drive_ctx)
 {
