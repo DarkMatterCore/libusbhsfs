@@ -1,7 +1,7 @@
 /*
  * usbhsfs_utils.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -26,9 +26,11 @@
 #include "usbhsfs.h"
 #include "usbhsfs_log.h"
 
-#define ALIGN_DOWN(x, y)    ((x) & ~((y) - 1))
+#define ALIGN_DOWN(x, y)        ((x) & ~((y) - 1))
 
-#define SCOPED_LOCK(mtx)    for(UsbHsFsUtilsScopedLock scoped_lock __attribute__((__cleanup__(usbHsFsUtilsUnlockScope))) = usbHsFsUtilsLockScope(mtx); scoped_lock.cond; scoped_lock.cond = 0)
+#define SCOPED_LOCK(mtx)        for(UsbHsFsUtilsScopedLock scoped_lock __attribute__((__cleanup__(usbHsFsUtilsUnlockScope))) = usbHsFsUtilsLockScope(mtx); scoped_lock.cond; scoped_lock.cond = 0)
+
+#define LIB_ASSERT(name, size)  static_assert(sizeof(name) == (size), "Bad size for " #name "! Expected " #size ".")
 
 /// Used by scoped locks.
 typedef struct {
@@ -39,6 +41,10 @@ typedef struct {
 
 /// Trims whitespace characters from the provided string.
 void usbHsFsUtilsTrimString(char *str);
+
+/// Returns true if the provided string only holds ASCII codepoints.
+/// If strsize == 0, strlen() will be used to retrieve the string length.
+bool usbHsFsUtilsIsAsciiString(const char *str, size_t strsize);
 
 /// Returns true if the fsp-usb service is running in the background.
 bool usbHsFsUtilsIsFspUsbRunning(void);

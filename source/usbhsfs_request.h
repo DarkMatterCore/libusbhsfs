@@ -1,7 +1,7 @@
 /*
  * usbhsfs_request.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -43,9 +43,13 @@ Result usbHsFsRequestClearEndpointHaltFeature(UsbHsClientIfSession *usb_if_sessi
 /// Performs a SET_INTERFACE request on the device pointed to by the provided interface session.
 Result usbHsFsRequestSetInterface(UsbHsClientIfSession *usb_if_session);
 
+/// Performs a synchronous data transfer on the provided endpoint, using a hardcoded timeout value (USB_POSTBUFFER_TIMEOUT).
+/// Uses usbHsEpPostBufferAsync() + eventWait() + usbHsEpGetXferReport() internally.
+Result usbHsFsRequestEndpointDataXfer(UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 *xfer_size);
+
 /// Performs a data transfer on the provided endpoint.
 /// If an error occurs, a STALL status check is performed on the target endpoint. If present, the STALL status is cleared and the transfer is retried one more time (if retry == true).
-/// This is essentially a nice wrapper for usbHsEpPostBuffer(), which can be used in data transfer stages and CSW transfers from SCSI commands.
+/// This is essentially a nice wrapper for usbHsFsRequestEndpointDataXfer(), which can be used in data transfer stages and CSW transfers from SCSI commands.
 Result usbHsFsRequestPostBuffer(UsbHsClientIfSession *usb_if_session, UsbHsClientEpSession *usb_ep_session, void *buf, u32 size, u32 *xfer_size, bool retry);
 
 #endif  /* __USBHSFS_REQUEST_H__ */

@@ -1,7 +1,7 @@
 /*
  * usb_common.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -20,6 +20,8 @@
 #define USB_XFER_BUF_SIZE                       0x800000            /* 8 MiB. */
 
 #define USB_FEATURE_ENDPOINT_HALT               0x00
+
+#define USB_POSTBUFFER_TIMEOUT                  (u64)10000000000     /* 10 seconds. Expressed in nanoseconds. */
 
 #define USB_DT_PIPE_USAGE                       0x24
 

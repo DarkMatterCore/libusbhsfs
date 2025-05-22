@@ -1,3 +1,4 @@
+/.vscode
 /debug
 /release
 /lib
@@ -7,14 +8,11 @@
 *.log
 *.bin
 *.pcapng
-/example/build
-/example/*.elf
-/example/*.nacp
-/example/*.nro
-/libntfs-3g/src
-/libntfs-3g/pkg
-/liblwext4/src
-/liblwext4/pkg
-
+*.elf
+*.nacp
+*.nro
+*.code-workspace
+/example_callback/build
+/example_event/build
 build
 .cache

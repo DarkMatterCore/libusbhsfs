@@ -1,7 +1,7 @@
 /*
  * usbhsfs.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
@@ -22,7 +22,7 @@ extern "C" {
 /// Library version.
 #define LIBUSBHSFS_VERSION_MAJOR    0
 #define LIBUSBHSFS_VERSION_MINOR    2
-#define LIBUSBHSFS_VERSION_MICRO    6
+#define LIBUSBHSFS_VERSION_MICRO    9
 
 /// Helper macro to generate a string based on a filesystem type value.
 #define LIBUSBHSFS_FS_TYPE_STR(x)   ((x) == UsbHsFsDeviceFileSystemType_FAT12 ? "FAT12" : ((x) == UsbHsFsDeviceFileSystemType_FAT16 ? "FAT16" : ((x) == UsbHsFsDeviceFileSystemType_FAT32 ? "FAT32" : \
@@ -44,25 +44,26 @@ typedef enum {
 
 /// Filesystem mount flags.
 /// Not all supported filesystems are compatible with these flags.
-/// The default mount bitmask is `UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ReplayJournal`.
 /// It can be overriden via usbHsFsSetFileSystemMountFlags() (see below).
 typedef enum {
-    UsbHsFsMountFlags_None                        = 0x00000000, ///< No special action is taken.
-    UsbHsFsMountFlags_IgnoreCaseSensitivity       = 0x00000001, ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
-    UsbHsFsMountFlags_UpdateAccessTimes           = 0x00000002, ///< NTFS only. File/directory access times are updated after each successful R/W operation.
-    UsbHsFsMountFlags_ShowHiddenFiles             = 0x00000004, ///< NTFS only. Hidden file entries are returned while enumerating directories.
-    UsbHsFsMountFlags_ShowSystemFiles             = 0x00000008, ///< NTFS only. System file entries are returned while enumerating directories.
-    UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = 0x00000010, ///< NTFS only. Allows writing to files even if they are marked as read-only.
-    UsbHsFsMountFlags_ReadOnly                    = 0x00000100, ///< NTFS and EXT only. Filesystem is mounted as read-only.
-    UsbHsFsMountFlags_ReplayJournal               = 0x00000200, ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
-    UsbHsFsMountFlags_IgnoreHibernation           = 0x00010000, ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
-    
+    UsbHsFsMountFlags_None                        = 0,      ///< No special action is taken.
+    UsbHsFsMountFlags_ReadOnly                    = BIT(0), ///< Filesystem is mounted as read-only.
+    UsbHsFsMountFlags_ReplayJournal               = BIT(1), ///< NTFS and EXT only. Replays the log/journal to restore filesystem consistency (e.g. fix unsafe device ejections).
+    UsbHsFsMountFlags_IgnoreCaseSensitivity       = BIT(2), ///< NTFS only. Case sensitivity is ignored for all filesystem operations.
+    UsbHsFsMountFlags_UpdateAccessTimes           = BIT(3), ///< NTFS only. File/directory access times are updated after each successful R/W operation.
+    UsbHsFsMountFlags_ShowHiddenFiles             = BIT(4), ///< NTFS only. Hidden file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_ShowSystemFiles             = BIT(5), ///< NTFS only. System file entries are returned while enumerating directories.
+    UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute = BIT(6), ///< NTFS only. Allows writing to files even if they are marked as read-only.
+    UsbHsFsMountFlags_IgnoreHibernation           = BIT(7), ///< NTFS only. Filesystem is mounted even if it's in a hibernated state. The saved Windows session is completely lost.
+
     ///< Pre-generated bitmasks provided for convenience.
-    UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute),
-    UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_ReplayJournal | UsbHsFsMountFlags_IgnoreHibernation)
+    UsbHsFsMountFlags_Default                     = (UsbHsFsMountFlags_ShowHiddenFiles | UsbHsFsMountFlags_UpdateAccessTimes | UsbHsFsMountFlags_ReplayJournal),
+    UsbHsFsMountFlags_SuperUser                   = (UsbHsFsMountFlags_IgnoreFileReadOnlyAttribute | UsbHsFsMountFlags_ShowSystemFiles | UsbHsFsMountFlags_Default),
+    UsbHsFsMountFlags_Force                       = (UsbHsFsMountFlags_IgnoreHibernation | UsbHsFsMountFlags_Default),
+    UsbHsFsMountFlags_All                         = (UsbHsFsMountFlags_IgnoreHibernation | (UsbHsFsMountFlags_IgnoreHibernation - 1))
 } UsbHsFsMountFlags;
 
-/// Struct used to list mounted filesystems as devoptab devices.
+/// Struct used to list filesystems that have been mounted as virtual devices via devoptab.
 /// Everything but the manufacturer, product_name and name fields is empty/zeroed-out under SX OS.
 typedef struct {
     s32 usb_if_id;          ///< USB interface ID. Internal use.
@@ -71,17 +72,20 @@ typedef struct {
     bool write_protect;     ///< Set to true if the logical unit is protected against write operations.
     u16 vid;                ///< Vendor ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
     u16 pid;                ///< Product ID. Retrieved from the device descriptor. Useful if you wish to implement a filter in your application.
-    char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
-    char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from the device descriptor or SCSI Inquiry data. May be empty.
-    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from the device descriptor. May be empty.
+    char manufacturer[64];  ///< UTF-8 encoded manufacturer string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
+    char product_name[64];  ///< UTF-8 encoded product name string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
+    char serial_number[64]; ///< UTF-8 encoded serial number string. Retrieved from SCSI Inquiry data or the USB device descriptor. May be empty.
     u64 capacity;           ///< Raw capacity from the logical unit this filesystem belongs to. Use statvfs() to get the actual filesystem capacity. May be shared with other UsbHsFsDevice entries.
     char name[32];          ///< Mount name used by the devoptab virtual device interface (e.g. "ums0:"). Use it as a prefix in libcstd I/O calls to perform operations on this filesystem.
     u8 fs_type;             ///< UsbHsFsDeviceFileSystemType.
     u32 flags;              ///< UsbHsFsMountFlags bitmask used at mount time.
 } UsbHsFsDevice;
 
+/// Used with usbHsFsSetPopulateCallback().
+typedef void (*UsbHsFsPopulateCb)(const UsbHsFsDevice *devices, u32 device_count, void *user_data);
+
 /// Initializes the USB Mass Storage Host interface.
-/// event_idx represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the 0 - 2 range (inclusive).
+/// `event_idx` represents the event index to use with usbHsCreateInterfaceAvailableEvent() / usbHsDestroyInterfaceAvailableEvent(). Must be within the [0, 2] range.
 /// If you're not using any usb:hs interface available events on your own, set this value to 0. If running under SX OS, this value will be ignored.
 /// This function will fail if the deprecated fsp-usb service is running in the background.
 Result usbHsFsInitialize(u8 event_idx);
@@ -90,24 +94,74 @@ Result usbHsFsInitialize(u8 event_idx);
 /// If there are any UMS devices with mounted filesystems connected to the console when this function is called, their filesystems will be unmounted and their logical units will be stopped.
 void usbHsFsExit(void);
 
+/************************************************************************************************
+ *                                 Event-based population system                                *
+ *                                                                                              *
+ * These functions make it possible to retrieve information on demand about the available UMS   *
+ * filesystems that have been mounted as virtual devoptab devices, using a background thread    *
+ * created by the user.                                                                         *
+ *                                                                                              *
+ * This background thread can create a Waiter object using the UEvent object returned by        *
+ * usbHsFsGetStatusChangeUserEvent(), which can then be used with primitive waiting operations  *
+ * such as waitMulti() or waitObjects(). This is specially useful for applications that rely on *
+ * other Switch-specific ABIs that are also event-driven: a single background thread can be     *
+ * dedicated to handle multiple types of events, including the UMS event provided here.         *
+ *                                                                                              *
+ * Even though simultaneous usage of both event-based and callback-based systems should be      *
+ * possible, it is heavily discouraged.                                                         *
+ ************************************************************************************************/
+
 /// Returns a pointer to the user-mode status change event (with autoclear enabled).
 /// Useful to wait for USB Mass Storage status changes without having to constantly poll the interface.
 /// Returns NULL if the USB Mass Storage Host interface hasn't been initialized.
 UEvent *usbHsFsGetStatusChangeUserEvent(void);
 
-/// Returns the mounted device count.
-u32 usbHsFsGetMountedDeviceCount(void);
-
-/// Lists up to max_count mounted devices and stores their information in the provided UsbHsFsDevice array.
+/// Lists up to `max_count` mounted virtual devices and stores their information in the provided UsbHsFsDevice array.
 /// Returns the total number of written entries.
+/// For better results, usbHsFsGetMountedDeviceCount() should be used before calling this function.
 u32 usbHsFsListMountedDevices(UsbHsFsDevice *out, u32 max_count);
 
+/************************************************************************************************
+ *                              Callback-based population system                                *
+ *                                                                                              *
+ * Makes it possible to automatically retrieve information about the available UMS filesystems  *
+ * that have been mounted as virtual devoptab devices by providing a pointer to a user function *
+ * that acts as a callback, which is executed under the library's very own background thread.   *
+ *                                                                                              *
+ * This essentially enables the user to receive updates from the library without creating an    *
+ * additional background thread. However, in order to achieve thread-safety and avoid possible  *
+ * race conditions, the provided user callback must also handle all concurrency-related tasks   *
+ * on its own, if needed (e.g. [un]locking a mutex, etc.).                                      *
+ *                                                                                              *
+ * Even though simultaneous usage of both event-based and callback-based systems should be      *
+ * possible, it is heavily discouraged.                                                         *
+ ************************************************************************************************/
+
+/// Sets the pointer to the user-provided callback function, which will automatically provide updates whenever a USB Mass Storage status change is triggered.
+/// The provided user callback must treat all input data as read-only and short-lived -- that means, it must copy the provided UsbHsFsDevice entries into a buffer of its own.
+/// A NULL `devices` pointer and/or a `device_count` of zero are valid inputs, and must be interpreted as no virtual devoptab devices being currently available.
+/// Optionally, a `user_data` pointer may be passed into this function, which will in turn be passed to the provided callback whenever it is executed.
+/// `populate_cb` may be a NULL pointer, in which case a previously set callback will just be unset.
+void usbHsFsSetPopulateCallback(UsbHsFsPopulateCb populate_cb, void *user_data);
+
+/************************************************************************************************
+ *                                  Miscellaneous functions                                     *
+ *                                                                                              *
+ * These can be safely used with both population systems.                                       *
+ ************************************************************************************************/
+
+/// Returns the number of physical UMS devices currently connected to the console with at least one underlying filesystem mounted as a virtual device.
+u32 usbHsFsGetPhysicalDeviceCount(void);
+
+/// Returns the total number of filesystems across all available UMS devices currently mounted as virtual devices via devoptab.
+u32 usbHsFsGetMountedDeviceCount(void);
+
 /// Unmounts all filesystems from the UMS device with a USB interface ID that matches the one from the provided UsbHsFsDevice, and stops all of its logical units.
-/// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't necessary.
-/// If multiple UsbHsFsDevice entries are returned for the same UMS device, any of them can be used as the input argument for this function.
-/// If successful, and signal_status_event is true, this will also fire the user-mode status change event from usbHsFsGetStatusChangeUserEvent().
+/// Can be used to safely unmount a UMS device at runtime, if that's needed for some reason. Calling this function before usbHsFsExit() isn't mandatory.
+/// If multiple UsbHsFsDevice entries are returned for the same physical UMS device, any of them can be used as the input argument for this function.
+/// If successful, and `signal_status_event` is true, this will also fire the user-mode status change event returned by usbHsFsGetStatusChangeUserEvent() and, if available, execute the user callback set with usbHsFsSetPopulateCallback().
 /// This function has no effect at all under SX OS.
-bool usbHsFsUnmountDevice(UsbHsFsDevice *device, bool signal_status_event);
+bool usbHsFsUnmountDevice(const UsbHsFsDevice *device, bool signal_status_event);
 
 /// Returns a bitmask with the current filesystem mount flags.
 /// Can be used even if the USB Mass Storage Host interface hasn't been initialized.

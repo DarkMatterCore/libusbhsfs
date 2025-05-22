@@ -1,7 +1,7 @@
 /*
  * usbhsfs_drive.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
@@ -41,11 +41,11 @@ typedef struct {
     ntfs_vd *ntfs;      ///< Pointer to a dynamically allocated ntfs_vd object. Only used if fs_type == UsbHsFsFileSystemType_NTFS.
     ext_vd *ext;        ///< Pointer to a dynamically allocated ext_vd object. Only used if fs_type == UsbHsFsFileSystemType_EXT.
 #endif
-    
+
     /// TODO: add more FS objects here after implementing support for other filesystems.
-    
+
     u32 device_id;      ///< ID used as part of the mount name.
-    char *name;         ///< Pointer to the dynamically allocated mount name string. Must end with a colon (:).
+    char *name;         ///< Pointer to the dynamically allocated mount name string, without a trailing colon (:).
     char *cwd;          ///< Pointer to the dynamically allocated current working directory string.
     devoptab_t *device; ///< Pointer to the dynamically allocated devoptab virtual device interface. Used to provide a way to use libcstd I/O calls on the mounted filesystem.
 } UsbHsFsDriveLogicalUnitFileSystemContext;
@@ -56,15 +56,16 @@ typedef struct {
     s32 usb_if_id;                                      ///< USB interface ID. Placed here for convenience.
     bool uasp;                                          ///< Set to true if USB Attached SCSI Protocol is being used with this drive. Placed here for convenience.
     u8 lun;                                             ///< Drive LUN index (zero-based, up to 15). Used to send SCSI commands.
-    bool removable;                                     ///< Set to true if this LUN is removable. Retrieved via Inquiry SCSI command.
+    bool removable;                                     ///< Set to true if this LUN is removable. Retrieved via SCSI Inquiry command.
     bool eject_supported;                               ///< Set to true if ejection via Prevent/Allow Medium Removal + Start Stop Unit is supported.
     bool write_protect;                                 ///< Set to true if the Write Protect bit is set.
     bool fua_supported;                                 ///< Set to true if the Force Unit Access feature is supported.
-    char vendor_id[0x9];                                ///< Vendor identification string. Retrieved via Inquiry SCSI command. May be empty.
-    char product_id[0x11];                              ///< Product identification string. Retrieved via Inquiry SCSI command. May be empty.
+    char vendor_id[0x9];                                ///< Vendor identification string. Retrieved via SCSI Inquiry command. May be empty.
+    char product_id[0x11];                              ///< Product identification string. Retrieved via SCSI Inquiry command. May be empty.
+    char serial_number[0x40];                           ///< Serial number string. Retrieved via SCSI Inquiry command. May be empty.
     bool long_lba;                                      ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
-    u64 block_count;                                    ///< Logical block count. Retrieved via Read Capacity SCSI command. Must be non-zero.
-    u32 block_length;                                   ///< Logical block length (bytes). Retrieved via Read Capacity SCSI command. Must be non-zero.
+    u64 block_count;                                    ///< Logical block count. Retrieved via SCSI Read Capacity command. Must be non-zero.
+    u32 block_length;                                   ///< Logical block length (bytes). Retrieved via SCSI Read Capacity command. Must be non-zero.
     u64 capacity;                                       ///< LUN capacity (block count times block length).
     u32 fs_count;                                       ///< Number of mounted filesystems stored in this LUN.
     UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx;  ///< Dynamically allocated pointer array of fs_count filesystem contexts.
@@ -81,9 +82,9 @@ typedef struct {
     UsbHsClientEpSession usb_out_ep_session[2]; ///< Output endpoint sessions (host to device). BOT: 0 = Command & Data Out, 1 = Unused. UASP: 0 = Command, 1 = Data Out.
     u16 vid;                                    ///< Vendor ID. Retrieved from the device descriptor. Placed here for convenience.
     u16 pid;                                    ///< Product ID. Retrieved from the device descriptor. Placed here for convenience.
-    char *manufacturer;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
-    char *product_name;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
-    char *serial_number;                        ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the device descriptor.
+    char *manufacturer;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the USB device descriptor.
+    char *product_name;                         ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the USB device descriptor.
+    char *serial_number;                        ///< Dynamically allocated, UTF-8 encoded manufacturer string. May be NULL if not provided by the USB device descriptor.
     u8 max_lun;                                 ///< Max LUNs supported by this drive. Must be at least 1.
     u8 lun_count;                               ///< Initialized LUN count. May differ from the max LUN count.
     UsbHsFsDriveLogicalUnitContext **lun_ctx;   ///< Dynamically allocated pointer array of lun_count LUN contexts.
@@ -115,13 +116,13 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitContext(UsbHsFsDriveLogicalUnitCont
 }
 
 /// Checks if the provided filesystem context is valid.
-/// TO DO: update this after adding support for more filesystems.
+/// TODO: update this after adding support for more filesystems.
 NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx)
 {
     bool ctx_valid = (fs_ctx && usbHsFsDriveIsValidLogicalUnitContext((UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx) && fs_ctx->fs_type > UsbHsFsDriveLogicalUnitFileSystemType_Unsupported && \
                       fs_ctx->name && fs_ctx->cwd && fs_ctx->device);
     bool fs_valid = false;
-    
+
     if (ctx_valid)
     {
         switch(fs_ctx->fs_type)
@@ -141,7 +142,7 @@ NX_INLINE bool usbHsFsDriveIsValidLogicalUnitFileSystemContext(UsbHsFsDriveLogic
                 break;
         }
     }
-    
+
     return (ctx_valid && fs_valid);
 }
 

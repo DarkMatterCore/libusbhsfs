@@ -1,7 +1,7 @@
 /*
  * ntfs.h
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -20,6 +20,7 @@
 #include <ntfs-3g/layout.h>
 #include <ntfs-3g/device.h>
 #include <ntfs-3g/volume.h>
+#include <ntfs-3g/cache.h>
 #include <ntfs-3g/inode.h>
 #include <ntfs-3g/logging.h>
 #include <ntfs-3g/dir.h>
@@ -50,8 +51,6 @@ typedef struct _ntfs_vd {
     u16 dmask;                  ///< Unix style permission mask for directory creation.
     bool update_access_times;   ///< True if file/directory access times should be updated during I/O operations.
     bool ignore_read_only_attr; ///< True if read-only file attributes should be ignored (allows writing to read-only files).
-    bool show_hidden_files;     ///< True if hidden files are shown when enumerating directories.
-    bool show_system_files;     ///< True if system files are shown when enumerating directories.
 } ntfs_vd;
 
 #ifdef DEBUG

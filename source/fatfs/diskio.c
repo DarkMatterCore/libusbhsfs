@@ -24,8 +24,8 @@ DSTATUS ff_disk_status (
 	BYTE pdrv		/* Physical drive nmuber to identify the drive */
 )
 {
-    (void)pdrv;
-    
+    NX_IGNORE_ARG(pdrv);
+
     /* We take care of this. */
     return RES_OK;
 }
@@ -40,8 +40,8 @@ DSTATUS ff_disk_initialize (
 	BYTE pdrv				/* Physical drive nmuber to identify the drive */
 )
 {
-    (void)pdrv;
-    
+    NX_IGNORE_ARG(pdrv);
+
     /* We take care of this. */
     return RES_OK;
 }
@@ -59,11 +59,11 @@ DRESULT ff_disk_read (
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
-    
+
     /* Get LUN context and read logical blocks. */
     lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
     if (lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
-    
+
     return ret;
 }
 
@@ -71,8 +71,6 @@ DRESULT ff_disk_read (
 /*-----------------------------------------------------------------------*/
 /* Write Sector(s)                                                       */
 /*-----------------------------------------------------------------------*/
-
-#if FF_FS_READONLY == 0
 
 DRESULT ff_disk_write (
 	BYTE pdrv,			/* Physical drive nmuber to identify the drive */
@@ -83,15 +81,13 @@ DRESULT ff_disk_write (
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
-    
-    /* Get LUN context and read logical blocks. */
+
+    /* Get LUN context and write logical blocks. */
     lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
     if (lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
-    
+
     return ret;
 }
-
-#endif
 
 
 /*-----------------------------------------------------------------------*/
@@ -106,7 +102,7 @@ DRESULT ff_disk_ioctl (
 {
     UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
     DRESULT ret = RES_PARERR;
-    
+
     /* Get LUN context. */
     lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
     if (lun_ctx)
@@ -129,18 +125,18 @@ DRESULT ff_disk_ioctl (
                 break;
         }
     }
-    
+
     return ret;
 }
 
-#if !FF_FS_READONLY && !FF_FS_NORTC /* Get system time */
+#if !FF_FS_NORTC /* Get system time */
 DWORD get_fattime(void)
 {
     Result rc = 0;
     u64 timestamp = 0;
     struct tm timeinfo = {0};
     DWORD output = FAT_TIMESTAMP(FF_NORTC_YEAR, FF_NORTC_MON, FF_NORTC_MDAY, 0, 0, 0);  /* Use FF_NORTC values by default. */
-    
+
     /* Try to retrieve time from time services. */
     rc = timeGetCurrentTime(TimeType_LocalSystemClock, &timestamp);
     if (R_SUCCEEDED(rc))
@@ -148,7 +144,7 @@ DWORD get_fattime(void)
         localtime_r((time_t*)&timestamp, &timeinfo);
         output = FAT_TIMESTAMP(timeinfo.tm_year, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     }
-    
+
     return output;
 }
 #endif

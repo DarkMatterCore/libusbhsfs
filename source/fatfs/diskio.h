@@ -43,7 +43,7 @@ DRESULT ff_disk_ioctl (BYTE pdrv, BYTE cmd, void* buff);
 /* Command code for ff_disk_ioctrl fucntion */
 
 /* Generic command (Used by FatFs) */
-#define CTRL_SYNC			0	/* Complete pending write process (needed at FF_FS_READONLY == 0) */
+#define CTRL_SYNC			0	/* Complete pending write process */
 #define GET_SECTOR_COUNT	1	/* Get media size */
 #define GET_SECTOR_SIZE		2	/* Get sector size (needed at FF_MAX_SS != FF_MIN_SS) */
 #define GET_BLOCK_SIZE		3	/* Get erase block size */

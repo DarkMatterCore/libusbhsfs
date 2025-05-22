@@ -1,7 +1,7 @@
 /*
  * usbfs.c
  *
- * Copyright (c) 2020-2022, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Blake Warner.
  * Copyright (c) 2018, Team Xecuter.
  *
@@ -13,10 +13,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -101,22 +101,22 @@ Result usbFsCloseDir(u64 dirid)
 Result usbFsReadDir(u64 dirid, u64 *type, u64 *size, char *name, size_t namemax)
 {
     Result rc = 0;
-    
+
     struct {
         u64 type;
         u64 size;
     } out;
-    
+
     rc = serviceDispatchInOut(&g_usbFsSrv, UsbFs_Cmd_ReadDir, dirid, out, \
                               .buffer_attrs = { SfBufferAttr_HipcMapAlias | SfBufferAttr_Out }, \
                               .buffers = { { name, namemax } });
-    
+
     if (R_SUCCEEDED(rc))
     {
         *type = out.type;
         *size = out.size;
     }
-    
+
     return rc;
 }
 
@@ -134,7 +134,7 @@ Result usbFsSeekFile(u64 fileid, u64 pos, u64 whence, u64 *retpos)
         u64 pos;
         u64 whence;
     } in = { fileid, pos, whence };
-    
+
     return serviceDispatchInOut(&g_usbFsSrv, UsbFs_Cmd_SeekFile, in, *retpos);
 }
 
@@ -144,7 +144,7 @@ Result usbFsReadRaw(u64 sector, u64 sectorcount, void *buffer)
         u64 sector;
         u64 sectorcount;
     } in = { sector, sectorcount };
-    
+
     return serviceDispatchIn(&g_usbFsSrv, UsbFs_Cmd_ReadRaw, in, \
                              .buffer_attrs = { SfBufferAttr_HipcMapAlias | SfBufferAttr_Out }, \
                              .buffers = { { buffer, 0x200ULL * sectorcount } });
@@ -182,33 +182,33 @@ Result usbFsTruncateFile(u64 fileid, u64 size)
         u64 fileid;
         u64 size;
     } in = { fileid, size };
-    
+
     return serviceDispatchIn(&g_usbFsSrv, UsbFs_Cmd_TruncateFile, in);
 }
 
 Result usbFsStatFile(u64 fileid, u64 *size, u64 *mode)
 {
     Result rc = 0;
-    
+
     struct {
         u64 size;
         u64 mode;
     } out;
-    
+
     rc = serviceDispatchInOut(&g_usbFsSrv, UsbFs_Cmd_StatFile, fileid, out);
     if (R_SUCCEEDED(rc))
     {
         *size = out.size;
         *mode = out.mode;
     }
-    
+
     return rc;
 }
 
 Result usbFsStatPath(const char *path, u64 *size, u64 *mode)
 {
     Result rc = 0;
-    
+
     struct {
         u64 size;
         u64 mode;
@@ -217,32 +217,32 @@ Result usbFsStatPath(const char *path, u64 *size, u64 *mode)
     rc = serviceDispatchOut(&g_usbFsSrv, UsbFs_Cmd_StatPath, out, \
                             .buffer_attrs = { SfBufferAttr_HipcMapAlias | SfBufferAttr_In }, \
                             .buffers = { { path, strlen(path) + 1 } });
-    
+
     if (R_SUCCEEDED(rc))
     {
         *size = out.size;
         *mode = out.mode;
     }
-    
+
     return rc;
 }
 
 Result usbFsStatFilesystem(u64 *totalsize, u64 *freesize)
 {
     Result rc = 0;
-    
+
     struct {
         u64 totalsize;
         u64 freesize;
     } out;
-    
+
     rc = serviceDispatchOut(&g_usbFsSrv, UsbFs_Cmd_StatFilesystem, out);
     if (R_SUCCEEDED(rc))
     {
         *totalsize = out.totalsize;
         *freesize = out.freesize;
     }
-    
+
     return rc;
 }
 
