@@ -4,8 +4,6 @@ project(libusbhsfs-example-callback
     LANGUAGES C
 )
 
-string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S" UTC)
-
 add_executable(libusbhsfs-example-callback source/main.c)
 
 target_link_libraries(libusbhsfs-example-callback PRIVATE libusbhsfs)

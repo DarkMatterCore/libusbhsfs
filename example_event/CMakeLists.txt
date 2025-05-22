@@ -4,8 +4,6 @@ project(libusbhsfs-example-event
     LANGUAGES C
 )
 
-string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S" UTC)
-
 add_executable(libusbhsfs-example-event source/main.c)
 
 target_link_libraries(libusbhsfs-example-event PRIVATE libusbhsfs)

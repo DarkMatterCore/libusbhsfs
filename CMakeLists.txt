@@ -31,6 +31,9 @@ project(libusbhsfs
 option(USBHSFS_GPL "ext4 and ntfs support" OFF)
 option(USBHSFS_EXAMPLES "build examples" OFF)
 
+set(LIB_TITLE "usbhsfs")
+string(TIMESTAMP BUILD_TIMESTAMP "%Y-%m-%d %H:%M:%S" UTC)
+
 add_library(libusbhsfs
     source/usbhsfs_drive.c
     source/usbhsfs_log.c
@@ -39,6 +42,11 @@ add_library(libusbhsfs
     source/usbhsfs_request.c
     source/usbhsfs_scsi.c
     source/usbhsfs_utils.c
+)
+
+target_compile_definitions(libusbhsfs PRIVATE
+    LIB_TITLE="${LIB_TITLE}"
+    BUILD_TIMESTAMP="${BUILD_TIMESTAMP}"
 )
 
 target_include_directories(libusbhsfs PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
