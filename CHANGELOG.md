@@ -1,5 +1,119 @@
 # Changelog
 
+v0.2.10:
+--------------
+
+Huge refactor/code cleanup.
+
+* **lib**:
+    * Add `usbHsFsGetDeviceByPath()`, which fills its output `UsbHsFsDevice` element with information about the mounted volume pointed to by the input path (e.g. `ums0:/switch/`).
+    * Ditch `FS_MAX_PATH` macro in favor of `LIBUSBHSFS_MAX_PATH` (set to 4096 bytes), providing better support for longer filesystem paths.
+    * Add support for retrieving and setting FAT/NTFS specific file attribute bitmasks via `stat()`, `chmod()`, `readdir()`, `fstat()` (NTFS only) and `fchmod()` (NTFS only). Please keep in mind that in order to preserve regular POSIX file attributes, the `st_spare4[0]` field from the `stat` struct is used to store this information.
+    * Add `UsbHsFsDosNtFileAttributes` enum to easily handle FAT/NTFS attribute bitmasks.
+    * Allow listing of dotfiles in directories whenever possible across all supported filesystems.
+    * Reduce the size of the dedicated transfer buffer for each UMS device from 8 MiB to 1 MiB.
+    * Add `_GNU_SOURCE` definition to `CFLAGS` in Makefile.
+* **devoptab**:
+    * Add a new header file with generic versions of the macros previously used in all devoptab interfaces.
+* **examples**:
+    * Use dynamically allocated buffers for the tested filesystem paths (using the LIBUSBHSFS_MAX_PATH macro).
+    * Reduce file copy block size to 1 MiB to match the rest of the changes.
+    * Print FAT/NTFS specific file attribute bitmasks during the file tests, depending on the mounted filesystem type.
+    * Unconditionally print full POSIX attributes bitmask during the file tests.
+    * Print last access and creation timestamps during the file tests.
+* **fat**:
+    * Update FatFs to R0.16 p2 (September 13th, 2025).
+    * Cherrypick specific FatFs improvements from the [fork maintained by Extrems](https://github.com/extremscorner/fatfs-mod), while still retaining support for our runtime read-only flag. These include:
+        * Remove internal volume management system in favor of explicitly passing FATFS objects.
+        * Modify `ff_stat()` to allow its use on the origin directory.
+        * Modify `FILINFO` struct to expose the cluster number and the last access timestamp.
+        * Prevent automatic hiding of dotfiles in directory listings.
+        * Integrate contiguous clusters patch from Wonderful Toolchain.
+        * Fix file growth error on exFAT.
+    * Add a small optimization to `FAT_TIMESTAMP` macro.
+    * Update `get_fattime()` to use plain old `time()` instead.
+    * Fix timestamp generation in `get_fattime()` by adding previously missing time offsets to `timeinfo.tm_year` (+1900) and `timeinfo.tm_mon` (+1). Thanks to [ITotalJustice](https://github.com/ITotalJustice).
+    * Refactor `ffdev_fixpath()` into `ffdev_get_fixed_path()`.
+    * Update `ffdev_fill_stat()` to store the last access and creation timestamps into the output stat struct, as well as the FAT-specific file attributes bitmask.
+    * Delegate timestamp conversion to the new `ffdev_time_posix2fat()` and `ffdev_time_fat2posix()` helpers.
+    * Implement `ffdev_chmod()`.
+* **ext**:
+    * Add `mounted` flag to `ext_vd`, in order to prevent unmounting an EXT volume that hasn't really been successfully mounted.
+    * Remove `extdev_fixpath()` in favor of `extdev_get_fixed_path()`.
+    * Only use full second precision in `extdev_utimes()`.
+* **ntfs**:
+    * Add `NTFS_MAX_NAME_LEN_BYTES` macro.
+    * Make `ntfs_path` struct public, remove its internal buffer and turn all strings into dynamically allocated pointers.
+    * Update `ntfs_inode_create()`, `ntfs_inode_link()` and `ntfs_inode_unlink()` to take in `ntfs_path` objects instead of character strings.
+    * Add `ntfs_path_destroy()`.
+    * Remove `ntfs_split_path()`.
+    * Refactor `ntfsdev_fixpath()` into `ntfsdev_get_fixed_path()`.
+    * Move path split logic from `ntfs_split_path()` into `ntfsdev_get_fixed_path()`.
+    * Update `ntfsdev_dirnext()` and `ntfsdev_dirnext_filldir()` to allow listing of dotfiles in directories.
+    * Update `ntfsdev_statvfs()` to use `NTFS_MAX_NAME_LEN_BYTES` as the value for `f_namemax`.
+    * Implement `ntfsdev_chmod()` and `ntfsdev_fchmod()`.
+    * Update `ntfsdev_fill_stat()` to store the NTFS-specific file attributes bitmask.
+* **usbfs**:
+    * Add `UsbFsMountStatus` enum.
+    * Update `UsbFsServiceCmd` enum to follow the same codestyle as the rest of the codebase.
+* **Other internal changes**:
+    * Use C23 strongly typed enums.
+    * Use forward declarations for structs whenever needed.
+    * **usbhsfs_drive**:
+        * Move struct definitions into their own header file.
+        * Update `UsbHsFsDriveLogicalUnitFileSystemContext` to use a single `void*` pointer to represent the underlying filesystem object.
+        * Update `UsbHsFsDriveContext` to use a recursive mutex instead of a regular one.
+        * Update `usbHsFsDriveInitializeContext()` to return a pointer to a dynamically allocated `UsbHsFsDriveContext` object.
+        * Update `usbHsFsDriveDestroyContext()` to lock the drive recursive mutex + let it take care of freeing `usbHsFsDriveDestroyContext` pointers as well.
+        * Heavily simplify `usbHsFsDriveIsValidLogicalUnitFileSystemContext()`.
+        * Move LUN initialization logic into `usbHsFsDriveInitializeLogicalUnitContext()`.
+        * Update `usbHsFsDriveClearStallStatus()` to add small 10 ms delays after each call to `usbHsFsRequestClearEndpointHaltFeature()`.
+        * Fix required conditions for an interface change in `usbHsFsDriveChangeInterfaceDescriptor()`.
+        * Add `usbHsFsDriveDestroyLogicalUnitContext()`.
+    * **usbhsfs_log**:
+        * Define stubbed macros for public `usbHsFsLog*()` calls when the library is not built in debug mode.
+    * **usbhsfs_manager**:
+        * Remove `usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber()`.
+        * Move Atmosphère-specific (de)initialization logic into `usbHsFsManagerInitializeAtmosphereDriverResources()` and `usbHsFsManagerCloseAtmosphereDriverResources()`.
+        * Move SX OS-specific (de)initialization logic into `usbHsFsManagerInitializeSXOSDriverResources()` and `usbHsFsManagerCloseSXOSDriverResources()`.
+        * Move NTFS/EXT debug logging configuration logic into `usbHsFsManagerSetupFileSystemDriverLogging()`.
+        * Rename `usbHsFsCreateDriveManagerThread()` to `usbHsFsManagerCreateBackgroundThread()`.
+        * Rename `usbHsFsCloseDriveManagerThread()` to `usbHsFsManagerDestroyBackgroundThread()`.
+        * Rename `usbHsFsDriveManagerThreadFuncAtmosphere()` to `usbHsFsManagerAtmosphereThreadFunc()`.
+        * Rename `usbHsFsDriveManagerThreadFuncSXOS()` to `usbHsFsManagerSXOSThreadFunc()`.
+        * Rename `usbHsFsResetDrives()` to `usbHsFsManagerResetMassStorageDevices()`.
+        * Refactor `usbHsFsUpdateDriveContexts()` into `usbHsFsManagerAddConnectedDriveContexts()`.
+        * Rename `usbHsFsAddDriveContextToList()` to `usbHsFsManagerInitializeAndAddDriveContextToList()`.
+        * Move drive initialization logic from `usbHsFsUpdateDriveContexts()` into `usbHsFsManagerInitializeAndAddDriveContextToList()`.
+        * Add `usbHsFsManagerRemoveDisconnectedDriveContexts()`.
+        * Rename `usbHsFsRemoveDriveContextFromListByIndex()` to `usbHsFsManagerRemoveDriveContextFromListByIndex()`.
+        * Rename `usbHsFsPopulateDeviceList()` to `usbHsFsManagerPopulateDeviceList()`.
+        * Rename `usbHsFsExecutePopulateCallback()` to `usbHsFsManagerExecutePopulateCallback()`.
+        * Rename `usbHsFsFillDeviceElement()` to `usbHsFsManagerFillDeviceElement()`.
+    * **usbhsfs_mount**:
+        * Define new macros for all the constants used throughout the compilation unit.
+        * Remove padding from the `GuidPartitionTableHeader` struct to bring the size down to `0x5C`, which actually matches the contents of its `header_size` field.
+        * Move MBR partition entry parsing logic into `usbHsFsMountParseMasterBootRecordPartitionEntry()`.
+        * Move GPT header parsing logic into `usbHsFsMountGetGuidPartitionTableHeader()`.
+        * Move GPT entry parsing logic into `usbHsFsMountParseGuidPartitionTableEntry()`.
+        * Refactor `usbHsFsMountRegisterVolume()` into `usbHsFsMountInitializeLogicalUnitFileSystemContext()`.
+        * Move LUN FS deinitialization logic into `usbHsFsMountDestroyLogicalUnitFileSystemContext()`.
+        * Update `usbHsFsMountRegisterDevoptabDevice()` to take in a pointer to a devoptab interface.
+        * Move devoptab device unregistration logic into `usbHsFsMountUnregisterDevoptabDevice()`.
+    * **usbhsfs_request**:
+        * Use `usbHsFsUtilsAlignedAlloc()` instead of `memalign()`.
+    * **usbhsfs_scsi**:
+        * Update to reflect the changes in the rest of the codebase.
+    * **usbhsfs_utils**:
+        * Add `ALIGN_UP`, `IS_ALIGNED`, `IS_POWER_OF_TWO`, `MAX_ELEMENTS`, `SCOPED_LOCK_BASE`, `SCOPED_RLOCK` and `UTF8_MAX_CODEPOINT_SIZE` macros.
+        * Update `SCOPED_LOCK` macro to rely on the new `SCOPED_LOCK_BASE` macro.
+        * Add `UsbHsFsUtilsScopedRecursiveLock` struct.
+        * Add `usbHsFsUtilsAlignedAlloc()`.
+        * Rename `usbHsFsUtilsLockScope()` to `usbHsFsUtilsAcquireScopedLock()`.
+        * Rename `usbHsFsUtilsUnlockScope()` to `usbHsFsUtilsReleaseScopedLock()`.
+        * Add `usbHsFsUtilsAcquireScopedRecursiveLock()`.
+        * Add `usbHsFsUtilsReleaseScopedRecursiveLock()`.
+
 v0.2.9:
 --------------
 
