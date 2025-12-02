@@ -1,5 +1,5 @@
 /*-----------------------------------------------------------------------*/
-/* Low level disk I/O module skeleton for FatFs     (C)ChaN, 2019        */
+/* Low level disk I/O module skeleton for FatFs     (C)ChaN, 2025        */
 /*-----------------------------------------------------------------------*/
 /* If a working storage control module is available, it should be        */
 /* attached to the FatFs via a glue function rather than modifying it.   */
@@ -7,11 +7,9 @@
 /* storage control modules to the FatFs module with a defined API.       */
 /*-----------------------------------------------------------------------*/
 
-#include "ff.h"			/* Obtains integer types */
-#include "diskio.h"		/* Declarations of disk functions */
+#include "ff.h"			/* Basic definitions of FatFs */
+#include "diskio.h"		/* Declarations FatFs MAI */
 
-#include "../usbhsfs_utils.h"
-#include "../usbhsfs_manager.h"
 #include "../usbhsfs_scsi.h"
 
 /* Reference for needed FATFS impl functions: http://irtos.sourceforge.net/FAT32_ChaN/doc/en/appnote.html#port */
@@ -21,7 +19,7 @@
 /*-----------------------------------------------------------------------*/
 
 DSTATUS ff_disk_status (
-	BYTE pdrv		/* Physical drive nmuber to identify the drive */
+	void* pdrv	/* Physical drive object */
 )
 {
     NX_IGNORE_ARG(pdrv);
@@ -37,7 +35,7 @@ DSTATUS ff_disk_status (
 /*-----------------------------------------------------------------------*/
 
 DSTATUS ff_disk_initialize (
-	BYTE pdrv				/* Physical drive nmuber to identify the drive */
+	void* pdrv	/* Physical drive object */
 )
 {
     NX_IGNORE_ARG(pdrv);
@@ -51,20 +49,15 @@ DSTATUS ff_disk_initialize (
 /*-----------------------------------------------------------------------*/
 
 DRESULT ff_disk_read (
-	BYTE pdrv,		/* Physical drive nmuber to identify the drive */
+	void* pdrv,		/* Physical drive object */
 	BYTE *buff,		/* Data buffer to store read data */
 	LBA_t sector,	/* Start sector in LBA */
 	UINT count		/* Number of sectors to read */
 )
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
-    DRESULT ret = RES_PARERR;
-
-    /* Get LUN context and read logical blocks. */
-    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
-    if (lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
-
-    return ret;
+    /* Read logical blocks using LUN context. */
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)pdrv;
+    return ((lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buff, sector, count)) ? RES_OK : RES_PARERR);
 }
 
 
@@ -73,20 +66,15 @@ DRESULT ff_disk_read (
 /*-----------------------------------------------------------------------*/
 
 DRESULT ff_disk_write (
-	BYTE pdrv,			/* Physical drive nmuber to identify the drive */
+	void* pdrv,			/* Physical drive object */
 	const BYTE *buff,	/* Data to be written */
 	LBA_t sector,		/* Start sector in LBA */
 	UINT count			/* Number of sectors to write */
 )
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
-    DRESULT ret = RES_PARERR;
-
-    /* Get LUN context and write logical blocks. */
-    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
-    if (lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buff, sector, count)) ret = RES_OK;
-
-    return ret;
+    /* Write logical blocks using LUN context. */
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)pdrv;
+    return ((lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buff, sector, count)) ? RES_OK : RES_PARERR);
 }
 
 
@@ -95,16 +83,14 @@ DRESULT ff_disk_write (
 /*-----------------------------------------------------------------------*/
 
 DRESULT ff_disk_ioctl (
-	BYTE pdrv,		/* Physical drive nmuber (0..) */
+	void* pdrv,		/* Physical drive object */
 	BYTE cmd,		/* Control code */
 	void *buff		/* Buffer to send/receive control data */
 )
 {
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)pdrv;
     DRESULT ret = RES_PARERR;
 
-    /* Get LUN context. */
-    lun_ctx = usbHsFsManagerGetLogicalUnitContextForFatFsDriveNumber(pdrv);
     if (lun_ctx)
     {
         /* Process control code. */
@@ -114,11 +100,11 @@ DRESULT ff_disk_ioctl (
                 ret = RES_OK;
                 break;
             case GET_SECTOR_COUNT:
-                *(LBA_t*)buff = lun_ctx->block_count;
+                *((LBA_t*)buff) = lun_ctx->block_count;
                 ret = RES_OK;
                 break;
             case GET_SECTOR_SIZE:
-                *(WORD*)buff = lun_ctx->block_length;
+                *((WORD*)buff) = lun_ctx->block_length;
                 ret = RES_OK;
                 break;
             default:
@@ -129,22 +115,14 @@ DRESULT ff_disk_ioctl (
     return ret;
 }
 
-#if !FF_FS_NORTC /* Get system time */
+#if !FF_FS_NORTC /* Get current time */
 DWORD get_fattime(void)
 {
-    Result rc = 0;
-    u64 timestamp = 0;
+    time_t cur_time = time(NULL);
+
     struct tm timeinfo = {0};
-    DWORD output = FAT_TIMESTAMP(FF_NORTC_YEAR, FF_NORTC_MON, FF_NORTC_MDAY, 0, 0, 0);  /* Use FF_NORTC values by default. */
+    localtime_r(&cur_time, &timeinfo);
 
-    /* Try to retrieve time from time services. */
-    rc = timeGetCurrentTime(TimeType_LocalSystemClock, &timestamp);
-    if (R_SUCCEEDED(rc))
-    {
-        localtime_r((time_t*)&timestamp, &timeinfo);
-        output = FAT_TIMESTAMP(timeinfo.tm_year, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    }
-
-    return output;
+    return FAT_TIMESTAMP(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 #endif

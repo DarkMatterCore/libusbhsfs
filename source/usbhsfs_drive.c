@@ -1,13 +1,13 @@
 /*
  * usbhsfs_drive.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
-#include "usbhsfs_utils.h"
+#include "usbhsfs_drive.h"
 #include "usbhsfs_request.h"
 #include "usbhsfs_scsi.h"
 #include "usbhsfs_mount.h"
@@ -22,20 +22,32 @@ static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session,
 static void usbHsFsDriveGetDeviceStrings(UsbHsFsDriveContext *drive_ctx);
 static void usbHsFsDriveGetUtf8StringFromStringDescriptor(UsbHsClientIfSession *usb_if_session, u8 idx, u16 lang_id, char **out_buf);
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun);
+static UsbHsFsDriveLogicalUnitContext *usbHsFsDriveInitializeLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun);
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext **lun_ctx, bool stop_lun);
 
-bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterface *usb_if)
+UsbHsFsDriveContext *usbHsFsDriveInitializeContext(UsbHsInterface *usb_if)
 {
-    if (!drive_ctx || !usb_if)
+    if (!usb_if)
     {
         USBHSFS_LOG_MSG("Invalid parameters!");
-        return false;
+        return NULL;
     }
 
     Result rc = 0;
-    UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
+    UsbHsFsDriveContext *drive_ctx = NULL;
+    UsbHsClientIfSession *usb_if_session = NULL;
     UsbHsFsDriveLogicalUnitContext **tmp_lun_ctx = NULL;
-    bool ret = false;
+    bool success = false;
+
+    /* Allocate memory for our drive context. */
+    drive_ctx = calloc(1, sizeof(UsbHsFsDriveContext));
+    if (!drive_ctx)
+    {
+        USBHSFS_LOG_MSG("Failed to allocate memory for drive context! (interface %d).", usb_if->inf.ID);
+        goto end;
+    }
+
+    usb_if_session = &(drive_ctx->usb_if_session);
 
     /* Allocate memory for the USB transfer buffer. */
     drive_ctx->xfer_buf = usbHsFsRequestAllocateXferBuffer();
@@ -94,51 +106,16 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
     /* Prepare LUNs using SCSI commands. */
     for(u8 i = 0; i < drive_ctx->max_lun; i++)
     {
-        /* Retrieve pointer to the current LUN context. */
-        UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[drive_ctx->lun_count];
-        if (!lun_ctx)
-        {
-            /* Allocate memory for a new LUN context. */
-            lun_ctx = calloc(1, sizeof(UsbHsFsDriveLogicalUnitContext));
-            if (!lun_ctx)
-            {
-                USBHSFS_LOG_MSG("Failed to allocate memory for LUN context entry #%u! (%u / %u).", drive_ctx->lun_count, i + 1, drive_ctx->max_lun);
-                goto end;
-            }
+        /* Initialize context for our current LUN. */
+        UsbHsFsDriveLogicalUnitContext *lun_ctx = usbHsFsDriveInitializeLogicalUnitContext(drive_ctx, i);
+        if (!lun_ctx) continue;
 
-            /* Set LUN context entry pointer. */
-            drive_ctx->lun_ctx[drive_ctx->lun_count] = lun_ctx;
-        }
-
-        /* Increase LUN context count. */
-        (drive_ctx->lun_count)++;
-
-        /* Set USB interface ID and LUN index. */
-        lun_ctx->drive_ctx = drive_ctx;
-        lun_ctx->usb_if_id = drive_ctx->usb_if_id;
-        lun_ctx->uasp = drive_ctx->uasp;
-        lun_ctx->lun = i;
-
-        /* Start LUN. */
-        if (!usbHsFsScsiStartDriveLogicalUnit(lun_ctx))
-        {
-            USBHSFS_LOG_MSG("Failed to initialize context for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
-            continue;
-        }
-
-        /* Initialize filesystem contexts for this LUN. */
-        if (!usbHsFsMountInitializeLogicalUnitFileSystemContexts(lun_ctx))
-        {
-            USBHSFS_LOG_MSG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", i, drive_ctx->usb_if_id);
-            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, true);
-            (drive_ctx->lun_count)--;   /* Decrease LUN context count. */
-        }
+        /* Update drive context. */
+        drive_ctx->lun_ctx[drive_ctx->lun_count++] = lun_ctx;
     }
 
     if (!drive_ctx->lun_count)
     {
-        if (drive_ctx->lun_ctx[0]) free(drive_ctx->lun_ctx[0]);
         USBHSFS_LOG_MSG("Failed to initialize any LUN/filesystem contexts! (interface %d).", drive_ctx->usb_if_id);
         goto end;
     }
@@ -154,79 +131,85 @@ bool usbHsFsDriveInitializeContext(UsbHsFsDriveContext *drive_ctx, UsbHsInterfac
         }
     }
 
-    /* Update return value. */
-    ret = true;
+    /* Update flag. */
+    success = true;
 
 end:
     /* Destroy drive context if something went wrong. */
-    if (!ret) usbHsFsDriveDestroyContext(drive_ctx, true);
+    if (!success && drive_ctx) usbHsFsDriveDestroyContext(&drive_ctx, true);
 
-    return ret;
+    return drive_ctx;
 }
 
-void usbHsFsDriveDestroyContext(UsbHsFsDriveContext *drive_ctx, bool stop_lun)
+void usbHsFsDriveDestroyContext(UsbHsFsDriveContext **drive_ctx, bool stop_lun)
 {
-    if (!drive_ctx) return;
+    UsbHsFsDriveContext *drive_ctx_ptr = NULL;
 
-    UsbHsClientIfSession *usb_if_session = &(drive_ctx->usb_if_session);
+    if (!drive_ctx || !(drive_ctx_ptr = *drive_ctx)) return;
 
-    UsbHsClientEpSession *usb_in_ep_session_1 = &(drive_ctx->usb_in_ep_session[0]);
-    UsbHsClientEpSession *usb_out_ep_session_1 = &(drive_ctx->usb_out_ep_session[0]);
-
-    UsbHsClientEpSession *usb_in_ep_session_2 = &(drive_ctx->usb_in_ep_session[1]);
-    UsbHsClientEpSession *usb_out_ep_session_2 = &(drive_ctx->usb_out_ep_session[1]);
-
-    if (drive_ctx->lun_ctx)
+    SCOPED_RLOCK(&(drive_ctx_ptr->rmtx))
     {
-        /* Destroy LUN contexts. */
-        for(u8 i = 0; i < drive_ctx->lun_count; i++)
-        {
-            UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx->lun_ctx[i];
-            if (!lun_ctx) continue;
+        UsbHsClientIfSession *usb_if_session = &(drive_ctx_ptr->usb_if_session);
 
-            usbHsFsDriveDestroyLogicalUnitContext(lun_ctx, stop_lun);
-            free(lun_ctx);
+        UsbHsClientEpSession *usb_in_ep_session_1 = &(drive_ctx_ptr->usb_in_ep_session[0]);
+        UsbHsClientEpSession *usb_out_ep_session_1 = &(drive_ctx_ptr->usb_out_ep_session[0]);
+
+        UsbHsClientEpSession *usb_in_ep_session_2 = &(drive_ctx_ptr->usb_in_ep_session[1]);
+        UsbHsClientEpSession *usb_out_ep_session_2 = &(drive_ctx_ptr->usb_out_ep_session[1]);
+
+        if (drive_ctx_ptr->lun_ctx)
+        {
+            /* Destroy LUN contexts. */
+            for(u8 i = 0; i < drive_ctx_ptr->lun_count; i++)
+            {
+                UsbHsFsDriveLogicalUnitContext *lun_ctx = drive_ctx_ptr->lun_ctx[i];
+                if (lun_ctx) usbHsFsDriveDestroyLogicalUnitContext(&lun_ctx, stop_lun);
+            }
+
+            /* Free LUN context pointer array. */
+            free(drive_ctx_ptr->lun_ctx);
+            drive_ctx_ptr->lun_ctx = NULL;
         }
 
-        /* Free LUN context pointer array. */
-        free(drive_ctx->lun_ctx);
-        drive_ctx->lun_ctx = NULL;
+        /* Free device strings. */
+        if (drive_ctx_ptr->manufacturer)
+        {
+            free(drive_ctx_ptr->manufacturer);
+            drive_ctx_ptr->manufacturer = NULL;
+        }
+
+        if (drive_ctx_ptr->product_name)
+        {
+            free(drive_ctx_ptr->product_name);
+            drive_ctx_ptr->product_name = NULL;
+        }
+
+        if (drive_ctx_ptr->serial_number)
+        {
+            free(drive_ctx_ptr->serial_number);
+            drive_ctx_ptr->serial_number = NULL;
+        }
+
+        /* Close USB interface and endpoint sessions. */
+        if (serviceIsActive(&(usb_out_ep_session_2->s))) usbHsEpClose(usb_out_ep_session_2);
+        if (serviceIsActive(&(usb_in_ep_session_2->s))) usbHsEpClose(usb_in_ep_session_2);
+
+        if (serviceIsActive(&(usb_out_ep_session_1->s))) usbHsEpClose(usb_out_ep_session_1);
+        if (serviceIsActive(&(usb_in_ep_session_1->s))) usbHsEpClose(usb_in_ep_session_1);
+
+        if (usbHsIfIsActive(usb_if_session)) usbHsIfClose(usb_if_session);
+
+        /* Free dedicated USB transfer buffer. */
+        if (drive_ctx_ptr->xfer_buf)
+        {
+            free(drive_ctx_ptr->xfer_buf);
+            drive_ctx_ptr->xfer_buf = NULL;
+        }
     }
 
-    /* Free device strings. */
-    if (drive_ctx->manufacturer)
-    {
-        free(drive_ctx->manufacturer);
-        drive_ctx->manufacturer = NULL;
-    }
-
-    if (drive_ctx->product_name)
-    {
-        free(drive_ctx->product_name);
-        drive_ctx->product_name = NULL;
-    }
-
-    if (drive_ctx->serial_number)
-    {
-        free(drive_ctx->serial_number);
-        drive_ctx->serial_number = NULL;
-    }
-
-    /* Close USB interface and endpoint sessions. */
-    if (serviceIsActive(&(usb_out_ep_session_2->s))) usbHsEpClose(usb_out_ep_session_2);
-    if (serviceIsActive(&(usb_in_ep_session_2->s))) usbHsEpClose(usb_in_ep_session_2);
-
-    if (serviceIsActive(&(usb_out_ep_session_1->s))) usbHsEpClose(usb_out_ep_session_1);
-    if (serviceIsActive(&(usb_in_ep_session_1->s))) usbHsEpClose(usb_in_ep_session_1);
-
-    if (usbHsIfIsActive(usb_if_session)) usbHsIfClose(usb_if_session);
-
-    /* Free dedicated USB transfer buffer. */
-    if (drive_ctx->xfer_buf)
-    {
-        free(drive_ctx->xfer_buf);
-        drive_ctx->xfer_buf = NULL;
-    }
+    /* Free context. */
+    free(drive_ctx_ptr);
+    drive_ctx_ptr = *drive_ctx = NULL;
 }
 
 void usbHsFsDriveClearStallStatus(UsbHsFsDriveContext *drive_ctx)
@@ -234,12 +217,18 @@ void usbHsFsDriveClearStallStatus(UsbHsFsDriveContext *drive_ctx)
     if (!usbHsFsDriveIsValidContext(drive_ctx)) return;
 
     usbHsFsRequestClearEndpointHaltFeature(&(drive_ctx->usb_if_session), &(drive_ctx->usb_in_ep_session[0]));
+    svcSleepThread(USB_CLEAR_EP_HALT_WAIT_NS);
+
     usbHsFsRequestClearEndpointHaltFeature(&(drive_ctx->usb_if_session), &(drive_ctx->usb_out_ep_session[0]));
+    svcSleepThread(USB_CLEAR_EP_HALT_WAIT_NS);
 
     if (drive_ctx->uasp)
     {
         usbHsFsRequestClearEndpointHaltFeature(&(drive_ctx->usb_if_session), &(drive_ctx->usb_in_ep_session[1]));
+        svcSleepThread(USB_CLEAR_EP_HALT_WAIT_NS);
+
         usbHsFsRequestClearEndpointHaltFeature(&(drive_ctx->usb_if_session), &(drive_ctx->usb_out_ep_session[1]));
+        svcSleepThread(USB_CLEAR_EP_HALT_WAIT_NS);
     }
 }
 
@@ -360,6 +349,8 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
     u8 new_if_num = interface_desc->bInterfaceNumber;
     u8 new_if_alt_setting = interface_desc->bAlternateSetting;
 
+    bool intf_changed = false;
+
     /* Check if we're trying to set the same interface. */
     if (new_if_num == cur_if_num && new_if_alt_setting == cur_if_alt_setting)
     {
@@ -376,10 +367,12 @@ static bool usbHsFsDriveChangeInterfaceDescriptor(UsbHsClientIfSession *usb_if_s
             USBHSFS_LOG_MSG("usbHsIfSetInterface failed! (0x%X) (interface %d).", rc, usb_if_session->ID);
             return false;
         }
+
+        intf_changed = true;
     }
 
     /* Check if we must set an alternate interface setting. */
-    if (new_if_alt_setting != cur_if_alt_setting)
+    if ((!intf_changed && new_if_alt_setting != cur_if_alt_setting) || (intf_changed && new_if_alt_setting != 0))
     {
         rc = usbHsIfGetAlternateInterface(usb_if_session, NULL, new_if_alt_setting);
         if (R_FAILED(rc))
@@ -666,27 +659,61 @@ end:
     if (string_data) free(string_data);
 }
 
-static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext *lun_ctx, bool stop_lun)
+static UsbHsFsDriveLogicalUnitContext *usbHsFsDriveInitializeLogicalUnitContext(UsbHsFsDriveContext *drive_ctx, u8 lun)
 {
-    if (!lun_ctx || !usbHsFsDriveIsValidContext((UsbHsFsDriveContext*)lun_ctx->drive_ctx) || lun_ctx->lun >= UMS_MAX_LUN) return;
-
-    if (lun_ctx->fs_ctx)
+    if (!usbHsFsDriveIsValidContext(drive_ctx) || lun >= UMS_MAX_LUN)
     {
-        /* Destroy filesystem contexts. */
-        for(u32 i = 0; i < lun_ctx->fs_count; i++)
-        {
-            UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = lun_ctx->fs_ctx[i];
-            if (!fs_ctx) continue;
-
-            usbHsFsMountDestroyLogicalUnitFileSystemContext(fs_ctx);
-            free(fs_ctx);
-        }
-
-        /* Free filesystem context pointer array. */
-        free(lun_ctx->fs_ctx);
-        lun_ctx->fs_ctx = NULL;
+        USBHSFS_LOG_MSG("Invalid parameters!");
+        return NULL;
     }
 
+    UsbHsFsDriveLogicalUnitContext *lun_ctx = NULL;
+    bool success = false;
+
+    /* Allocate memory for a new LUN context. */
+    lun_ctx = calloc(1, sizeof(UsbHsFsDriveLogicalUnitContext));
+    if (!lun_ctx)
+    {
+        USBHSFS_LOG_MSG("Failed to allocate memory for LUN context #%u! (interface %d).", lun, drive_ctx->usb_if_id);
+        goto end;
+    }
+
+    /* Set LUN context properties. */
+    lun_ctx->drive_ctx = drive_ctx;
+    lun_ctx->usb_if_id = drive_ctx->usb_if_id;
+    lun_ctx->uasp = drive_ctx->uasp;
+    lun_ctx->lun = lun;
+
+    /* Start LUN. */
+    if (!usbHsFsScsiStartDriveLogicalUnit(lun_ctx))
+    {
+        USBHSFS_LOG_MSG("Failed to initialize context for LUN #%u! (interface %d).", lun, drive_ctx->usb_if_id);
+        goto end;
+    }
+
+    /* Initialize filesystem contexts for this LUN. */
+    success = usbHsFsMountInitializeLogicalUnitFileSystemContexts(lun_ctx);
+    if (!success) USBHSFS_LOG_MSG("Failed to initialize filesystem contexts for LUN #%u! (interface %d).", lun, drive_ctx->usb_if_id);
+
+end:
+    if (!success && lun_ctx) usbHsFsDriveDestroyLogicalUnitContext(&lun_ctx, true);
+
+    return lun_ctx;
+}
+
+static void usbHsFsDriveDestroyLogicalUnitContext(UsbHsFsDriveLogicalUnitContext **lun_ctx, bool stop_lun)
+{
+    UsbHsFsDriveLogicalUnitContext *lun_ctx_ptr = NULL;
+
+    if (!lun_ctx || !(lun_ctx_ptr = *lun_ctx) || !usbHsFsDriveIsValidContext(lun_ctx_ptr->drive_ctx) || lun_ctx_ptr->lun >= UMS_MAX_LUN) return;
+
+    /* Destroy filesystem contexts. */
+    usbHsFsMountDestroyLogicalUnitFileSystemContexts(lun_ctx_ptr);
+
     /* Stop current LUN. */
-    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx);
+    if (stop_lun) usbHsFsScsiStopDriveLogicalUnit(lun_ctx_ptr);
+
+    /* Free context. */
+    free(lun_ctx_ptr);
+    lun_ctx_ptr = *lun_ctx = NULL;
 }

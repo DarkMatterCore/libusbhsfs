@@ -1,7 +1,7 @@
 /*
  * usb_common.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -11,17 +11,19 @@
 #ifndef __USB_COMMON_H__
 #define __USB_COMMON_H__
 
+#define MAX_USB_INTERFACES                      0x20
+
 #define USB_SUBCLASS_SCSI_TRANSPARENT_CMD_SET   0x06
 
 #define USB_PROTOCOL_BULK_ONLY_TRANSPORT        0x50
 #define USB_PROTOCOL_USB_ATTACHED_SCSI          0x62
 
 #define USB_XFER_BUF_ALIGNMENT                  0x1000              /* 4 KiB. */
-#define USB_XFER_BUF_SIZE                       0x800000            /* 8 MiB. */
+#define USB_XFER_BUF_SIZE                       0x100000            /* 1 MiB. */
 
 #define USB_FEATURE_ENDPOINT_HALT               0x00
 
-#define USB_POSTBUFFER_TIMEOUT                  (u64)10000000000     /* 10 seconds. Expressed in nanoseconds. */
+#define USB_POSTBUFFER_TIMEOUT                  (u64)10000000000    /* 10 seconds. Expressed in nanoseconds. */
 
 #define USB_DT_PIPE_USAGE                       0x24
 
@@ -31,11 +33,7 @@
 
 #define UMS_MAX_LUN                             16                  /* Max returned value is actually a zero-based index to the highest LUN. */
 
-#define MOUNT_NAME_PREFIX                       "ums"
-#define MOUNT_NAME_PREFIX_LENGTH                (sizeof(MOUNT_NAME_PREFIX) - 1)
-#define MOUNT_NAME_LENGTH                       32
-
-#define MAX_PATH_LENGTH                         (FS_MAX_PATH + 1)
+#define USB_CLEAR_EP_HALT_WAIT_NS               (s64)10000000       /* 10 ms. */
 
 #define BLKDEV_MIN_BLOCK_SIZE                   512
 #define BLKDEV_MAX_BLOCK_SIZE                   4096

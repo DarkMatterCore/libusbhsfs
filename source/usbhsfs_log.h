@@ -1,7 +1,7 @@
 /*
  * usbhsfs_log.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -34,8 +34,14 @@ void usbHsFsLogCloseLogFile(void);
 
 #else   /* DEBUG */
 
-#define USBHSFS_LOG_MSG(fmt, ...)                   do {} while(0)
-#define USBHSFS_LOG_DATA(data, data_size, fmt, ...) do {} while(0)
+#define USBHSFS_LOG_MSG(fmt, ...)                       do {} while(0)
+#define USBHSFS_LOG_DATA(data, data_size, fmt, ...)     do {} while(0)
+
+#define usbHsFsLogWriteStringToLogFile(...)             do {} while(0)
+#define usbHsFsLogWriteFormattedStringToLogFile(...)    do {} while(0)
+#define usbHsFsLogWriteBinaryDataToLogFile(...)         do {} while(0)
+#define usbHsFsLogFlushLogFile(...)                     do {} while(0)
+#define usbHsFsLogCloseLogFile(...)                     do {} while(0)
 
 #endif  /* DEBUG */
 

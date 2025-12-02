@@ -1,29 +1,68 @@
 /*
  * usbhsfs_utils.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
 #include "usbhsfs_utils.h"
 
+/* Type definitions. */
+
+/// Reference: https://github.com/Atmosphere-NX/Atmosphere/blob/master/libraries/libvapours/include/vapours/ams/ams_target_firmware.h.
+typedef struct {
+    union {
+        u32 value;
+        struct {
+            u32 relstep : 8;
+            u32 micro   : 8;
+            u32 minor   : 8;
+            u32 major   : 8;
+        };
+    };
+} UsbHsFsUtilsExosphereTargetFirmware;
+
+LIB_ASSERT(UsbHsFsUtilsExosphereTargetFirmware, 0x4);
+
+/// Reference: https://github.com/Atmosphere-NX/Atmosphere/blob/master/exosphere/program/source/smc/secmon_smc_info.cpp.
+typedef struct {
+    UsbHsFsUtilsExosphereTargetFirmware target_firmware;
+    u8 key_generation;
+    u8 ams_ver_micro;
+    u8 ams_ver_minor;
+    u8 ams_ver_major;
+} UsbHsFsUtilsExosphereApiVersion;
+
+LIB_ASSERT(UsbHsFsUtilsExosphereApiVersion, 0x8);
+
 /* Global variables. */
 
-static u32 g_atmosphereVersion = 0;
 static Mutex g_atmosphereVersionMutex = 0;
+static UsbHsFsUtilsExosphereApiVersion g_exosphereApiVersion = {0};
+static u32 g_atmosphereVersion = 0;
 
 /* Atmosphère-related constants. */
 
-static const u32 g_smAtmosphereHasService = 65100;
+/// Reference: https://github.com/Atmosphere-NX/Atmosphere/blob/master/exosphere/program/source/smc/secmon_smc_info.hpp.
 static const SplConfigItem SplConfigItem_ExosphereApiVersion = (SplConfigItem)65000;
+static const u32 g_smAtmosphereHasService = 65100;
 static const u32 g_atmosphereTipcVersion = MAKEHOSVERSION(0, 19, 0);
 
 /* Function prototypes. */
 
 static bool usbHsFsUtilsCheckRunningServiceByName(const char *name);
 static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name);
-static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out);
+static bool usbHsFsUtilsGetExosphereApiVersion(void);
+
+void *usbHsFsUtilsAlignedAlloc(size_t alignment, size_t size)
+{
+    if (!alignment || !IS_POWER_OF_TWO(alignment) || (alignment % sizeof(void*)) != 0 || !size) return NULL;
+
+    if (!IS_ALIGNED(size, alignment)) size = ALIGN_UP(size, alignment);
+
+    return aligned_alloc(alignment, size);
+}
 
 void usbHsFsUtilsTrimString(char *str)
 {
@@ -101,10 +140,18 @@ static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name)
     Result rc = 0;
 
     /* Get Exosphère API version. */
-    if (!g_atmosphereVersion)
+    if (!g_atmosphereVersion && usbHsFsUtilsGetExosphereApiVersion())
     {
-        rc = usbHsFsUtilsGetExosphereApiVersion(&g_atmosphereVersion);
-        if (R_FAILED(rc)) USBHSFS_LOG_MSG("usbHsFsUtilsGetExosphereApiVersion failed! (0x%X).", rc);
+        /* Generate Atmosphère version integer. */
+        g_atmosphereVersion = MAKEHOSVERSION(g_exosphereApiVersion.ams_ver_major, g_exosphereApiVersion.ams_ver_minor, g_exosphereApiVersion.ams_ver_micro);
+
+        USBHSFS_LOG_MSG("Exosphère API version info:\r\n" \
+                        "- Release version: %u.%u.%u.\r\n" \
+                        "- PKG1 key generation: %u (0x%02X).\r\n" \
+                        "- Target firmware: %u.%u.%u.", \
+                        g_exosphereApiVersion.ams_ver_major, g_exosphereApiVersion.ams_ver_minor, g_exosphereApiVersion.ams_ver_micro, \
+                        g_exosphereApiVersion.key_generation, !g_exosphereApiVersion.key_generation ? g_exosphereApiVersion.key_generation : (g_exosphereApiVersion.key_generation + 1), \
+                        g_exosphereApiVersion.target_firmware.major, g_exosphereApiVersion.target_firmware.minor, g_exosphereApiVersion.target_firmware.micro);
     }
 
     /* Check if service is running. */
@@ -122,35 +169,29 @@ static Result usbHsFsUtilsAtmosphereHasService(bool *out, SmServiceName name)
 }
 
 /* SMC config item available in Atmosphère and Atmosphère-based CFWs. */
-static Result usbHsFsUtilsGetExosphereApiVersion(u32 *out)
+static bool usbHsFsUtilsGetExosphereApiVersion(void)
 {
-    if (!out) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
-
     Result rc = 0;
-    u64 cfg = 0;
-    u32 version = 0;
 
     /* Initialize spl service. */
     rc = splInitialize();
     if (R_FAILED(rc))
     {
         USBHSFS_LOG_MSG("splInitialize failed! (0x%X).", rc);
-        return rc;
+        return false;
     }
 
     /* Get Exosphère API version config item. */
-    rc = splGetConfig(SplConfigItem_ExosphereApiVersion, &cfg);
+    rc = splGetConfig(SplConfigItem_ExosphereApiVersion, (u64*)&g_exosphereApiVersion);
 
     /* Close spl service. */
     splExit();
 
-    if (R_SUCCEEDED(rc))
+    if (R_FAILED(rc))
     {
-        *out = version = (u32)((cfg >> 40) & 0xFFFFFF);
-        USBHSFS_LOG_MSG("Exosphère API version: %u.%u.%u.", HOSVER_MAJOR(version), HOSVER_MINOR(version), HOSVER_MICRO(version));
-    } else {
         USBHSFS_LOG_MSG("splGetConfig failed! (0x%X).", rc);
+        return false;
     }
 
-    return rc;
+    return true;
 }

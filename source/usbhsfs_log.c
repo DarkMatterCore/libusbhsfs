@@ -1,7 +1,7 @@
 /*
  * usbhsfs_log.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -14,6 +14,9 @@
 #define LOG_BUF_SIZE    0x400000                /* 4 MiB. */
 #define LOG_FORCE_FLUSH 0                       /* Forces a log buffer flush each time the logfile is written to. */
 
+#define UTF8_BOM        "\xEF\xBB\xBF"
+#define CRLF            "\r\n"
+
 /* Global variables. */
 
 static Mutex g_logMutex = 0;
@@ -25,9 +28,6 @@ static s64 g_logFileOffset = 0;
 
 static char *g_logBuffer = NULL;
 static size_t g_logBufferLength = 0;
-
-static const char *g_utf8Bom = "\xEF\xBB\xBF";
-static const char *g_lineBreak = "\r\n";
 
 static const char *g_logStrFormat = "[%d-%02d-%02d %02d:%02d:%02d.%09lu] %s:%d:%s -> ";
 static const char *g_logSessionSeparator = "________________________________________________________________\r\n";
@@ -71,7 +71,7 @@ __attribute__((format(printf, 6, 7))) void usbHsFsLogWriteBinaryDataToLogFile(co
 
     /* Generate hex string representation. */
     usbHsFsLogGenerateHexStringFromData(data_str, data_str_size, data, data_size);
-    strcat(data_str, g_lineBreak);
+    strcat(data_str, CRLF);
 
     SCOPED_LOCK(&g_logMutex)
     {
@@ -219,7 +219,7 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int 
         /* Nice and easy string formatting using the log buffer. */
         sprintf(g_logBuffer + g_logBufferLength, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, file_name, line, func_name);
         vsprintf(g_logBuffer + g_logBufferLength + (size_t)str1_len, fmt, args);
-        strcat(g_logBuffer, g_lineBreak);
+        strcat(g_logBuffer, CRLF);
 
         /* Update log buffer length. */
         g_logBufferLength += log_str_len;
@@ -235,7 +235,7 @@ static void _usbHsFsLogWriteFormattedStringToLogFile(const char *file_name, int 
         /* Generate formatted string. */
         sprintf(tmp_str, g_logStrFormat, ts.tm_year, ts.tm_mon, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec, now.tv_nsec, file_name, line, func_name);
         vsprintf(tmp_str + (size_t)str1_len, fmt, args);
-        strcat(tmp_str, g_lineBreak);
+        strcat(tmp_str, CRLF);
 
         /* Write formatted string data until it no longer exceeds the log buffer size. */
         while(log_str_len >= LOG_BUF_SIZE)
@@ -283,7 +283,7 @@ static void _usbHsFsLogFlushLogFile(void)
 static bool usbHsFsLogAllocateLogBuffer(void)
 {
     if (g_logBuffer) return true;
-    g_logBuffer = memalign(LOG_BUF_SIZE, LOG_BUF_SIZE);
+    g_logBuffer = usbHsFsUtilsAlignedAlloc(LOG_BUF_SIZE, LOG_BUF_SIZE);
     return (g_logBuffer != NULL);
 }
 
@@ -294,7 +294,7 @@ static bool usbHsFsLogOpenLogFile(void)
     Result rc = 0;
 
     /* Get SD card FsFileSystem object. */
-    g_sdCardFileSystem = fsdevGetDeviceFileSystem("sdmc:");
+    g_sdCardFileSystem = fsdevGetDeviceFileSystem(DEVOPTAB_SDMC_DEVICE);
     if (!g_sdCardFileSystem) return false;
 
     /* Create file. This will fail if the logfile exists, so we don't check its return value. */
@@ -313,8 +313,8 @@ static bool usbHsFsLogOpenLogFile(void)
             if (!g_logFileOffset)
             {
                 /* Write UTF-8 BOM if the logfile is empty. */
-                len = strlen(g_utf8Bom);
-                rc = fsFileWrite(&g_logFile, g_logFileOffset, g_utf8Bom, len, FsWriteOption_Flush);
+                len = strlen(UTF8_BOM);
+                rc = fsFileWrite(&g_logFile, g_logFileOffset, UTF8_BOM, len, FsWriteOption_Flush);
             } else {
                 /* Write session separator if the logfile isn't empty. */
                 len = strlen(g_logSessionSeparator);

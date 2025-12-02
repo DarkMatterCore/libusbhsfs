@@ -1,14 +1,13 @@
 /*
  * ext_disk_io.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
-#include "ext.h"
-
 #include "../usbhsfs_scsi.h"
+#include "ext.h"
 
 /* Function prototypes. */
 
@@ -117,14 +116,14 @@ static int ext_blockdev_bread(struct ext4_blockdev *bdev, void *buf, uint64_t bl
 {
     /* Get LUN context and read sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)bdev->bdif->p_user;
-    return (usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buf, blk_id, blk_cnt) ? 0 : EIO);
+    return ((lun_ctx && usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buf, blk_id, blk_cnt)) ? 0 : EIO);
 }
 
 static int ext_blockdev_bwrite(struct ext4_blockdev *bdev, const void *buf, uint64_t blk_id, uint32_t blk_cnt)
 {
     /* Get LUN context and write sectors. */
     UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)bdev->bdif->p_user;
-    return (usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buf, blk_id, blk_cnt) ? 0 : EIO);
+    return ((lun_ctx && usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buf, blk_id, blk_cnt)) ? 0 : EIO);
 }
 
 static int ext_blockdev_close(struct ext4_blockdev *bdev)

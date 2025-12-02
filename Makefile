@@ -30,9 +30,10 @@ INCLUDES		:=	include
 ARCH		:=	-march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec
 
 CFLAGS		:=	-g -Wall -Wextra -Werror -Wno-implicit-fallthrough -Wno-unused-function -ffunction-sections -fdata-sections $(ARCH) $(BUILD_CFLAGS) $(INCLUDE)
-CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE="\"lib$(TARGET)\"" -fmacro-prefix-map=$(ROOTDIR)=
+CFLAGS		+=	-DBUILD_TIMESTAMP="\"$(BUILD_TIMESTAMP)\"" -DLIB_TITLE="\"lib$(TARGET)\"" -D_GNU_SOURCE -fmacro-prefix-map=$(ROOTDIR)=
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
+CFLAGS		+=	-std=c23
 
 ASFLAGS		:=	-g $(ARCH)
 

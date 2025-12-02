@@ -1,14 +1,13 @@
 /*
  * ext.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
+#include "../usbhsfs_drive_datatypes.h"
 #include "ext.h"
-
-#include "../usbhsfs_drive.h"
 
 #define EXT2_FINCOM_SUPPORTED   (EXT4_FINCOM_FILETYPE | EXT4_FINCOM_META_BG)
 #define EXT2_FINCOM_UNSUPPORTED ~EXT2_FINCOM_SUPPORTED
@@ -92,7 +91,7 @@ bool ext_mount(ext_vd *vd)
     ext_get_version(vd);
 
     /* Update return value. */
-    ret = true;
+    vd->mounted = ret = true;
 
 end:
     if (!ret)
@@ -107,7 +106,7 @@ end:
 
 void ext_umount(ext_vd *vd)
 {
-    if (!vd || !vd->bdev || !vd->bdev->bdif || !vd->bdev->bdif->ph_bbuf || !vd->dev_name[0]) return;
+    if (!vd || !vd->bdev || !vd->bdev->bdif || !vd->bdev->bdif->ph_bbuf || !vd->dev_name[0] || !vd->mounted) return;
 
     char mount_point[CONFIG_EXT4_MAX_MP_NAME + 3] = {0};
     int res = 0;

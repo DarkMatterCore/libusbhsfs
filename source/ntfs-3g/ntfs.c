@@ -1,7 +1,7 @@
 /*
  * ntfs.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -11,26 +11,14 @@
 
 #include "ntfs.h"
 
-/* Type definitions. */
-
-/// NTFS path.
-typedef struct _ntfs_path {
-    const char *path;           ///< Volume path (e.g. '/foo/bar/file.txt').
-    const char *dir;            ///< Directory path (e.g. '/foo/bar').
-    const char *name;           ///< Filename (e.g. 'file.txt').
-    char buf[MAX_PATH_LENGTH];  ///< Internal buffer containing the path string.
-} ntfs_path;
-
 /* Function prototypes. */
 
 static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *path, int reparse_depth);
 
-static void ntfs_split_path(const char *path, ntfs_path *p);
-
 #ifdef DEBUG
 int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u32 level, void *data, const char *format, va_list args)
 {
-	(void)data;
+	NX_IGNORE_ARG(data);
 
     int ret = 0;
     size_t formatted_str_len = 0;
@@ -69,36 +57,25 @@ ntfs_inode *ntfs_inode_open_from_path(ntfs_vd *vd, const char *path)
     return ntfs_inode_open_from_path_reparse(vd, path, 1);
 }
 
-ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const char *target)
+ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const ntfs_path *path, mode_t type, const char *target)
 {
-    ntfs_path full_path = {0};
     ntfs_inode *dir_ni = NULL, *ni = NULL;
     ntfschar *uname = NULL, *utarget = NULL;
     int uname_len = 0, utarget_len = 0;
 
     /* Safety check. */
-    if (!vd || !vd->vol || !path || !*path || (type == S_IFLNK && (!target || !*target)))
-    {
-        errno = EINVAL;
-        goto end;
-    }
-
-    /* Split entry path. */
-    ntfs_split_path(path, &full_path);
-
-    /* Make sure we have a valid entry name to work with. */
-    if (full_path.name[0] == '\0')
+    if (!vd || !vd->vol || !path || !path->dir || !path->name || (type == S_IFLNK && (!target || !*target)))
     {
         errno = EINVAL;
         goto end;
     }
 
     /* Open the parent directory the desired entry will be created in. */
-    dir_ni = ntfs_inode_open_from_path(vd, full_path.dir);
+    dir_ni = ntfs_inode_open_from_path(vd, path->dir);
     if (!dir_ni) goto end;
 
     /* Convert the entry name string from our current locale (UTF-8) into UTF-16LE. */
-    uname_len = ntfs_mbstoucs(full_path.name, &uname);
+    uname_len = ntfs_mbstoucs(path->name, &uname);
     if (uname_len <= 0)
     {
         errno = EINVAL;
@@ -110,7 +87,7 @@ ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const 
     {
         case S_IFDIR:   /* Directory. */
         case S_IFREG:   /* File. */
-            USBHSFS_LOG_MSG("Creating inode in directory \"%s\" named \"%s\".", full_path.dir, full_path.name);
+            USBHSFS_LOG_MSG("Creating inode \"%s\" in directory \"%s\".", path->name, path->dir);
             ni = ntfs_create(dir_ni, 0, uname, uname_len, type);
             break;
         case S_IFLNK:   /* Symbolic link. */
@@ -122,13 +99,15 @@ ntfs_inode *ntfs_inode_create(ntfs_vd *vd, const char *path, mode_t type, const 
                 goto end;
             }
 
-            USBHSFS_LOG_MSG("Creating symlink in directory \"%s\" named \"%s\" targetting \"%s\".", full_path.dir, full_path.name, target);
+            USBHSFS_LOG_MSG("Creating symlink in directory \"%s\" named \"%s\" targetting \"%s\".", path->dir, path->name, target);
             ni = ntfs_create_symlink(dir_ni, 0, uname, uname_len, utarget, utarget_len);
             break;
         default:        /* Invalid entry. */
             errno = EINVAL;
             break;
     }
+
+    if (!ni) USBHSFS_LOG_MSG("NTFS inode creation failed for \"%s\" (%d).", path->path, errno);
 
 end:
     if (utarget) free(utarget);
@@ -140,50 +119,40 @@ end:
     return ni;
 }
 
-int ntfs_inode_link(ntfs_vd *vd, const char *old_path, const char *new_path)
+int ntfs_inode_link(ntfs_vd *vd, const ntfs_path *old_path, const ntfs_path *new_path)
 {
-    ntfs_path full_old_path = {0}, full_new_path = {0};
     ntfs_inode *ni = NULL, *dir_ni = NULL;
     ntfschar *uname = NULL;
     int ret = -1, uname_len = 0;
 
     /* Safety check. */
-    if (!vd || !vd->vol || !old_path || !*old_path || !new_path || !*new_path)
-    {
-        errno = EINVAL;
-        goto end;
-    }
-
-    /* Split entry paths. */
-    ntfs_split_path(old_path, &full_old_path);
-    ntfs_split_path(new_path, &full_new_path);
-
-    /* Make sure we have valid old and new entry names to work with. */
-    if (full_old_path.name[0] == '\0' || full_new_path.name[0] == '\0')
+    if (!vd || !vd->vol || !old_path || !old_path->path || !new_path || !new_path->dir || !new_path->name)
     {
         errno = EINVAL;
         goto end;
     }
 
     /* Open the entry we will create a symlink for. */
-    ni = ntfs_inode_open_from_path(vd, full_old_path.path);
+    ni = ntfs_inode_open_from_path(vd, old_path->path);
     if (!ni) goto end;
 
     /* Open new parent directory. */
-    dir_ni = ntfs_inode_open_from_path(vd, full_new_path.dir);
+    dir_ni = ntfs_inode_open_from_path(vd, new_path->dir);
     if (!dir_ni) goto end;
 
     /* Convert the entry name string from our current locale (UTF-8) into UTF-16LE. */
-    uname_len = ntfs_mbstoucs(full_new_path.name, &uname);
+    uname_len = ntfs_mbstoucs(new_path->name, &uname);
     if (uname_len <= 0)
     {
         errno = EINVAL;
         goto end;
     }
 
+    USBHSFS_LOG_MSG("Linking inode \"%s\" to \"%s\".", old_path->path, new_path->path);
+
     /* Link the entry to its new parent directory. */
-    USBHSFS_LOG_MSG("Linking inode \"%s\" to \"%s\".", full_old_path.path, full_new_path.path);
     ret = ntfs_link(ni, dir_ni, uname, uname_len);
+    if (ret) USBHSFS_LOG_MSG("Failed to create NTFS inode link for \"%s\" (ret %d, errno %d).", new_path->path, ret, errno);
 
 end:
     if (uname) free(uname);
@@ -195,52 +164,42 @@ end:
     return ret;
 }
 
-int ntfs_inode_unlink(ntfs_vd *vd, const char *path)
+int ntfs_inode_unlink(ntfs_vd *vd, const ntfs_path *path)
 {
-    ntfs_path full_path = {0};
     ntfs_inode *ni = NULL, *dir_ni = NULL;
     ntfschar *uname = NULL;
     int ret = -1, uname_len = 0;
 
     /* Safety check. */
-    if (!vd || !vd->vol || !path || !*path)
-    {
-        errno = EINVAL;
-        goto end;
-    }
-
-    /* Split entry path. */
-    ntfs_split_path(path, &full_path);
-
-    /* Make sure we have a valid entry name to work with. */
-    if (full_path.name[0] == '\0')
+    if (!vd || !vd->vol || !path || !path->path || !path->dir || !path->name)
     {
         errno = EINVAL;
         goto end;
     }
 
     /* Open entry. */
-    ni = ntfs_inode_open_from_path(vd, full_path.path);
+    ni = ntfs_inode_open_from_path(vd, path->path);
     if (!ni) goto end;
 
     /* Open parent directory. */
-    dir_ni = ntfs_inode_open_from_path(vd, full_path.dir);
+    dir_ni = ntfs_inode_open_from_path(vd, path->dir);
     if (!dir_ni) goto end;
 
     /* Convert the entry name string from our current locale (UTF-8) into UTF-16LE. */
-    uname_len = ntfs_mbstoucs(full_path.name, &uname);
+    uname_len = ntfs_mbstoucs(path->name, &uname);
     if (uname_len <= 0)
     {
         errno = EINVAL;
         goto end;
     }
 
-    USBHSFS_LOG_MSG("Unlinking inode \"%s\" from \"%s\".", full_path.name, full_path.dir);
+    USBHSFS_LOG_MSG("Unlinking inode \"%s\" from \"%s\".", path->name, path->dir);
 
     /* Unlink entry from its parent. */
-    /* 'ni' and 'dir_ni' are always closed by ntfs_delete(), even if it fails. */
-    ret = ntfs_delete(vd->vol, full_path.path, ni, dir_ni, uname, uname_len);
+    ret = ntfs_delete(vd->vol, path->path, ni, dir_ni, uname, uname_len);
+    if (ret) USBHSFS_LOG_MSG("Failed to unlink NTFS inode \"%s\" (ret %d, errno %d).", path->path, ret, errno);
 
+    /* 'ni' and 'dir_ni' are always closed by ntfs_delete(), even if it fails. */
     ni = NULL;
     dir_ni = NULL;
 
@@ -272,7 +231,6 @@ void ntfs_inode_update_times_filtered(ntfs_vd *vd, ntfs_inode *ni, ntfs_time_upd
 static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *path, int reparse_depth)
 {
     ntfs_inode *ni = NULL;
-    char *target = NULL;
 
     /* Safety check. */
     if (!vd || !vd->vol || !path || !*path || reparse_depth <= 0 || reparse_depth > NTFS_MAX_SYMLINK_DEPTH)
@@ -298,7 +256,7 @@ static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *pa
     if ((ni->flags & FILE_ATTR_REPARSE_POINT) && ntfs_possible_symlink(ni))
     {
         /* Get the target path of this entry. */
-        target = ntfs_make_symlink(ni, path);
+        char *target = ntfs_make_symlink(ni, path);
         if (!target) goto end;
 
         /* Close this entry (we are no longer interested in it). */
@@ -314,32 +272,4 @@ static ntfs_inode *ntfs_inode_open_from_path_reparse(ntfs_vd *vd, const char *pa
 
 end:
     return ni;
-}
-
-/* This function doesn't perform checks on the provided path because it is guaranteed to be valid. */
-/* Check ntfsdev_fixpath(). */
-static void ntfs_split_path(const char *path, ntfs_path *p)
-{
-    USBHSFS_LOG_MSG("Input path: \"%s\".", path);
-
-    /* Setup NTFS path. */
-    memset(p, 0, sizeof(ntfs_path));
-    p->path = path;
-
-    /* Copy the path to internal buffer so we can modify it. */
-    strcpy(p->buf, p->path);
-
-    /* Split the path into separate directory and filename parts. */
-    /* e.g. "/dir/file.txt" => dir: "/dir", name: "file.txt". */
-    char *buf_sep = strrchr(p->buf, PATH_SEP);
-
-    /* If there's just a single path separator at the start of the string, set the directory string to a path separator. */
-    /* Otherwise, just use the directory string as-is. */
-    p->dir = (buf_sep == p->buf ? "/" : p->buf);
-
-    /* Remove the path separator we found and update the entry name pointer. */
-    *buf_sep = '\0';
-    p->name = (buf_sep + 1);
-
-    USBHSFS_LOG_MSG("Output strings -> Path: \"%s\" | Directory: \"%s\" | Name: \"%s\".", p->path, p->dir, p->name);
 }

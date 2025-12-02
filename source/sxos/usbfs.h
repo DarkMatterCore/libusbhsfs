@@ -1,7 +1,7 @@
 /*
  * usbfs.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Blake Warner.
  * Copyright (c) 2018, Team Xecuter.
  *
@@ -31,13 +31,11 @@
 #ifndef __USBFS_H__
 #define __USBFS_H__
 
-#include <switch.h>
-
-#define USBFS_MOUNT_NAME        "usbhdd"
-
-#define USBFS_UNMOUNTED         0
-#define USBFS_MOUNTED           1
-#define USBFS_UNSUPPORTED_FS    2
+typedef enum {
+    UsbFsMountStatus_Unmounted             = 0,
+    UsbFsMountStatus_Mounted               = 1,
+    UsbFsMountStatus_UnsupportedFileSystem = 2
+} UsbFsMountStatus;
 
 Result usbFsInitialize(void);
 void usbFsExit(void);

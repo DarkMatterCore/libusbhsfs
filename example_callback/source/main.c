@@ -16,7 +16,10 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
 {
     if (!device) return;
 
-    char path[FS_MAX_PATH] = {0}, tmp[0x40] = {0}, new_path[FS_MAX_PATH] = {0}, *ptr = NULL;
+    bool is_fat = (device->fs_type > UsbHsFsDeviceFileSystemType_Invalid && device->fs_type < UsbHsFsDeviceFileSystemType_NTFS);
+
+    char *path = calloc(LIBUSBHSFS_MAX_PATH, sizeof(char)), *new_path = calloc(LIBUSBHSFS_MAX_PATH, sizeof(char));
+    char tmp[0x40] = {0}, *ptr = NULL;
     const char *test_str = "Hello world!";
     size_t test_str_len = strlen(test_str);
 
@@ -33,7 +36,9 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
     int ret = -1, val = 0;
 
     u8 *buf = NULL;
-    size_t blksize = 0x800000;
+    size_t blksize = 0x100000;
+
+    if (!path || !new_path) goto end;
 
     sprintf(path, "%s/test_dir", device->name);
 
@@ -82,7 +87,7 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
     {
         if (fgets(tmp, test_str_len + 1, fd) != NULL)
         {
-            printf("OK! (\"%s\").\n", tmp);
+            printf("OK! (\"%s\") (%d).\n", tmp, errno);
         } else {
             printf("FAILED! (%d).\n", errno);
         }
@@ -100,7 +105,23 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
 
     if (!stat(path, &st))
     {
-        printf("OK!\n\t\t\t- ID: %i.\n\t\t\t- Type: %s.\n\t\t\t- Size: %lu.\n\t\t\t- Timestamp: %lu.\n", st.st_ino, st.st_mode & S_IFREG ? "file" : "dir", st.st_size, st.st_mtime);
+        bool is_dir = (st.st_mode & S_IFREG);
+
+        printf("OK!\n");
+
+        if (is_fat)
+        {
+            printf("\t\t\t- FAT/DOS element attributes: 0x%X.\n", (u8)st.st_spare4[0]);
+        } else
+        if (device->fs_type == UsbHsFsDeviceFileSystemType_NTFS)
+        {
+            printf("\t\t\t- NTFS element attributes: 0x%X.\n", (u32)st.st_spare4[0]);
+        }
+
+        printf("\t\t\t- POSIX element attributes: 0x%X.\n\t\t\t- ID: %i.\n\t\t\t- Type: %s.\n\t\t\t- Last access timestamp: %lu.\n\t\t\t- Last modification timestamp: %lu.\n\t\t\t- Creation timestamp: %lu.\n", \
+               st.st_mode, st.st_ino, is_dir ? "file" : "dir", st.st_atime, st.st_mtime, st.st_ctime);
+
+        if (!is_dir) printf("\t\t\t- File size: %lu.\n", st.st_size);
     } else {
         printf("FAILED! (%d).\n", errno);
     }
@@ -255,6 +276,11 @@ static void usbMscFileSystemTest(UsbHsFsDevice *device)
 
     printf("\n");
     consoleUpdate(NULL);
+
+end:
+    if (new_path) free(new_path);
+
+    if (path) free(path);
 }
 
 static void usbMscPopulateFunc(const UsbHsFsDevice *devices, u32 device_count, void *user_data)

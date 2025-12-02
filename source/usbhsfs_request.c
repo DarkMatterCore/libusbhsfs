@@ -1,7 +1,7 @@
 /*
  * usbhsfs_request.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -15,7 +15,7 @@ static Result __usbHsEpSubmitRequest(UsbHsClientEpSession *usb_ep_session, void 
 
 void *usbHsFsRequestAllocateXferBuffer(void)
 {
-    return memalign(USB_XFER_BUF_ALIGNMENT, USB_XFER_BUF_SIZE);
+    return usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, USB_XFER_BUF_SIZE);
 }
 
 /* Reference: https://www.usb.org/sites/default/files/usbmassbulk_10.pdf (page 7). */
@@ -36,7 +36,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
     if_num = usb_if_session->inf.inf.interface_desc.bInterfaceNumber;
 
     /* Allocate memory for the control transfer. */
-    max_lun = memalign(USB_XFER_BUF_ALIGNMENT, len);
+    max_lun = usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, len);
     if (!max_lun)
     {
         USBHSFS_LOG_MSG("Failed to allocate memory! (interface %d).", usb_if_session->ID);
@@ -60,6 +60,7 @@ Result usbHsFsRequestGetMaxLogicalUnits(UsbHsClientIfSession *usb_if_session, u8
         goto end;
     }
 
+    /* Update output. */
     *out = (*max_lun + 1);
     if (*out > UMS_MAX_LUN) *out = 1;
 
@@ -112,7 +113,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
     }
 
     /* Allocate memory for the minimal configuration descriptor. */
-    config_desc = memalign(USB_XFER_BUF_ALIGNMENT, len);
+    config_desc = usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, len);
     if (!config_desc)
     {
         USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the minimal configuration descriptor! (interface %d, index %u).", len, usb_if_session->ID, idx);
@@ -148,7 +149,7 @@ Result usbHsFsRequestGetConfigurationDescriptor(UsbHsClientIfSession *usb_if_ses
 
     /* Allocate memory for the full configuration descriptor. */
     /* An extra byte is allocated for parsing purposes. It won't be reflected in the returned size. */
-    buf = memalign(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength + 1);
+    buf = usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, config_desc->wTotalLength + 1);
     if (!buf)
     {
         USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the full configuration descriptor! (interface %d, index %u).", config_desc->wTotalLength + 1, usb_if_session->ID, idx);
@@ -214,7 +215,7 @@ Result usbHsFsRequestGetStringDescriptor(UsbHsClientIfSession *usb_if_session, u
     }
 
     /* Allocate memory for the string descriptor. */
-    string_desc = memalign(USB_XFER_BUF_ALIGNMENT, len);
+    string_desc = usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, len);
     if (!string_desc)
     {
         USBHSFS_LOG_MSG("Failed to allocate 0x%X bytes for the string descriptor! (interface %d, language ID 0x%04X, index 0x%02X).", len, usb_if_session->ID, lang_id, idx);
@@ -289,7 +290,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
     ep_addr = usb_ep_session->desc.bEndpointAddress;
 
     /* Allocate memory for the control transfer. */
-    status = memalign(USB_XFER_BUF_ALIGNMENT, len);
+    status = usbHsFsUtilsAlignedAlloc(USB_XFER_BUF_ALIGNMENT, len);
     if (!status)
     {
         USBHSFS_LOG_MSG("Failed to allocate memory! (interface %d, endpoint 0x%02X).", usb_if_session->ID, ep_addr);
@@ -313,6 +314,7 @@ Result usbHsFsRequestGetEndpointStatus(UsbHsClientIfSession *usb_if_session, Usb
         goto end;
     }
 
+    /* Update output. */
     *out = (*status != 0);
 
 end:

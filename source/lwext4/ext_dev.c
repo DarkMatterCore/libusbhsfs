@@ -1,7 +1,7 @@
 /*
  * ext_dev.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  *
@@ -14,36 +14,13 @@
 #include "../usbhsfs_manager.h"
 #include "../usbhsfs_mount.h"
 
+#include "ext.h"
+
 /* Helper macros. */
 
-#define ext_end                     goto end
-#define ext_ended_with_error        (_errno != 0)
-#define ext_set_error(x)            r->_errno = _errno = (x)
-#define ext_set_error_and_exit(x)   \
-do { \
-    ext_set_error((x)); \
-    ext_end; \
-} while(0)
-
-#define ext_declare_error_state     int _errno = 0
-#define ext_declare_file_state      ext4_file *file = (ext4_file*)fd
-#define ext_declare_dir_state       ext4_dir *dir = (ext4_dir*)dirState->dirStruct
-#define ext_declare_fs_ctx          UsbHsFsDriveLogicalUnitFileSystemContext *fs_ctx = (UsbHsFsDriveLogicalUnitFileSystemContext*)r->deviceData
-#define ext_declare_lun_ctx         UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)fs_ctx->lun_ctx
-#define ext_declare_drive_ctx       UsbHsFsDriveContext *drive_ctx = (UsbHsFsDriveContext*)lun_ctx->drive_ctx
-#define ext_declare_vol_state       ext_vd *vd = fs_ctx->ext
-
-#define ext_lock_drive_ctx          ext_declare_fs_ctx; \
-                                    ext_declare_lun_ctx; \
-                                    ext_declare_drive_ctx; \
-                                    bool drive_ctx_valid = usbHsFsManagerIsDriveContextPointerValid(drive_ctx); \
-                                    if (!drive_ctx_valid) ext_set_error_and_exit(ENODEV)
-
-#define ext_unlock_drive_ctx        if (drive_ctx_valid) mutexUnlock(&(drive_ctx->mutex))
-
-#define ext_return(x)               return (ext_ended_with_error ? -1 : (x))
-#define ext_return_ptr(x)           return (ext_ended_with_error ? NULL : (x))
-#define ext_return_bool             return (ext_ended_with_error ? false : true)
+#define EXTDEV_INIT_FILE_VARS  DEVOPTAB_INIT_FILE_VARS(ext4_file)
+#define EXTDEV_INIT_DIR_VARS   DEVOPTAB_INIT_DIR_VARS(ext4_dir)
+#define EXTDEV_INIT_FS_ACCESS  DEVOPTAB_DECL_FS_CTX(ext_vd)
 
 /* Function prototypes. */
 
@@ -68,10 +45,13 @@ static int       extdev_ftruncate(struct _reent *r, void *fd, off_t len);
 static int       extdev_fsync(struct _reent *r, void *fd);
 static int       extdev_chmod(struct _reent *r, const char *path, mode_t mode);
 static int       extdev_fchmod(struct _reent *r, void *fd, mode_t mode);
-static int       extdev_rmdir(struct _reent *r, const char *name);
 static int       extdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2]);
+static long      extdev_fpathconf(struct _reent *r, void *fd, int name);
+static long      extdev_pathconf(struct _reent *r, const char *path, int name);
+static int       extdev_symlink(struct _reent *r, const char *target, const char *linkpath);
+static ssize_t   extdev_readlink(struct _reent *r, const char *path, char *buf, size_t bufsiz);
 
-static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath);
+static const char *extdev_get_fixed_path(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext *lun_fs_ctx);
 
 static void extdev_fill_stat(const struct ext4_inode *inode, u32 st_dev, u32 st_ino, u32 st_blksize, struct stat *st);
 
@@ -107,9 +87,13 @@ static const devoptab_t extdev_devoptab = {
     .deviceData   = NULL,
     .chmod_r      = extdev_chmod,
     .fchmod_r     = extdev_fchmod,
-    .rmdir_r      = extdev_rmdir,
+    .rmdir_r      = extdev_unlink,      ///< Exactly the same as unlink.
     .lstat_r      = extdev_stat,        ///< We'll just alias lstat() to stat().
-    .utimes_r     = extdev_utimes
+    .utimes_r     = extdev_utimes,
+    .fpathconf_r  = extdev_fpathconf,   ///< Not implemented.
+    .pathconf_r   = extdev_pathconf,    ///< Not implemented.
+    .symlink_r    = extdev_symlink,     ///< Not implemented.
+    .readlink_r   = extdev_readlink     ///< Not implemented.
 };
 
 const devoptab_t *extdev_get_devoptab()
@@ -123,53 +107,43 @@ static int extdev_open(struct _reent *r, void *fd, const char *path, int flags, 
 
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_FILE_VARS;
 
-    /* Sanity check. */
-    if (!file) ext_set_error_and_exit(EINVAL);
+    /* Get fixed path. */
+    if (!(path = extdev_get_fixed_path(r, path, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
-
-    USBHSFS_LOG_MSG("Opening file \"%s\" (\"%s\") with flags 0x%X.", path, __usbhsfs_dev_path_buf, flags);
+    USBHSFS_LOG_MSG("Opening file \"%s\" with flags 0x%X.", path, flags);
 
     /* Reset file descriptor. */
     memset(file, 0, sizeof(ext4_file));
 
     /* Open file. */
-    ret = ext4_fopen2(file, __usbhsfs_dev_path_buf, flags);
-    if (ret) ext_set_error(ret);
+    ret = ext4_fopen2(file, path, flags);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_close(struct _reent *r, void *fd)
 {
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
-
-    /* Sanity check. */
-    if (!file) ext_set_error_and_exit(EINVAL);
+    EXTDEV_INIT_FILE_VARS;
 
     USBHSFS_LOG_MSG("Closing file %u.", file->inode);
 
     /* Close file. */
     ret = ext4_fclose(file);
-    if (ret) ext_set_error_and_exit(ret);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Reset file descriptor. */
     memset(file, 0, sizeof(ext4_file));
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static ssize_t extdev_write(struct _reent *r, void *fd, const char *ptr, size_t len)
@@ -177,30 +151,28 @@ static ssize_t extdev_write(struct _reent *r, void *fd, const char *ptr, size_t 
     size_t bw = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_FILE_VARS;
 
     /* Sanity check. */
-    if (!file || !ptr || !len) ext_set_error_and_exit(EINVAL);
+    if (!ptr || !len) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     /* Check if the append flag is enabled. */
     if ((file->flags & O_APPEND) && ext4_ftell(file) != ext4_fsize(file))
     {
         /* Seek to EOF. */
         ret = ext4_fseek(file, 0, SEEK_END);
-        if (ret) ext_set_error_and_exit(ret);
+        if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
     }
 
     USBHSFS_LOG_MSG("Writing 0x%lX byte(s) to file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
 
     /* Write file data. */
     ret = ext4_fwrite(file, ptr, len, &bw);
-    if (ret) ext_set_error(ret);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return((ssize_t)bw);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT((ssize_t)bw);
 }
 
 static ssize_t extdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
@@ -208,22 +180,20 @@ static ssize_t extdev_read(struct _reent *r, void *fd, char *ptr, size_t len)
     size_t br = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_FILE_VARS;
 
     /* Sanity check. */
-    if (!file || !ptr || !len) ext_set_error_and_exit(EINVAL);
+    if (!ptr || !len) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     USBHSFS_LOG_MSG("Reading 0x%lX byte(s) from file %u at offset 0x%lX.", len, file->inode, ext4_ftell(file));
 
     /* Read file data. */
     ret = ext4_fread(file, ptr, len, &br);
-    if (ret) ext_set_error(ret);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return((ssize_t)br);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT((ssize_t)br);
 }
 
 static off_t extdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
@@ -231,25 +201,20 @@ static off_t extdev_seek(struct _reent *r, void *fd, off_t pos, int dir)
     off_t offset = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_FILE_VARS;
 
-    /* Sanity check. */
-    if (!file) ext_set_error_and_exit(EINVAL);
-
-    USBHSFS_LOG_MSG("Seeking 0x%lX byte(s) from current position in file %u.", pos, file->inode);
+    USBHSFS_LOG_MSG("Seeking 0x%lX byte(s) from position %d in file %u.", pos, dir, file->inode);
 
     /* Perform file seek. */
     ret = ext4_fseek(file, (s64)pos, (u32)dir);
-    if (ret) ext_set_error_and_exit(ret);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Update current offset. */
     offset = (off_t)ext4_ftell(file);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(offset);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(offset);
 }
 
 static int extdev_fstat(struct _reent *r, void *fd, struct stat *st)
@@ -257,28 +222,26 @@ static int extdev_fstat(struct _reent *r, void *fd, struct stat *st)
     struct ext4_inode_ref inode_ref = {0};
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
-    ext_declare_vol_state;
+    EXTDEV_INIT_FILE_VARS;
+    EXTDEV_INIT_FS_ACCESS;
 
     /* Sanity check. */
-    if (!file || !st) ext_set_error_and_exit(EINVAL);
+    if (!st) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     /* Get inode reference. */
-    ret = ext4_fs_get_inode_ref(vd->bdev->fs, file->inode, &inode_ref);
-    if (ret) ext_set_error_and_exit(ret);
+    ret = ext4_fs_get_inode_ref(fs_ctx->bdev->fs, file->inode, &inode_ref);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Fill stat info. */
-    extdev_fill_stat(inode_ref.inode, fs_ctx->device_id, file->inode, vd->bdev->lg_bsize, st);
+    extdev_fill_stat(inode_ref.inode, lun_fs_ctx->device_id, file->inode, fs_ctx->bdev->lg_bsize, st);
 
     /* Put back inode reference. */
     ret = ext4_fs_put_inode_ref(&inode_ref);
-    if (ret) ext_set_error(ret);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_stat(struct _reent *r, const char *file, struct stat *st)
@@ -287,72 +250,75 @@ static int extdev_stat(struct _reent *r, const char *file, struct stat *st)
     struct ext4_inode inode = {0};
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
-    ext_declare_vol_state;
+    DEVOPTAB_INIT_VARS;
+    EXTDEV_INIT_FS_ACCESS;
 
     /* Sanity check. */
-    if (!st) ext_set_error_and_exit(EINVAL);
+    if (!st) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, file, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(file = extdev_get_fixed_path(r, file, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Getting stats for \"%s\" (\"%s\").", file, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Getting stats for \"%s\".", file);
 
     /* Get inode. */
-    ret = ext4_raw_inode_fill(__usbhsfs_dev_path_buf, &inode_num, &inode);
-    if (ret) ext_set_error_and_exit(ret);
+    ret = ext4_raw_inode_fill(file, &inode_num, &inode);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Fill stat info. */
-    extdev_fill_stat(&inode, fs_ctx->device_id, inode_num, vd->bdev->lg_bsize, st);
+    extdev_fill_stat(&inode, lun_fs_ctx->device_id, inode_num, fs_ctx->bdev->lg_bsize, st);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_link(struct _reent *r, const char *existing, const char *newLink)
 {
-    char existing_path[MAX_PATH_LENGTH] = {0};
-    char *new_path = __usbhsfs_dev_path_buf;
+    char *existing_path = NULL;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input paths. */
-    if (!extdev_fixpath(r, existing, &fs_ctx, existing_path) || !extdev_fixpath(r, newLink, &fs_ctx, new_path)) ext_end;
+    /* Get fixed paths. */
+    /* A copy of the first fixed path is required here because a pointer to a thread-local buffer is always returned by this function. */
+    if (!(existing = extdev_get_fixed_path(r, existing, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Linking \"%s\" (\"%s\") to \"%s\" (\"%s\").", existing, existing_path, newLink, new_path);
+    if (!(existing_path = strdup(existing))) DEVOPTAB_SET_ERROR_AND_EXIT(ENOMEM);
+
+    if (!(newLink = extdev_get_fixed_path(r, newLink, lun_fs_ctx))) DEVOPTAB_EXIT;
+
+    USBHSFS_LOG_MSG("Linking \"%s\" to \"%s\".", existing_path, newLink);
 
     /* Create hard link. */
-    ret = ext4_flink(existing_path, new_path);
-    if (ret) ext_set_error(ret);
+    ret = ext4_flink(existing_path, newLink);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    if (existing_path) free(existing_path);
+
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_unlink(struct _reent *r, const char *name)
 {
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, name, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(name = extdev_get_fixed_path(r, name, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Deleting \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Deleting \"%s\".", name);
 
     /* Delete file. */
-    ret = ext4_fremove(__usbhsfs_dev_path_buf);
-    if (ret) ext_set_error(ret);
+    ret = ext4_fremove(name);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_chdir(struct _reent *r, const char *name)
@@ -361,60 +327,64 @@ static int extdev_chdir(struct _reent *r, const char *name)
     size_t cwd_len = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, name, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(name = extdev_get_fixed_path(r, name, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Changing current directory to \"%s\" (\"%s\").", name, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Changing current directory to \"%s\".", name);
 
     /* Open directory. */
-    ret = ext4_dir_open(&dir, __usbhsfs_dev_path_buf);
-    if (ret) ext_set_error_and_exit(ret);
+    ret = ext4_dir_open(&dir, name);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Close directory. */
     ext4_dir_close(&dir);
 
     /* Update current working directory. */
-    sprintf(fs_ctx->cwd, "%s", strchr(__usbhsfs_dev_path_buf + 1, '/'));
+    snprintf(lun_fs_ctx->cwd, LIBUSBHSFS_MAX_PATH, "%s", strchr(name + 1, '/'));
 
-    cwd_len = strlen(fs_ctx->cwd);
-    if (fs_ctx->cwd[cwd_len - 1] != '/')
+    cwd_len = strlen(lun_fs_ctx->cwd);
+    if (lun_fs_ctx->cwd[cwd_len - 1] != '/')
     {
-        fs_ctx->cwd[cwd_len] = '/';
-        fs_ctx->cwd[cwd_len + 1] = '\0';
+        lun_fs_ctx->cwd[cwd_len] = '/';
+        lun_fs_ctx->cwd[cwd_len + 1] = '\0';
     }
 
     /* Set default devoptab device. */
-    usbHsFsMountSetDefaultDevoptabDevice(fs_ctx);
+    usbHsFsMountSetDefaultDevoptabDevice(lun_fs_ctx);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_rename(struct _reent *r, const char *oldName, const char *newName)
 {
-    char old_path[MAX_PATH_LENGTH] = {0};
-    char *new_path = __usbhsfs_dev_path_buf;
+    char *old_path = NULL;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input paths. */
-    if (!extdev_fixpath(r, oldName, &fs_ctx, old_path) || !extdev_fixpath(r, newName, &fs_ctx, new_path)) ext_end;
+    /* Get fixed paths. */
+    /* A copy of the first fixed path is required here because a pointer to a thread-local buffer is always returned by this function. */
+    if (!(oldName = extdev_get_fixed_path(r, oldName, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Renaming \"%s\" (\"%s\") to \"%s\" (\"%s\").", oldName, old_path, newName, new_path);
+    if (!(old_path = strdup(oldName))) DEVOPTAB_SET_ERROR_AND_EXIT(ENOMEM);
+
+    if (!(newName = extdev_get_fixed_path(r, newName, lun_fs_ctx))) DEVOPTAB_EXIT;
+
+    USBHSFS_LOG_MSG("Renaming \"%s\" to \"%s\".", old_path, newName);
 
     /* Rename entry. */
-    ret = ext4_frename(old_path, new_path);
-    if (ret) ext_set_error(ret);
+    ret = ext4_frename(old_path, newName);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    if (old_path) free(old_path);
+
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_mkdir(struct _reent *r, const char *path, int mode)
@@ -423,21 +393,20 @@ static int extdev_mkdir(struct _reent *r, const char *path, int mode)
 
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(path = extdev_get_fixed_path(r, path, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Creating directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Creating directory \"%s\".", path);
 
     /* Create directory. */
-    ret = ext4_dir_mk(__usbhsfs_dev_path_buf);
-    if (ret) ext_set_error(ret);
+    ret = ext4_dir_mk(path);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static DIR_ITER *extdev_diropen(struct _reent *r, DIR_ITER *dirState, const char *path)
@@ -445,43 +414,31 @@ static DIR_ITER *extdev_diropen(struct _reent *r, DIR_ITER *dirState, const char
     int res = -1;
     DIR_ITER *ret = NULL;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_DIR_VARS;
 
-    /* Sanity check. */
-    if (!dirState) ext_set_error_and_exit(EINVAL);
+    /* Get fixed path. */
+    if (!(path = extdev_get_fixed_path(r, path, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    ext_declare_dir_state;
-
-    /* Fix input path. */
-    if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
-
-    USBHSFS_LOG_MSG("Opening directory \"%s\" (\"%s\").", path, __usbhsfs_dev_path_buf);
+    USBHSFS_LOG_MSG("Opening directory \"%s\".", path);
 
     /* Reset directory state. */
     memset(dir, 0, sizeof(ext4_dir));
 
     /* Open directory. */
-    res = ext4_dir_open(dir, __usbhsfs_dev_path_buf);
-    if (res) ext_set_error_and_exit(res);
+    res = ext4_dir_open(dir, path);
+    if (res) DEVOPTAB_SET_ERROR_AND_EXIT(res);
 
     /* Update return value. */
     ret = dirState;
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return_ptr(ret);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_PTR(ret);
 }
 
 static int extdev_dirreset(struct _reent *r, DIR_ITER *dirState)
 {
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
-
-    /* Sanity check. */
-    if (!dirState) ext_set_error_and_exit(EINVAL);
-
-    ext_declare_dir_state;
+    EXTDEV_INIT_DIR_VARS;
 
     USBHSFS_LOG_MSG("Resetting state from directory %u.", dir->f.inode);
 
@@ -489,8 +446,8 @@ static int extdev_dirreset(struct _reent *r, DIR_ITER *dirState)
     ext4_dir_entry_rewind(dir);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat)
@@ -499,14 +456,11 @@ static int extdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
     struct ext4_inode_ref inode_ref = {0};
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
-    ext_declare_vol_state;
+    EXTDEV_INIT_DIR_VARS;
+    EXTDEV_INIT_FS_ACCESS;
 
     /* Sanity check. */
-    if (!dirState || !filename || !filestat) ext_set_error_and_exit(EINVAL);
-
-    ext_declare_dir_state;
+    if (!filename || !filestat) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     USBHSFS_LOG_MSG("Getting info from next entry in directory %u.", dir->f.inode);
 
@@ -516,61 +470,55 @@ static int extdev_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, 
         entry = ext4_dir_entry_next(dir);
         if (!entry) break;
 
-        /* Filter entry types. */
+        /* Filter unsupported entry types. */
         if (entry->inode_type != EXT4_DE_REG_FILE && entry->inode_type != EXT4_DE_DIR && entry->inode_type != EXT4_DE_SYMLINK) continue;
 
         /* Filter dot directory entries. */
-        if (entry->inode_type == EXT4_DE_DIR && (!strcmp((char*)entry->name, ".") || !strcmp((char*)entry->name, ".."))) continue;
+        //if (entry->inode_type == EXT4_DE_DIR && (!strcmp((char*)entry->name, ".") || !strcmp((char*)entry->name, ".."))) continue;
 
         /* Jackpot. */
         break;
     }
 
-    if (!entry) ext_set_error_and_exit(ENOENT); /* ENOENT signals EOD. */
+    if (!entry) DEVOPTAB_SET_ERROR_AND_EXIT(ENOENT); /* ENOENT signals EOD. */
 
     /* Get inode reference. */
-    ret = ext4_fs_get_inode_ref(vd->bdev->fs, entry->inode, &inode_ref);
-    if (ret) ext_set_error_and_exit(ret);
+    ret = ext4_fs_get_inode_ref(fs_ctx->bdev->fs, entry->inode, &inode_ref);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
+
+    /* Copy filename. */
+    sprintf(filename, "%.*s", (int)entry->name_length, (char*)entry->name);
 
     /* Fill stat info. */
-    extdev_fill_stat(inode_ref.inode, fs_ctx->device_id, entry->inode, vd->bdev->lg_bsize, filestat);
+    extdev_fill_stat(inode_ref.inode, lun_fs_ctx->device_id, entry->inode, fs_ctx->bdev->lg_bsize, filestat);
 
     /* Put back inode reference. */
     ret = ext4_fs_put_inode_ref(&inode_ref);
-    if (ret) ext_set_error_and_exit(ret);
-
-    /* Copy filename. */
-    strcpy(filename, (char*)entry->name);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_dirclose(struct _reent *r, DIR_ITER *dirState)
 {
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
-
-    /* Sanity check. */
-    if (!dirState) ext_set_error_and_exit(EINVAL);
-
-    ext_declare_dir_state;
+    EXTDEV_INIT_DIR_VARS;
 
     USBHSFS_LOG_MSG("Closing directory %u.", dir->f.inode);
 
     /* Close directory. */
     ret = ext4_dir_close(dir);
-    if (ret) ext_set_error_and_exit(ret);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Reset directory state. */
     memset(dir, 0, sizeof(ext4_dir));
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_statvfs(struct _reent *r, const char *path, struct statvfs *buf)
@@ -581,21 +529,20 @@ static int extdev_statvfs(struct _reent *r, const char *path, struct statvfs *bu
     struct ext4_mount_stats mount_stats = {0};
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
-    ext_declare_vol_state;
+    DEVOPTAB_INIT_VARS;
+    EXTDEV_INIT_FS_ACCESS;
 
     /* Sanity check. */
-    if (!buf) ext_set_error_and_exit(EINVAL);
+    if (!buf) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     /* Generate lwext4 mount point. */
-    sprintf(mount_point, "/%s/", vd->dev_name);
+    sprintf(mount_point, "/%s/", fs_ctx->dev_name);
 
     USBHSFS_LOG_MSG("Getting filesystem stats for \"%s\" (\"%s\").", path, mount_point);
 
     /* Get volume information. */
     ret = ext4_mount_point_stats(mount_point, &mount_stats);
-    if (ret) ext_set_error_and_exit(ret);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Fill filesystem stats. */
     memset(buf, 0, sizeof(struct statvfs));
@@ -608,65 +555,61 @@ static int extdev_statvfs(struct _reent *r, const char *path, struct statvfs *bu
     buf->f_files = mount_stats.inodes_count;
     buf->f_ffree = mount_stats.free_inodes_count;
     buf->f_favail = mount_stats.free_inodes_count;
-    buf->f_fsid = fs_ctx->device_id;
-    buf->f_flag = ST_NOSUID;
+    buf->f_fsid = lun_fs_ctx->device_id;
+    buf->f_flag = (ST_NOSUID | (((fs_ctx->flags & UsbHsFsMountFlags_ReadOnly) || lun_ctx->write_protect) ? ST_RDONLY : 0));
     buf->f_namemax = EXT4_DIRECTORY_FILENAME_LEN;
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_ftruncate(struct _reent *r, void *fd, off_t len)
 {
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
+    EXTDEV_INIT_FILE_VARS;
 
     /* Sanity check. */
-    if (!file || len < 0) ext_set_error_and_exit(EINVAL);
+    if (len < 0) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     USBHSFS_LOG_MSG("Truncating file %u to 0x%lX bytes.", file->inode, len);
 
     /* Truncate file. */
     ret = ext4_ftruncate(file, (u64)len);
-    if (ret) ext_set_error(ret);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_fsync(struct _reent *r, void *fd)
 {
+    NX_IGNORE_ARG(r);
     NX_IGNORE_ARG(fd);
 
-    /* Not supported by lwext4. */
-    r->_errno = ENOSYS;
-    return -1;
+    DEVOPTAB_RETURN_UNSUPPORTED_OP;
 }
 
 static int extdev_chmod(struct _reent *r, const char *path, mode_t mode)
 {
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, path, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(path = extdev_get_fixed_path(r, path, lun_fs_ctx))) DEVOPTAB_EXIT;
 
-    USBHSFS_LOG_MSG("Changing permissions for \"%s\" (\"%s\") to %o.", path, __usbhsfs_dev_path_buf, mode);
+    USBHSFS_LOG_MSG("Changing permissions for \"%s\" to %o.", path, mode);
 
     /* Change permissions. */
-    ret = ext4_mode_set(__usbhsfs_dev_path_buf, (u32)mode);
-    if (ret) ext_set_error(ret);
+    ret = ext4_mode_set(path, (u32)mode);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_fchmod(struct _reent *r, void *fd, mode_t mode)
@@ -677,27 +620,22 @@ static int extdev_fchmod(struct _reent *r, void *fd, mode_t mode)
     u32 orig_mode = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_declare_file_state;
-    ext_lock_drive_ctx;
-    ext_declare_vol_state;
+    EXTDEV_INIT_FILE_VARS;
+    EXTDEV_INIT_FS_ACCESS;
 
-    ext_fs = vd->bdev->fs;
-    sblock = &(vd->bdev->fs->sb);
-
-    /* Sanity check. */
-    if (!file) ext_set_error_and_exit(EINVAL);
+    ext_fs = fs_ctx->bdev->fs;
+    sblock = &(fs_ctx->bdev->fs->sb);
 
     /* Start journal transfer. */
     ret = ext_trans_start(ext_fs);
-    if (ret) ext_set_error_and_exit(ret);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Get inode reference. */
     ret = ext4_fs_get_inode_ref(ext_fs, file->inode, &inode_ref);
     if (ret)
     {
         ext_trans_abort(ext_fs);
-        ext_set_error_and_exit(ret);
+        DEVOPTAB_SET_ERROR_AND_EXIT(ret);
     }
 
     USBHSFS_LOG_MSG("Changing permissions for file %u to %o.", file->inode, mode);
@@ -705,7 +643,7 @@ static int extdev_fchmod(struct _reent *r, void *fd, mode_t mode)
     /* Change permissions. */
 	orig_mode = ext4_inode_get_mode(sblock, inode_ref.inode);
 	orig_mode &= ~0xFFF;
-	orig_mode |= ((u32)mode & 0xFFF);
+	orig_mode |= (mode & 0xFFF);
 	ext4_inode_set_mode(sblock, inode_ref.inode, orig_mode);
     inode_ref.dirty = true;
 
@@ -714,84 +652,122 @@ static int extdev_fchmod(struct _reent *r, void *fd, mode_t mode)
     if (ret)
     {
         ext_trans_abort(ext_fs);
-        ext_set_error_and_exit(ret);
+        DEVOPTAB_SET_ERROR_AND_EXIT(ret);
     }
 
     /* Stop journal transfer. */
     ret = ext_trans_stop(ext_fs);
-    if (ret) ext_set_error(ret);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
-}
-
-static int extdev_rmdir(struct _reent *r, const char *name)
-{
-    /* Exactly the same as extdev_unlink(). */
-    return extdev_unlink(r, name);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int extdev_utimes(struct _reent *r, const char *filename, const struct timeval times[2])
 {
-    struct timespec ts_times[2] = {0};
+    time_t atime = 0, mtime = 0;
     int ret = -1;
 
-    ext_declare_error_state;
-    ext_lock_drive_ctx;
+    DEVOPTAB_INIT_VARS;
 
-    /* Fix input path. */
-    if (!extdev_fixpath(r, filename, &fs_ctx, NULL)) ext_end;
+    /* Get fixed path. */
+    if (!(filename = extdev_get_fixed_path(r, filename, lun_fs_ctx))) DEVOPTAB_EXIT;
 
     /* Check if we should use the current time. */
     if (!times)
     {
         /* Get current time. */
-        clock_gettime(CLOCK_REALTIME, &(ts_times[0]));
-        memcpy(&(ts_times[1]), &(ts_times[0]), sizeof(struct timespec));
+        atime = mtime = time(NULL);
     } else {
-        /* Convert provided timeval values to timespec values. */
-        TIMEVAL_TO_TIMESPEC(&(times[0]), &(ts_times[0]));
-        TIMEVAL_TO_TIMESPEC(&(times[1]), &(ts_times[1]));
+        /* Only use full second precision from the provided timeval values. */
+        atime = times[0].tv_sec;
+        mtime = times[1].tv_sec;
     }
 
-    USBHSFS_LOG_MSG("Setting last access and modification times for \"%s\" (\"%s\") to 0x%lX and 0x%lX, respectively.", filename, __usbhsfs_dev_path_buf, ts_times[0].tv_sec, ts_times[1].tv_sec);
+    USBHSFS_LOG_MSG("Setting last access and modification times for \"%s\" to 0x%lX and 0x%lX, respectively.", filename, atime, mtime);
 
     /* Set access time. */
-    ret = ext4_atime_set(__usbhsfs_dev_path_buf, (u32)ts_times[0].tv_sec);
-    if (ret) ext_set_error_and_exit(ret);
+    ret = ext4_atime_set(filename, (u32)atime);
+    if (ret) DEVOPTAB_SET_ERROR_AND_EXIT(ret);
 
     /* Set modification time. */
-    ret = ext4_mtime_set(__usbhsfs_dev_path_buf, (u32)ts_times[1].tv_sec);
-    if (ret) ext_set_error(ret);
+    ret = ext4_mtime_set(filename, (u32)mtime);
+    if (ret) DEVOPTAB_SET_ERROR(ret);
 
 end:
-    ext_unlock_drive_ctx;
-    ext_return(0);
+    DEVOPTAB_DEINIT_VARS;
+    DEVOPTAB_RETURN_INT(0);
 }
 
-static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext **fs_ctx, char *outpath)
+static long extdev_fpathconf(struct _reent *r, void *fd, int name)
 {
-    ext_vd *vd = NULL;
+    NX_IGNORE_ARG(r);
+    NX_IGNORE_ARG(fd);
+    NX_IGNORE_ARG(name);
+
+    DEVOPTAB_RETURN_UNSUPPORTED_OP;
+}
+
+static long extdev_pathconf(struct _reent *r, const char *path, int name)
+{
+    NX_IGNORE_ARG(r);
+    NX_IGNORE_ARG(path);
+    NX_IGNORE_ARG(name);
+
+    DEVOPTAB_RETURN_UNSUPPORTED_OP;
+}
+
+static int extdev_symlink(struct _reent *r, const char *target, const char *linkpath)
+{
+    NX_IGNORE_ARG(r);
+    NX_IGNORE_ARG(target);
+    NX_IGNORE_ARG(linkpath);
+
+    DEVOPTAB_RETURN_UNSUPPORTED_OP;
+}
+
+static ssize_t extdev_readlink(struct _reent *r, const char *path, char *buf, size_t bufsiz)
+{
+    NX_IGNORE_ARG(r);
+    NX_IGNORE_ARG(path);
+    NX_IGNORE_ARG(buf);
+    NX_IGNORE_ARG(bufsiz);
+
+    DEVOPTAB_RETURN_UNSUPPORTED_OP;
+}
+
+static const char *extdev_get_fixed_path(struct _reent *r, const char *path, UsbHsFsDriveLogicalUnitFileSystemContext *lun_fs_ctx)
+{
+    DEVOPTAB_INIT_ERROR_STATE;
+
     const u8 *p = (const u8*)path;
     ssize_t units = 0;
     u32 code = 0;
+
     size_t len = 0;
-    char mount_point[CONFIG_EXT4_MAX_MP_NAME + 3] = {0}, *outptr = (outpath ? outpath : __usbhsfs_dev_path_buf), *cwd = NULL;
+    const char *cwd = NULL;
 
-    ext_declare_error_state;
+    char mount_point[CONFIG_EXT4_MAX_MP_NAME + 3] = {0};
 
-    if (!r || !path || !*path || !fs_ctx || !*fs_ctx || !(vd = (*fs_ctx)->ext) || !(cwd = (*fs_ctx)->cwd)) ext_set_error_and_exit(EINVAL);
+    char *out = __usbhsfs_dev_path_buf;
+    const size_t out_sz = MAX_ELEMENTS(__usbhsfs_dev_path_buf);
+
+    if (!r || !path || !*path || !lun_fs_ctx) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
+
+    EXTDEV_INIT_FS_ACCESS;
+
+    if (!(cwd = lun_fs_ctx->cwd) || !fs_ctx) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
     USBHSFS_LOG_MSG("Input path: \"%s\".", path);
 
     /* Generate lwext4 mount point. */
-    sprintf(mount_point, "/%s", vd->dev_name);
+    sprintf(mount_point, "/%s", fs_ctx->dev_name);
 
     /* Move the path pointer to the start of the actual path. */
     do {
         units = decode_utf8(&code, p);
-        if (units < 0) ext_set_error_and_exit(EILSEQ);
+        if (units < 0) DEVOPTAB_SET_ERROR_AND_EXIT(EILSEQ);
         p += units;
     } while(code >= ' ' && code != ':');
 
@@ -800,32 +776,37 @@ static bool extdev_fixpath(struct _reent *r, const char *path, UsbHsFsDriveLogic
 
     /* Make sure there are no more colons and that the remainder of the string is valid UTF-8. */
     p = (const u8*)path;
+    len = strlen(mount_point);
 
     do {
         units = decode_utf8(&code, p);
-        if (units < 0) ext_set_error_and_exit(EILSEQ);
-        if (code == ':') ext_set_error_and_exit(EINVAL);
+
+        if (units < 0) DEVOPTAB_SET_ERROR_AND_EXIT(EILSEQ);
+        if (code == ':') DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
+
         p += units;
+        len += (size_t)units;
     } while(code >= ' ');
 
     /* Verify fixed path length. */
-    len = (strlen(mount_point) + strlen(path));
-    if (path[0] != '/') len += strlen(cwd);
-
-    if (len >= MAX_PATH_LENGTH) ext_set_error_and_exit(ENAMETOOLONG);
+    if (*path != '/') len += strlen(cwd);
+    if (len >= out_sz) DEVOPTAB_SET_ERROR_AND_EXIT(ENAMETOOLONG);
 
     /* Generate fixed path. */
-    if (path[0] == '/')
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    if (*path == '/')
     {
-        sprintf(outptr, "%s%s", mount_point, path);
+        snprintf(out, out_sz, "%s%s", mount_point, path);
     } else {
-        sprintf(outptr, "%s%s%s", mount_point, cwd, path);
+        snprintf(out, out_sz, "%s%s%s", mount_point, cwd, path);
     }
+#pragma GCC diagnostic pop
 
-    USBHSFS_LOG_MSG("Fixed path: \"%s\".", outptr);
+    USBHSFS_LOG_MSG("Fixed path: \"%s\".", out);
 
 end:
-    ext_return_bool;
+    DEVOPTAB_RETURN_PTR(out);
 }
 
 static void extdev_fill_stat(const struct ext4_inode *inode, u32 st_dev, u32 st_ino, u32 st_blksize, struct stat *st)

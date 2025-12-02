@@ -1,7 +1,7 @@
 /*
  * ntfs_disk_io.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -14,17 +14,19 @@
 #ifndef __NTFS_DISK_IO_H__
 #define __NTFS_DISK_IO_H__
 
+#include "../usbhsfs_drive_datatypes.h"
+
 /// NTFS device descriptor.
 typedef struct _ntfs_dd {
-    void *lun_ctx;          ///< Logical unit context.
-    NTFS_BOOT_SECTOR vbr;   ///< Volume Boot Record (VBR) data. This is the first sector of the filesystem.
-    u64 sector_start;       ///< LBA of partition start.
-    u64 sector_offset;      ///< LBA offset to true partition start (as described by boot sector).
-    u16 sector_size;        ///< Device sector size (in bytes).
-    u64 sector_count;       ///< Total number of sectors in partition.
-    u64 pos;                ///< Current position within the partition (in bytes).
-    u64 len;                ///< Total length of partition (in bytes).
-    ino_t ino;              ///< Device identifier (serial number).
+    UsbHsFsDriveLogicalUnitContext *lun_ctx;    ///< Logical unit context.
+    NTFS_BOOT_SECTOR vbr;                       ///< Volume Boot Record (VBR) data. This is the first sector of the filesystem.
+    u64 sector_start;                           ///< LBA of partition start.
+    u64 sector_offset;                          ///< LBA offset to true partition start (as described by boot sector).
+    u16 sector_size;                            ///< Device sector size (in bytes).
+    u64 sector_count;                           ///< Total number of sectors in partition.
+    u64 pos;                                    ///< Current position within the partition (in bytes).
+    u64 len;                                    ///< Total length of partition (in bytes).
+    ino_t ino;                                  ///< Device identifier (serial number).
 } ntfs_dd;
 
 /// Returns a pointer to the generic ntfs_device_operations object.

@@ -1,7 +1,7 @@
 /*
  * ext.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
@@ -18,8 +18,6 @@
 #include <ext4_inode.h>
 #include <ext4_journal.h>
 
-#include "../usbhsfs_utils.h"
-
 #include "ext_disk_io.h"
 
 /// EXT volume descriptor.
@@ -33,6 +31,7 @@ typedef struct _ext_vd {
     u16 fmask;                              ///< Unix style permission mask for file creation.
     u16 dmask;                              ///< Unix style permission mask for directory creation.
     u8 version;                             ///< UsbHsFsDeviceFileSystemType_EXT* value to identify the EXT version.
+    bool mounted;                           ///< Set to true if this volume descriptor has been successfully mounted.
 } ext_vd;
 
 /// Mounts an EXT volume using the provided volume descriptor.

@@ -1,7 +1,7 @@
 /*
  * usbfs_dev.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2018, Team Xecuter.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -25,10 +25,14 @@
  * SOFTWARE.
  */
 
+#pragma once
+
 #ifndef __USBFS_DEV_H__
 #define __USBFS_DEV_H__
 
 #include "usbfs.h"
+
+#define USBFS_MOUNT_NAME    "usbhdd"
 
 /// Register "usbhdd" devoptab device.
 bool usbfsdev_register(void);

@@ -1,7 +1,7 @@
 /*
  * usbhsfs_scsi.h
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, XorTroll.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -12,7 +12,7 @@
 #ifndef __USBHSFS_SCSI_H__
 #define __USBHSFS_SCSI_H__
 
-#include "usbhsfs_manager.h"
+#include "usbhsfs_drive_datatypes.h"
 
 /// None of these functions are thread safe - make sure to (un)lock mutexes elsewhere.
 

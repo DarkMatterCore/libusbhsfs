@@ -2,7 +2,7 @@
  * service_guard.h
  *
  * Copyright (c) 2018-2021, Switchbrew and libnx contributors.
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */

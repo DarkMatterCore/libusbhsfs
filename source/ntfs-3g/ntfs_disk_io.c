@@ -1,7 +1,7 @@
 /*
  * ntfs_disk_io.c
  *
- * Copyright (c) 2020-2023, DarkMatterCore <pabloacurielz@gmail.com>.
+ * Copyright (c) 2020-2025, DarkMatterCore <pabloacurielz@gmail.com>.
  * Copyright (c) 2020-2021, Rhys Koedijk.
  *
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
@@ -15,6 +15,7 @@
 #include "ntfs.h"
 
 #include "../usbhsfs_scsi.h"
+#include "ntfs.h"
 
 /* Function prototypes. */
 
@@ -341,7 +342,7 @@ static s64 ntfs_io_device_writebytes(struct ntfs_device *dev, s64 offset, s64 co
         }
 
         /* Read the first and last sectors of the buffer from the device (if required). */
-        /* This is done thwn the data doesn't line up with sector boundaries, so we just in the buffer edges where the data overlaps. */
+        /* This is done to preserve the already available data on the device that potentially overlaps with our buffer. */
         if (buffer_offset != 0 && !ntfs_io_device_readsectors(dev, sec_start, 1, buffer))
         {
             USBHSFS_LOG_MSG("Failed to read sector 0x%lX from device %p (first).", sec_start, dev);
@@ -384,22 +385,20 @@ static bool ntfs_io_device_readsectors(struct ntfs_device *dev, u64 start, u32 c
 {
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
-    if (!dd) return false;
+    if (!dd || !dd->lun_ctx) return false;
 
-    /* Get LUN context and read sectors. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    return usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, buf, start, count);
+    /* Read sectors. */
+    return usbHsFsScsiReadLogicalUnitBlocks(dd->lun_ctx, buf, start, count);
 }
 
 static bool ntfs_io_device_writesectors(struct ntfs_device *dev, u64 start, u32 count, const void *buf)
 {
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
-    if (!dd) return false;
+    if (!dd || !dd->lun_ctx) return false;
 
-    /* Get LUN context and write sectors. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    return usbHsFsScsiWriteLogicalUnitBlocks(lun_ctx, buf, start, count);
+    /* Write sectors. */
+    return usbHsFsScsiWriteLogicalUnitBlocks(dd->lun_ctx, buf, start, count);
 }
 
 static int ntfs_io_device_sync(struct ntfs_device *dev)
@@ -436,15 +435,7 @@ static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
 
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
-    if (!dd)
-    {
-        errno = EBADF;
-        goto end;
-    }
-
-    /* Get LUN context. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    if (!lun_ctx)
+    if (!dd || !dd->lun_ctx)
     {
         errno = EBADF;
         goto end;
@@ -457,10 +448,10 @@ static int ntfs_io_device_stat(struct ntfs_device *dev, struct stat *buf)
     memset(buf, 0, sizeof(struct stat));
 
     /* Fill device stats. */
-    buf->st_dev = lun_ctx->usb_if_id;
+    buf->st_dev = dd->lun_ctx->usb_if_id;
     buf->st_ino = dd->ino;
     buf->st_mode = mode;
-    buf->st_rdev = lun_ctx->usb_if_id;
+    buf->st_rdev = dd->lun_ctx->usb_if_id;
     buf->st_size = ((u64)dd->sector_size * dd->sector_count);
     buf->st_blksize = dd->sector_size;
     buf->st_blocks = dd->sector_count;
@@ -482,15 +473,7 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
 
     /* Get device descriptor. */
     ntfs_dd *dd = (ntfs_dd*)dev->d_private;
-    if (!dd)
-    {
-        errno = EBADF;
-        goto end;
-    }
-
-    /* Get LUN context. */
-    UsbHsFsDriveLogicalUnitContext *lun_ctx = (UsbHsFsDriveLogicalUnitContext*)dd->lun_ctx;
-    if (!lun_ctx)
+    if (!dd || !dd->lun_ctx)
     {
         errno = EBADF;
         goto end;
@@ -501,13 +484,13 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
     {
 #ifdef BLKGETSIZE64
         case BLKGETSIZE64:  /* Get block device size (bytes). */
-            *(u64*)argp = lun_ctx->capacity;
+            *((u64*)argp) = dd->lun_ctx->capacity;
             ret = 0;
             break;
 #endif
 #ifdef BLKGETSIZE
         case BLKGETSIZE:    /* Get block device size (sectors). */
-            *(u32*)argp = (u32)lun_ctx->block_count;
+            *((u32*)argp) = (u32)dd->lun_ctx->block_count;
             ret = 0;
             break;
 #endif
@@ -526,13 +509,13 @@ static int ntfs_io_device_ioctl(struct ntfs_device *dev, unsigned long request, 
 #endif
 #ifdef BLKSSZGET
         case BLKSSZGET:     /* Get block device sector size. */
-            *(int*)argp = (int)lun_ctx->block_length;
+            *((int*)argp) = (int)dd->lun_ctx->block_length;
             ret = 0;
             break;
 #endif
 #ifdef BLKBSZSET
         case BLKBSZSET:     /* Set block device sector size. */
-            dd->sector_size = *(int*)argp;
+            dd->sector_size = *((int*)argp);
             ret = 0;
             break;
 #endif

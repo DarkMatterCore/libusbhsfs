@@ -4,7 +4,7 @@
 /  Configurations of FatFs Module
 /---------------------------------------------------------------------------*/
 
-#define FFCONF_DEF	80286	/* Revision ID */
+#define FFCONF_DEF	80386	/* Revision ID */
 
 /*---------------------------------------------------------------------------/
 / Function Configurations
@@ -26,41 +26,41 @@
 
 
 #define FF_USE_FASTSEEK	0
-/* This option switches fast seek function. (0:Disable or 1:Enable) */
+/* This option switches fast seek feature. (0:Disable or 1:Enable) */
 
 
 #define FF_USE_EXPAND	0
-/* This option switches ff_expand function. (0:Disable or 1:Enable) */
+/* This option switches ff_expand(). (0:Disable or 1:Enable) */
 
 
 #define FF_USE_CHMOD	1
-/* This option switches attribute manipulation functions, ff_chmod() and ff_utime().
+/* This option switches attribute control API functions, ff_chmod() and ff_utime().
 /  (0:Disable or 1:Enable) */
 
 
 #define FF_USE_LABEL	0
-/* This option switches volume label functions, ff_getlabel() and ff_setlabel().
+/* This option switches volume label API functions, ff_getlabel() and ff_setlabel().
 /  (0:Disable or 1:Enable) */
 
 
 #define FF_USE_FORWARD	0
-/* This option switches ff_forward() function. (0:Disable or 1:Enable) */
+/* This option switches ff_forward(). (0:Disable or 1:Enable) */
 
 
 #define FF_USE_STRFUNC	0
 #define FF_PRINT_LLI	0
 #define FF_PRINT_FLOAT	0
 #define FF_STRF_ENCODE	3
-/* FF_USE_STRFUNC switches string functions, ff_gets(), ff_putc(), ff_puts() and
-/  ff_printf().
+/* FF_USE_STRFUNC switches the string API functions, ff_gets(), ff_putc(), ff_puts()
+/  and ff_printf().
 /
 /   0: Disable. FF_PRINT_LLI, FF_PRINT_FLOAT and FF_STRF_ENCODE have no effect.
-/   1: Enable without LF-CRLF conversion.
-/   2: Enable with LF-CRLF conversion.
+/   1: Enable without LF - CRLF conversion.
+/   2: Enable with LF - CRLF conversion.
 /
 /  FF_PRINT_LLI = 1 makes ff_printf() support long long argument and FF_PRINT_FLOAT = 1/2
 /  makes ff_printf() support floating point argument. These features want C99 or later.
-/  When FF_LFN_UNICODE >= 1 with LFN enabled, string functions convert the character
+/  When FF_LFN_UNICODE >= 1 with LFN enabled, string API functions convert the character
 /  encoding in it. FF_STRF_ENCODE selects assumption of character encoding ON THE FILE
 /  to be read/written via those functions.
 /
@@ -109,15 +109,15 @@
 /* The FF_USE_LFN switches the support for LFN (long file name).
 /
 /   0: Disable LFN. FF_MAX_LFN has no effect.
-/   1: Enable LFN with static  working buffer on the BSS. Always NOT thread-safe.
+/   1: Enable LFN with static working buffer on the BSS. Always NOT thread-safe.
 /   2: Enable LFN with dynamic working buffer on the STACK.
 /   3: Enable LFN with dynamic working buffer on the HEAP.
 /
-/  To enable the LFN, ffunicode.c needs to be added to the project. The LFN function
+/  To enable the LFN, ffunicode.c needs to be added to the project. The LFN feature
 /  requiers certain internal working buffer occupies (FF_MAX_LFN + 1) * 2 bytes and
 /  additional (FF_MAX_LFN + 44) / 15 * 32 bytes when exFAT is enabled.
 /  The FF_MAX_LFN defines size of the working buffer in UTF-16 code unit and it can
-/  be in range of 12 to 255. It is recommended to be set it 255 to fully support LFN
+/  be in range of 12 to 255. It is recommended to be set 255 to fully support the LFN
 /  specification.
 /  When use stack for the working buffer, take care on stack overflow. When use heap
 /  memory for the working buffer, memory management functions, ff_memalloc() and
@@ -148,17 +148,13 @@
 / Drive/Volume Configurations
 /---------------------------------------------------------------------------*/
 
-#define FF_VOLUMES		64
-/* Number of volumes (logical drives) to be used. (1-100) */
-
-
 #define FF_MIN_SS		BLKDEV_MIN_BLOCK_SIZE
 #define FF_MAX_SS		BLKDEV_MAX_BLOCK_SIZE
 /* This set of options configures the range of sector size to be supported. (512,
 /  1024, 2048 or 4096) Always set both 512 for most systems, generic memory card and
 /  harddisk, but a larger value may be required for on-board flash memory and some
-/  type of optical media. When FF_MAX_SS is larger than FF_MIN_SS, FatFs is configured
-/  for variable sector size mode and ff_disk_ioctl() function needs to implement
+/  type of optical media. When FF_MAX_SS is larger than FF_MIN_SS, FatFs is
+/  configured for variable sector size mode and ff_disk_ioctl() needs to implement
 /  GET_SECTOR_SIZE command. */
 
 
@@ -169,8 +165,8 @@
 
 #define FF_USE_TRIM		0
 /* This option switches support for ATA-TRIM. (0:Disable or 1:Enable)
-/  To enable Trim function, also CTRL_TRIM command should be implemented to the
-/  ff_disk_ioctl() function. */
+/  To enable this feature, also CTRL_TRIM command should be implemented to
+/  the ff_disk_ioctl(). */
 
 
 
@@ -180,7 +176,7 @@
 
 #define FF_FS_TINY		0
 /* This option switches tiny buffer configuration. (0:Normal or 1:Tiny)
-/  At the tiny configuration, size of file object (FIL) is shrinked FF_MAX_SS bytes.
+/  At the tiny configuration, size of file object (FFFIL) is reduced FF_MAX_SS bytes.
 /  Instead of private sector buffer eliminated from the file object, common sector
 /  buffer in the filesystem object (FATFS) is used for the file data transfer. */
 
@@ -194,19 +190,24 @@
 #define FF_FS_NORTC		0
 #define FF_NORTC_MON	1
 #define FF_NORTC_MDAY	1
-#define FF_NORTC_YEAR	2023
+#define FF_NORTC_YEAR	2025
 /* The option FF_FS_NORTC switches timestamp feature. If the system does not have
 /  an RTC or valid timestamp is not needed, set FF_FS_NORTC = 1 to disable the
 /  timestamp feature. Every object modified by FatFs will have a fixed timestamp
 /  defined by FF_NORTC_MON, FF_NORTC_MDAY and FF_NORTC_YEAR in local time.
-/  To enable timestamp function (FF_FS_NORTC = 0), get_fattime() function need to be
-/  added to the project to read current time form real-time clock. FF_NORTC_MON,
+/  To enable timestamp function (FF_FS_NORTC = 0), get_fattime() need to be added
+/  to the project to read current time form real-time clock. FF_NORTC_MON,
 /  FF_NORTC_MDAY and FF_NORTC_YEAR have no effect. */
 
 
+#define FF_FS_CRTIME	1
+/* This option enables(1)/disables(0) the timestamp of the file created. When
+/  set 1, the file created time is available in FILINFO structure. */
+
+
 #define FF_FS_NOFSINFO	0
-/* If you need to know correct free space on the FAT32 volume, set bit 0 of this
-/  option, and ff_getfree() function at the first time after volume mount will force
+/* If you need to know the correct free space on the FAT32 volume, set bit 0 of
+/  this option, and ff_getfree() on the first time after volume mount will force
 /  a full FAT scan. Bit 1 controls the use of last allocated cluster number.
 /
 /  bit0=0: Use free cluster count in the FSINFO if available.
@@ -216,7 +217,7 @@
 */
 
 
-#define FF_FS_LOCK		64
+#define FF_FS_LOCK		1024
 /* The option FF_FS_LOCK switches file lock function to control duplicated file open
 /  and illegal operation to open objects.
 /
@@ -231,16 +232,33 @@
 #define FF_FS_TIMEOUT	1000
 /* The option FF_FS_REENTRANT switches the re-entrancy (thread safe) of the FatFs
 /  module itself. Note that regardless of this option, file access to different
-/  volume is always re-entrant and volume control functions, ff_mount(),
-/  are always not re-entrant. Only file/directory access to the same volume is
-/  under control of this featuer.
+/  volume is always re-entrant and volume control functions and ff_mount()
+/  are always not re-entrant. Only file/directory access to
+/  the same volume is under control of this featuer.
 /
 /   0: Disable re-entrancy. FF_FS_TIMEOUT have no effect.
 /   1: Enable re-entrancy. Also user provided synchronization handlers,
-/      ff_mutex_create(), ff_mutex_delete(), ff_mutex_take() and ff_mutex_give()
-/      function, must be added to the project. Samples are available in ffsystem.c.
+/      ff_mutex_create(), ff_mutex_delete(), ff_mutex_take() and ff_mutex_give(),
+/      must be added to the project. Samples are available in ffsystem.c.
 /
 /  The FF_FS_TIMEOUT defines timeout period in unit of O/S time tick.
+*/
+
+
+
+/*---------------------------------------------------------------------------/
+/ wf-fatfs Fork Configurations (Optimizations)
+/---------------------------------------------------------------------------*/
+
+#define FF_WF_FAST_CONTIGUOUS_READ	1
+#define FF_WF_FAST_CONTIGUOUS_WRITE	1
+/* FF_WF_FAST_CONTIGUOUS_* controls whether or not contiguous reads or writes
+/  of more than 1 cluster (>4-32KB) are optimized to use large ff_disk_read()
+/  and ff_disk_write() calls. This can be useful on platforms where the cost of
+/  initializing a sector read/write is large.
+/
+/  0: Do not optimize this scenario.
+/  1: Optimize this scenario.
 */
 
 

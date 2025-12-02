@@ -40,7 +40,7 @@ Main features
         * NTFS (via NTFS-3G).
         * EXT2/3/4 (via lwext4).
         * Completely possible to add support for additional filesystems, as long as their libraries are ported over to Switch.
-    * Uses devoptab virtual device interface to provide a way to use standard I/O calls from libc (e.g. `fopen()`, `opendir()`, etc.) on mounted filesystems from the available logical units.
+    * Uses devoptab virtual device interface to provide a way to use standard C I/O calls (e.g. `fopen()`, `opendir()`, etc.) on mounted filesystems from the available logical units.
 * Easy to use library interface:
     * Provides an autoclear user event that is signaled each time a status change is detected by the background thread (new device mounted, device removed).
     * Painless listing of mounted partitions using a simple struct that provides the devoptab device name, as well as other interesting information (filesystem index, filesystem type, write protection, raw logical unit capacity, etc.).
@@ -55,7 +55,7 @@ Limitations
     * Only a single SCSI operation can be performed at any given time per UMS device, regardless of their number of logical units. This is an official limitation of the BOT protocol. Mutexes are used to avoid multiple SCSI operations from taking place at the same time on the same UMS device.
 * Filesystem libraries:
     * FatFs:
-        * Up to 64 FAT volumes can be mounted at the same time across all available UMS devices. Original limit was 10, but FatFs was slightly modified to allow for more volumes to be mounted simultaneously.
+        * `fstat()` and `fchmod()` aren't supported. This is a limitation of FatFs itself, since it doesn't provide an easy way to perform these operations using an already open file descriptor.
     * NTFS-3G:
         * Crypto operations aren't supported.
         * Security contexts are always ignored.
@@ -65,7 +65,7 @@ Limitations
         * Up to 8 EXT volumes can be mounted at the same time across all available UMS devices. This is because lwext4 uses an internal, stack-based registry of mount points and block devices, and increasing the limit can potentially exhaust the stack memory from the thread libusbhsfs runs under.
         * For the rest of the limitations, please take a look at the [README](https://github.com/gkostka/lwext4/blob/master/README.md) from the lwext4 repository.
 * Stack and/or heap memory consumption:
-    * This library is *not* suitable for custom sysmodules and/or service MITM projects. It allocates a 8 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
+    * This library is \*not\* suitable for custom sysmodules and/or service MITM projects. It allocates a 1 MiB buffer per each UMS device, which is used for command and data transfers. It also relies heavily on libnx features, which are not always compatible with sysmodule/MITM program contexts.
 * Switch-specific FS features:
     * Concatenation files aren't supported.
 * `usbfs` service from SX OS:
@@ -129,7 +129,7 @@ This section assumes you've already built the library by following the steps fro
     * Callback-based system:
         * Set a pointer to a callback function of your own with `usbHsFsSetPopulateCallback()`, which will receive a short-lived array of mounted devices and their count.
 5. Perform I/O operations using the returned mount names from the listed devices.
-6. If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it and without shutting down the whole library interface, use `usbHsFsUnmountDevice()`.
+6. If, for some reason, you need to safely unmount a UMS device at runtime before disconnecting it without shutting down the whole library interface, use `usbHsFsUnmountDevice()`.
 7. Close the USB Mass Storage Class Host interface with `usbHsFsExit()` when you're done.
 
 Please check both the header file located at `/include/usbhsfs.h` and the provided test applications in `/example_event` (event-driven system) and `/example_callback` (callback-based system) for additional information.
@@ -148,15 +148,15 @@ The SD card will be set as the new default devoptab device under two different c
 * If the UMS device that holds the volume set as the default devoptab device is removed from the console.
 * If the USB Mass Storage Class Host interface is closed via `usbHsFsExit()` and a volume from an available UMS device was set as the default devoptab device.
 
-For an example, please check the provided test application in `/example`.
+For an example, please check the provided test applications under `/example_event` or `/example_callback`.
 
 Credits
 --------------
 
-* [DarkMatterCore](https://github.com/DarkMatterCore): UMS device LUN/FS management, Bulk-Only Transport (BOT) driver, library interface.
+* [DarkMatterCore](https://github.com/DarkMatterCore): UMS device LUN/FS management, Bulk-Only Transport (BOT) driver, library interface, FAT support, EXT support.
 * [XorTroll](https://github.com/XorTroll): FS mounting system, devoptab device (un)registration, example test application.
 * [Rhys Koedijk](https://github.com/rhyskoedijk): NTFS support.
-* Lots of SPC/BOT docs across the Internet - these have been referenced in multiple files from the codebase.
+* Lots of SPC/BOT docs across the Internet -- these have been referenced in multiple files from the codebase.
 
 Thanks to
 --------------
