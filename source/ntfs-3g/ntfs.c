@@ -29,14 +29,14 @@ int ntfs_log_handler_usbhsfs(const char *function, const char *file, int line, u
     if (!formatted_str_len) return ret;
 
     /* Allocate buffer for the formatted string. */
-    formatted_str = calloc(++formatted_str_len, sizeof(char));
+    formatted_str = calloc(formatted_str_len + 1, sizeof(char));
     if (!formatted_str) return ret;
 
     /* Generate formatted string and save it to the logfile. */
-    ret = (int)vsnprintf(formatted_str, formatted_str_len, format, args);
+    ret = (int)vsnprintf(formatted_str, formatted_str_len + 1, format, args);
     if (ret)
     {
-        /* Remove CRLFs and dots - we take care of them. */
+        /* Remove CRLFs and dots -- we'll take care of them. */
         if (formatted_str[formatted_str_len - 1] == '\n') formatted_str[--formatted_str_len] = '\0';
         if (formatted_str[formatted_str_len - 1] == '\r') formatted_str[--formatted_str_len] = '\0';
         if (formatted_str[formatted_str_len - 1] == '.') formatted_str[--formatted_str_len] = '\0';

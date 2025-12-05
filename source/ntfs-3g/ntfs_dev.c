@@ -1160,24 +1160,27 @@ static bool ntfsdev_get_fixed_path(struct _reent *r, const char *path, const cha
             *(++path_sep) = '\0';
             path_elem = path_sep;
             depth--;
+
+            /* Make sure our current position points to the right place. */
+            out_pos = (size_t)(path_elem - out);
         } else {
             /* Completely new path element. Make sure its length is valid. */
             if (strlen(path_elem) > NTFS_MAX_NAME_LEN_BYTES) DEVOPTAB_SET_ERROR_AND_EXIT(ENAMETOOLONG);
 
+            /* Append path separator. */
+            out[out_pos++] = PATH_SEP;
+            out[out_pos] = '\0';
+
             /* Update path element pointer and directory depth. */
             path_elem = (out + out_pos);
             depth++;
-
-            /* Append path separator if we're not done yet. */
-            if (!finished)
-            {
-                out[out_pos++] = PATH_SEP;
-                out[out_pos] = '\0';
-            }
         }
 
         if (finished) break;
     }
+
+    /* Remove trailing path separator. */
+    if (out_pos > 1 && out[--out_pos] == PATH_SEP) out[out_pos] = '\0';
 
     /* Clear output NTFS path. */
     ntfs_path_destroy(out_path);
