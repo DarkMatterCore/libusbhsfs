@@ -154,22 +154,22 @@ typedef enum : u8 {
 
 /// Reference: https://www.seagate.com/files/staticfiles/support/docs/manual/Interface%20manuals/100293068j.pdf (page 96).
 typedef enum : u8 {
-    ScsiInquiryPeripheralDeviceType_DirectAccessBlock       = 0x00,
-    ScsiInquiryPeripheralDeviceType_SequentialAccess        = 0x01,
-    ScsiInquiryPeripheralDeviceType_Printer                 = 0x02,
-    ScsiInquiryPeripheralDeviceType_Processor               = 0x03,
-    ScsiInquiryPeripheralDeviceType_WriteOnce               = 0x04,
-    ScsiInquiryPeripheralDeviceType_CdDvd                   = 0x05,
-    ScsiInquiryPeripheralDeviceType_Obsolete1               = 0x06,
-    ScsiInquiryPeripheralDeviceType_OpticalMemory           = 0x07,
-    ScsiInquiryPeripheralDeviceType_MediumChanger           = 0x08,
-    ScsiInquiryPeripheralDeviceType_Obsolete2               = 0x09,
-    ScsiInquiryPeripheralDeviceType_Obsolete3               = 0x0A,
-    ScsiInquiryPeripheralDeviceType_Obsolete4               = 0x0B,
-    ScsiInquiryPeripheralDeviceType_StorageArrayController  = 0x0C,
-    ScsiInquiryPeripheralDeviceType_EnclosureServices       = 0x0D,
-    ScsiInquiryPeripheralDeviceType_SimplifiedDirectAccess  = 0x0E,
-    ScsiInquiryPeripheralDeviceType_OpticalCardReaderWriter = 0x0F,
+    ScsiInquiryPeripheralDeviceType_DirectAccessBlock        = 0x00,
+    ScsiInquiryPeripheralDeviceType_SequentialAccess         = 0x01,
+    ScsiInquiryPeripheralDeviceType_Printer                  = 0x02,
+    ScsiInquiryPeripheralDeviceType_Processor                = 0x03,
+    ScsiInquiryPeripheralDeviceType_WriteOnce                = 0x04,
+    ScsiInquiryPeripheralDeviceType_CdDvd                    = 0x05,
+    ScsiInquiryPeripheralDeviceType_Obsolete1                = 0x06,
+    ScsiInquiryPeripheralDeviceType_OpticalMemory            = 0x07,
+    ScsiInquiryPeripheralDeviceType_MediumChanger            = 0x08,
+    ScsiInquiryPeripheralDeviceType_Obsolete2                = 0x09,
+    ScsiInquiryPeripheralDeviceType_Obsolete3                = 0x0A,
+    ScsiInquiryPeripheralDeviceType_Obsolete4                = 0x0B,
+    ScsiInquiryPeripheralDeviceType_StorageArrayController   = 0x0C,
+    ScsiInquiryPeripheralDeviceType_EnclosureServices        = 0x0D,
+    ScsiInquiryPeripheralDeviceType_SimplifiedDirectAccess   = 0x0E,
+    ScsiInquiryPeripheralDeviceType_OpticalCardReaderWriter  = 0x0F,
     ScsiInquiryPeripheralDeviceType_BridgeControllerCommands = 0x10,
     ScsiInquiryPeripheralDeviceType_ObjectBasedStorage       = 0x11,
     ScsiInquiryPeripheralDeviceType_AutomationDriveInterface = 0x12,
@@ -414,6 +414,20 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
 
     USBHSFS_LOG_DATA(&inquiry_data, sizeof(ScsiInquiryStandardData), "Standard Inquiry data (interface %d, LUN %u):", drive_ctx->usb_if_id, lun);
 
+    /* Check if we're dealing with an available Direct Access Block device. */
+    if (inquiry_data.peripheral_qualifier != ScsiInquiryPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiInquiryPeripheralDeviceType_DirectAccessBlock)
+    {
+        USBHSFS_LOG_MSG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
+        goto end;
+    }
+
+    /* Check if the SPC standard version is valid. */
+    if (inquiry_data.version > ScsiInquirySPCVersion_SPC5)
+    {
+        USBHSFS_LOG_MSG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
+        goto end;
+    }
+
     /* Send Unit Serial Number VPD Inquiry SCSI command. */
     /* We'll first retrieve the Unit Serial Number VPD page header (in order to get the serial number length), then we'll retrieve the full VPD page. */
     if (usbHsFsScsiSendInquiryCommand(drive_ctx, lun, true, ScsiInquiryVitalProductDataPageCode_UnitSerialNumber, sizeof(ScsiInquiryUnitSerialNumberPageHeader), inquiry_vpd_buf))
@@ -438,20 +452,6 @@ bool usbHsFsScsiStartDriveLogicalUnit(UsbHsFsDriveLogicalUnitContext *lun_ctx)
         /* Use the serial number from the standard Inquiry command as a fallback. */
         serial_number = inquiry_data.serial_number;
         serial_number_length = strnlen(serial_number, sizeof(inquiry_data.serial_number));
-    }
-
-    /* Check if we're dealing with an available Direct Access Block device. */
-    if (inquiry_data.peripheral_qualifier != ScsiInquiryPeripheralQualifier_Connected || inquiry_data.peripheral_device_type != ScsiInquiryPeripheralDeviceType_DirectAccessBlock)
-    {
-        USBHSFS_LOG_MSG("Unsupported peripheral qualifier and/or device type! (0x%02X) (interface %d, LUN %d).", *((u8*)&inquiry_data), drive_ctx->usb_if_id, lun);
-        goto end;
-    }
-
-    /* Check if the SPC standard version is valid. */
-    if (inquiry_data.version > ScsiInquirySPCVersion_SPC5)
-    {
-        USBHSFS_LOG_MSG("Invalid SPC standard version value! (0x%02X) (interface %d, LUN %d).", inquiry_data.version, drive_ctx->usb_if_id, lun);
-        goto end;
     }
 
     /* Perform necessary steps for removable LUNs. */
