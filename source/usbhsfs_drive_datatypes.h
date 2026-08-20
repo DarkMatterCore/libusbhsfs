@@ -61,6 +61,7 @@ struct _UsbHsFsDriveLogicalUnitContext {
     char product_id[0x11];                                  ///< Product identification string. Retrieved via SCSI Inquiry command. May be empty.
     char serial_number[0x40];                               ///< Serial number string. Retrieved via SCSI Inquiry command. May be empty.
     bool long_lba;                                          ///< Set to true if Read Capacity (16) was used to retrieve the LUN capacity.
+    bool medium_present;                                    ///< Initially set to true. Set to false by SCSI calls if no medium is available under this LUN.
     u64 block_count;                                        ///< Logical block count. Retrieved via SCSI Read Capacity command. Must be non-zero.
     u32 block_length;                                       ///< Logical block length (bytes). Retrieved via SCSI Read Capacity command. Must be non-zero.
     u64 capacity;                                           ///< LUN capacity (block count times block length).

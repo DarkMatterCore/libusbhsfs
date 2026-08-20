@@ -683,6 +683,7 @@ static UsbHsFsDriveLogicalUnitContext *usbHsFsDriveInitializeLogicalUnitContext(
     lun_ctx->usb_if_id = drive_ctx->usb_if_id;
     lun_ctx->uasp = drive_ctx->uasp;
     lun_ctx->lun = lun;
+    lun_ctx->medium_present = true;
 
     /* Start LUN. */
     if (!usbHsFsScsiStartDriveLogicalUnit(lun_ctx))
