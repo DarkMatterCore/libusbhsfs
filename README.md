@@ -134,6 +134,34 @@ This section assumes you've already built the library by following the steps fro
 
 Please check both the header file located at `/include/usbhsfs.h` and the provided test applications in `/example_event` (event-driven system) and `/example_callback` (callback-based system) for additional information.
 
+How to use (Cmake)
+--------------
+
+You can include libusbhsfs into your project using cmake.
+```cmake
+set(USBHSFS_GPL OFF)
+add_subdirectory(libusbhsfs)
+target_link_libraries(you_app PRIVATE libusbhsfs)
+```
+
+You can also use cmake to fetch directly from github.
+
+```cmake
+include(FetchContent)
+
+FetchContent_Declare(libusbhsfs
+    GIT_REPOSITORY https://github.com/DarkMatterCore/libusbhsfs.git
+    # fetch latest version.
+    GIT_TAG dev
+    # fetch tagged release.
+    # GIT_TAG v0.2.9
+)
+
+set(USBHSFS_GPL OFF)
+FetchContent_MakeAvailable(libusbhsfs)
+target_link_libraries(you_app PRIVATE libusbhsfs)
+```
+
 Relative path support
 --------------
 
