@@ -71,7 +71,7 @@ static const devoptab_t ffdev_devoptab = {
     .write_r      = ffdev_write,
     .read_r       = ffdev_read,
     .seek_r       = ffdev_seek,
-    .fstat_r      = ffdev_fstat,
+    .fstat_r      = ffdev_fstat,        ///< Not supported by FatFs.
     .stat_r       = ffdev_stat,
     .link_r       = ffdev_link,         ///< Not supported by FatFs.
     .unlink_r     = ffdev_unlink,
@@ -290,7 +290,6 @@ static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
     FILINFO info = {0};
 
     FFDEV_INIT_FILE_VARS;
-    FFDEV_INIT_FS_ACCESS;
 
     /* Sanity check. */
     if (!st) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
