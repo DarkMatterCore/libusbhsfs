@@ -287,30 +287,29 @@ end:
 
 static int ffdev_fstat(struct _reent *r, void *fd, struct stat *st)
 {
-    /*FILINFO info = {0};
+    FILINFO info = {0};
 
     FFDEV_INIT_FILE_VARS;
 
-    // Sanity check.
+    /* Sanity check. */
     if (!st) DEVOPTAB_SET_ERROR_AND_EXIT(EINVAL);
 
-    // Only fill the attr and size field, leaving the timestamp blank.
-    // TODO: find a way to retrieve timestamps for an already opened file.
-    info.fattrib = file->obj.attr; // I'm not sure this is correct.
-    info.fsize = file->obj.objsize;
+    USBHSFS_LOG_MSG("Getting file stats for %p from volume \"%s:\".", fd, lun_fs_ctx->name);
 
-    // Fill stat info.
+    /* Get the current size from the open handle. */
+    info.fsize = ff_size(file);
+
+    /* Fill stat info. */
     ffdev_fill_stat(st, &info);
+
+    /* Timestamps are unavailable from an open handle. */
+    st->st_atim.tv_sec = 0;
+    st->st_mtim.tv_sec = 0;
+    st->st_ctim.tv_sec = 0;
 
 end:
     DEVOPTAB_DEINIT_VARS;
-    DEVOPTAB_RETURN_INT(0);*/
-
-    NX_IGNORE_ARG(r);
-    NX_IGNORE_ARG(fd);
-    NX_IGNORE_ARG(st);
-
-    DEVOPTAB_RETURN_UNSUPPORTED_OP;
+    DEVOPTAB_RETURN_INT(0);
 }
 
 static int ffdev_stat(struct _reent *r, const char *file, struct stat *st)
