@@ -17,7 +17,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 
 ROOTDIR			?=	$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
-BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
+BUILD_TIMESTAMP	:=	$(strip $(shell date -u '+%Y-%m-%d %T UTC'))
 
 TARGET			:=	usbhsfs
 SOURCES			:=	source source/fatfs source/sxos

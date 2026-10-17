@@ -38,7 +38,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
 
-BUILD_TIMESTAMP	:=	$(strip $(shell date --utc '+%Y-%m-%d %T UTC'))
+BUILD_TIMESTAMP	:=	$(strip $(shell date -u '+%Y-%m-%d %T UTC'))
 
 VERSION_MAJOR	:=	0
 VERSION_MINOR	:=	0
