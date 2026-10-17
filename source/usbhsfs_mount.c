@@ -8,6 +8,8 @@
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
+#include <stddef.h>
+
 #include "usbhsfs_drive.h"
 #include "usbhsfs_scsi.h"
 
@@ -630,6 +632,7 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveLogicalUnitContext *
     GuidPartitionTableEntry gpt_entry = {0};
     u32 part_count = 0, part_per_block = 0, part_array_block_count = 0;
     u64 part_lba = 0;
+    u8 *partition_block = NULL;
 
     /* Get GPT header. */
     if (!usbHsFsMountGetGuidPartitionTableHeader(lun_ctx, block, gpt_lba, &gpt_header, false)) return;
@@ -643,23 +646,32 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveLogicalUnitContext *
     part_per_block = (lun_ctx->block_length / (u32)sizeof(GuidPartitionTableEntry));
     part_array_block_count = (u32)ceil((double)part_count / (double)part_per_block);
 
+    partition_block = malloc(lun_ctx->block_length);
+    if (!partition_block)
+    {
+        USBHSFS_LOG_MSG("Failed to allocate GPT partition block! (interface %d, LUN %u).", lun_ctx->usb_if_id, lun_ctx->lun);
+        return;
+    }
+
     /* Parse GPT partition entries. */
     for(u32 i = 0; i < part_array_block_count; i++)
     {
         /* Read current partition array block. */
-        if (!usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, block, part_lba + i, 1))
+        if (!usbHsFsScsiReadLogicalUnitBlocks(lun_ctx, partition_block, part_lba + i, 1))
         {
             USBHSFS_LOG_MSG("Failed to read GPT partition array block #%u from LBA 0x%lX! (interface %d, LUN %u).", i, part_lba + i, lun_ctx->usb_if_id, lun_ctx->lun);
             break;
         }
 
-        for(u32 j = 0; j < part_per_block; j++)
+        for(u32 j = 0; j < part_per_block && ((i * part_per_block) + j) < part_count; j++)
         {
             /* Parse partition entry. */
-            memcpy(&gpt_entry, block + (j * sizeof(GuidPartitionTableEntry)), sizeof(GuidPartitionTableEntry));
+            memcpy(&gpt_entry, partition_block + (j * sizeof(GuidPartitionTableEntry)), sizeof(GuidPartitionTableEntry));
             usbHsFsMountParseGuidPartitionTableEntry(lun_ctx, block, &gpt_entry);
         }
     }
+
+    free(partition_block);
 }
 
 static bool usbHsFsMountGetGuidPartitionTableHeader(UsbHsFsDriveLogicalUnitContext *lun_ctx, u8 *block, u64 gpt_lba, GuidPartitionTableHeader *gpt_header, bool is_bkp)
@@ -692,10 +704,13 @@ static bool usbHsFsMountGetGuidPartitionTableHeader(UsbHsFsDriveLogicalUnitConte
     /* Verify CRC32 checksum for the GPT header. */
     /* This checksum must be calculated with the corresponding CRC32 field set to zero. */
     header_crc32 = gpt_header->header_crc32;
-    gpt_header->header_crc32 = 0;
 
-    header_crc32_calc = crc32Calculate(gpt_header, gpt_header->header_size);
-    gpt_header->header_crc32 = header_crc32;
+    /*
+     * Clear the crc field using memset to prevent strict aliasing optimizing away the store,
+     * since crc32Calculate loads 64-bit integers internally.
+     */
+    memset(block + offsetof(GuidPartitionTableHeader, header_crc32), 0, sizeof(gpt_header->header_crc32));
+    header_crc32_calc = crc32Calculate(block, gpt_header->header_size);
 
     if (header_crc32_calc != header_crc32)
     {
