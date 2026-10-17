@@ -536,9 +536,10 @@ static bool usbHsFsDriveGetEndpointSession(UsbHsClientIfSession *usb_if_session,
     {
         struct usb_endpoint_descriptor *ep_desc = (input ? &(usb_if_session->inf.inf.input_endpoint_descs[i]) : &(usb_if_session->inf.inf.output_endpoint_descs[i]));
 
+#ifdef DEBUG
         u8 max_burst = (input ? usb_if_session->inf.inf.input_ss_endpoint_companion_descs[i].bMaxBurst : usb_if_session->inf.inf.output_ss_endpoint_companion_descs[i].bMaxBurst);
         max_burst++;
-        (void)max_burst;
+#endif
 
         if (ep_desc->bLength && ((!ep_addr && ((input && (ep_desc->bEndpointAddress & USB_ENDPOINT_IN)) || (!input && !(ep_desc->bEndpointAddress & USB_ENDPOINT_IN)))) || \
             (ep_addr && ep_desc->bEndpointAddress == ep_addr)) && (ep_desc->bmAttributes & USB_TRANSFER_TYPE_MASK) == USB_TRANSFER_TYPE_BULK)

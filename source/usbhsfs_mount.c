@@ -663,7 +663,7 @@ static void usbHsFsMountParseGuidPartitionTable(UsbHsFsDriveLogicalUnitContext *
             break;
         }
 
-        for(u32 j = 0; j < part_per_block && (i * part_per_block + j) < part_count; j++)
+        for(u32 j = 0; j < part_per_block && ((i * part_per_block) + j) < part_count; j++)
         {
             /* Parse partition entry. */
             memcpy(&gpt_entry, partition_block + (j * sizeof(GuidPartitionTableEntry)), sizeof(GuidPartitionTableEntry));
@@ -706,7 +706,7 @@ static bool usbHsFsMountGetGuidPartitionTableHeader(UsbHsFsDriveLogicalUnitConte
     header_crc32 = gpt_header->header_crc32;
 
     /*
-     * Clear the crc field using memcpy to prevent strict aliasing optimizing away the store,
+     * Clear the crc field using memset to prevent strict aliasing optimizing away the store,
      * since crc32Calculate loads 64-bit integers internally.
      */
     memset(block + offsetof(GuidPartitionTableHeader, header_crc32), 0, sizeof(gpt_header->header_crc32));
