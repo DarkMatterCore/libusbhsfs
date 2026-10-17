@@ -8,6 +8,8 @@
  * This file is part of libusbhsfs (https://github.com/DarkMatterCore/libusbhsfs).
  */
 
+#include <stddef.h>
+
 #include "usbhsfs_drive.h"
 #include "usbhsfs_scsi.h"
 
@@ -692,10 +694,13 @@ static bool usbHsFsMountGetGuidPartitionTableHeader(UsbHsFsDriveLogicalUnitConte
     /* Verify CRC32 checksum for the GPT header. */
     /* This checksum must be calculated with the corresponding CRC32 field set to zero. */
     header_crc32 = gpt_header->header_crc32;
-    gpt_header->header_crc32 = 0;
 
-    header_crc32_calc = crc32Calculate(gpt_header, gpt_header->header_size);
-    gpt_header->header_crc32 = header_crc32;
+    /*
+     * Clear the crc field using memcpy to prevent strict aliasing optimizing away the store,
+     * since crc32Calculate loads 64-bit integers internally.
+     */
+    memset(block + offsetof(GuidPartitionTableHeader, header_crc32), 0, sizeof(gpt_header->header_crc32));
+    header_crc32_calc = crc32Calculate(block, gpt_header->header_size);
 
     if (header_crc32_calc != header_crc32)
     {
